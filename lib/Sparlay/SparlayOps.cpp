@@ -10,5 +10,9 @@
 #include "Sparlay/SparlayDialect.h"
 #include "mlir/IR/OpImplementation.h"
 
+#include "mlir/IR/Dialect.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/OpDefinition.h"
+
 #define GET_OP_CLASSES
 #include "Sparlay/SparlayOps.cpp.inc"

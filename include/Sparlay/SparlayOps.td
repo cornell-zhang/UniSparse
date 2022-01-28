@@ -43,9 +43,50 @@ def Sparlay_FooOp : Sparlay_Op<"foo", [NoSideEffect,
 }
 
 def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
-    let summary = "";
-    let description = [{}];
-    
+    let summary = "Remove zero elements selectively from the input tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_crd, %A_val = %sparlay.pack %A 
+            { reduce_dim = "j", padding = "none", 
+            storage_order = affine_map<(i,j) -> (i,j)> } :
+            tensor<4x4xf32> to 
+            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
+        ```
+    }];
+    let arguments = (ins AnyTensor:$input,
+                        StrAttr:$reduce_dim,
+                        StrAttr:$padding);
+    let results = (outs Sparlay_StructType:$out_indices);
+    let builders = [
+        OpBuilder<(ins "Value":$input, "StringRef":$reduce_dim,
+                        "StringRef":$padding)>,
+    ];
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `to` 
+        type($out_indices) 
+    }];
+}
+
+def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
+    let summary = "Compress the coordinate arrays selectively from the input tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        %out_ptr, %out_crd, %out_val = %sparlay.compress %in_crd, %in_val 
+            { placeholder } :
+            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
+            tensor<?xf32> to 
+            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
+            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
+            tensor<?xf32>
+        ```
+    }];
+    let arguments = (ins Sparlay_StructType:$in_indices,
+                         AnyTensor:$in_values);
+    let results = (outs Sparlay_StructType:$out_pointers);
+    // let assemblyFormat = "$index `:` type($output)";
+    // let verifier = [{ return ::verify(*this); }];
 }
 
 #endif // SPARLAY_OPS

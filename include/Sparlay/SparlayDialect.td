@@ -11,6 +11,10 @@
 
 include "mlir/IR/OpBase.td"
 
+include "mlir/Interfaces/CallInterfaces.td"
+include "mlir/Interfaces/CastInterfaces.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
+
 //===----------------------------------------------------------------------===//
 // Sparlay dialect definition.
 //===----------------------------------------------------------------------===//
@@ -37,5 +41,6 @@ class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
 def Sparlay_StructType :
     DialectType<Sparlay_Dialect, CPred<"$_self.isa<StructType>()">,
                 "Sparlay struct type">;
+
 
 #endif // SPARLAY_DIALECT
