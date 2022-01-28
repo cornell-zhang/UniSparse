@@ -56,11 +56,12 @@ def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
     }];
     let arguments = (ins AnyTensor:$input,
                         StrAttr:$reduce_dim,
-                        StrAttr:$padding);
+                        StrAttr:$padding,
+                        AffineMapAttr:$storage_order);
     let results = (outs Sparlay_StructType:$out_indices);
     let builders = [
         OpBuilder<(ins "Value":$input, "StringRef":$reduce_dim,
-                        "StringRef":$padding)>,
+                        "StringRef":$padding, "AffineMapAttr":$storage_order)>,
     ];
     let assemblyFormat = [{
         `(` $input `)` attr-dict `:` type($input) `to` 
