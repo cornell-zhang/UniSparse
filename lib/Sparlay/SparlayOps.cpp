@@ -14,7 +14,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/AffineMap.h"
 
 #define GET_OP_CLASSES

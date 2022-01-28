@@ -75,8 +75,8 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     let description = [{
         Example:
         ```mlir
-        %out_ptr, %out_crd, %out_val = %sparlay.compress %in_crd, %in_val 
-            { placeholder } :
+        %csr_ptr, %csr_crd, %csr_val = %sparlay.compress %in_crd, %in_val 
+            { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
             !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
             tensor<?xf32> to 
             !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
@@ -85,8 +85,12 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
         ```
     }];
     let arguments = (ins Sparlay_StructType:$in_indices,
-                         AnyTensor:$in_values);
-    let results = (outs Sparlay_StructType:$out_pointers);
+                         AnyTensor:$in_values,
+                         StrAttr:$compress_dim,
+                         AffineMapAttr:$storage_order);
+    let results = (outs Sparlay_StructType:$out_pointers,
+                        Sparlay_StructType:$out_indices,
+                        AnyTensor:$out_values);
     // let assemblyFormat = "$index `:` type($output)";
     // let verifier = [{ return ::verify(*this); }];
 }
