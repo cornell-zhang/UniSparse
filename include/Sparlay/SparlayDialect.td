@@ -33,4 +33,9 @@ def Sparlay_Dialect : Dialect {
 class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
         Op<Sparlay_Dialect, mnemonic, traits>;
 
+
+def Sparlay_StructType :
+    DialectType<Sparlay_Dialect, CPred<"$_self.isa<StructType>()">,
+                "Sparlay struct type">;
+
 #endif // SPARLAY_DIALECT
