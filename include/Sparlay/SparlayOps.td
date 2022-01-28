@@ -12,6 +12,9 @@
 include "SparlayDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
+include "mlir/Interfaces/CallInterfaces.td"
+include "mlir/Interfaces/CastInterfaces.td"
+
 def Sparlay_FooOp : Sparlay_Op<"foo", [NoSideEffect,
                                              SameOperandsAndResultType]> {
     let summary = "Illustrates how to define an operation.";
@@ -37,6 +40,12 @@ def Sparlay_FooOp : Sparlay_Op<"foo", [NoSideEffect,
     let assemblyFormat = [{
         $input attr-dict `:` type($input)
     }];
+}
+
+def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
+    let summary = "";
+    let description = [{}];
+    
 }
 
 #endif // SPARLAY_OPS
