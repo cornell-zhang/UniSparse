@@ -47,7 +47,7 @@ def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
     let description = [{
         Example:
         ```mlir
-        %A_crd, %A_val = %sparlay.pack %A 
+        %A_crd, %A_val = sparlay.pack %A 
             { reduce_dim = "j", padding = "none", 
             storage_order = affine_map<(i,j) -> (i,j)> } :
             tensor<4x4xf32> to 
@@ -75,7 +75,7 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     let description = [{
         Example:
         ```mlir
-        %csr_ptr, %csr_crd, %csr_val = %sparlay.compress %in_crd, %in_val 
+        %csr_ptr, %csr_crd, %csr_val = sparlay.compress %in_crd, %in_val 
             { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
             !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
             tensor<?xf32> to 
@@ -91,7 +91,11 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     let results = (outs Sparlay_StructType:$out_pointers,
                         Sparlay_StructType:$out_indices,
                         AnyTensor:$out_values);
-    // let assemblyFormat = "$index `:` type($output)";
+    let assemblyFormat = [{
+        `(` $in_indices `,` $in_values `)` attr-dict `:` 
+        type($in_indices) `,` type($in_values) `to` 
+        type($out_pointers) `,` type($out_indices) `,` type($out_values)
+    }];
     // let verifier = [{ return ::verify(*this); }];
 }
 
