@@ -54,12 +54,12 @@ def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
             !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
         ```
     }];
-    let arguments = (ins AnyTensor:$input,
+    let arguments = (ins Sparlay_Type:$input,
                         StrAttr:$reduce_dim,
                         StrAttr:$padding,
                         AffineMapAttr:$storage_order);
-    let results = (outs Sparlay_StructType:$out_indices,
-                        AnyTensor:$out_values);
+    let results = (outs Sparlay_Type:$out_indices,
+                        Sparlay_Type:$out_values);
     let builders = [
         OpBuilder<(ins "Value":$input, "StringRef":$reduce_dim,
                         "StringRef":$padding, "AffineMapAttr":$storage_order)>,
@@ -84,13 +84,13 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
             tensor<?xf32>
         ```
     }];
-    let arguments = (ins Sparlay_StructType:$in_indices,
-                         AnyTensor:$in_values,
+    let arguments = (ins Sparlay_Type:$in_indices,
+                         Sparlay_Type:$in_values,
                          StrAttr:$compress_dim,
                          AffineMapAttr:$storage_order);
-    let results = (outs Sparlay_StructType:$out_pointers,
-                        Sparlay_StructType:$out_indices,
-                        AnyTensor:$out_values);
+    let results = (outs Sparlay_Type:$out_pointers,
+                        Sparlay_Type:$out_indices,
+                        Sparlay_Type:$out_values);
     let assemblyFormat = [{
         `(` $in_indices `,` $in_values `)` attr-dict `:` 
         type($in_indices) `,` type($in_values) `to` 
@@ -98,5 +98,26 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     }];
     // let verifier = [{ return ::verify(*this); }];
 }
+
+def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]> {
+    let summary = "struct access";
+    let description = [{
+
+    }];
+    let arguments = (ins Sparlay_StructType:$input, I32Attr:$index);
+    let results = (outs Sparlay_Type:$output);
+
+    let assemblyFormat = [{
+        $input `[` $index `]` attr-dict `:` type($input) `to` type($output)
+    }];
+
+    let builders = [
+        OpBuilder<(ins "Value":$input, "size_t":$index)>
+    ];
+    let verifier = [{ return ::verify(*this); }];
+    let hasFolder = 1;
+}
+
+// def Sparlay_StructConstantOp : 
 
 #endif // SPARLAY_OPS

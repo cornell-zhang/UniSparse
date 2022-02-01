@@ -42,5 +42,6 @@ def Sparlay_StructType :
     DialectType<Sparlay_Dialect, CPred<"$_self.isa<StructType>()">,
                 "Sparlay struct type">;
 
+def Sparlay_Type : AnyTypeOf<[AnyTensor, Sparlay_StructType]>;
 
 #endif // SPARLAY_DIALECT
