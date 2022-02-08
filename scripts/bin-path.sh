@@ -1,0 +1,1 @@
+export PATH=/work/shared/users/phd/jl3952/workspace/MLIR_dialect/sparlay/build/bin/:$PATH
