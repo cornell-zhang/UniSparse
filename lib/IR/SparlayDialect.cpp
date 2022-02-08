@@ -124,9 +124,9 @@ mlir::Type SparlayDialect::parseType(mlir::DialectAsmParser &parser) const {
       return nullptr;
 
     // Check that the type is either a TensorType or another StructType.
-    if (!elementType.isa<mlir::TensorType, StructType>()) {
+    if (!elementType.isa<mlir::TensorType, mlir::MemRefType, StructType>()) {
       parser.emitError(typeLoc, "element type for a struct must either "
-                                "be a TensorType or a StructType, got: ")
+                                "be a TensorType, a MemrefType or a StructType, got: ")
           << elementType;
       return Type();
     }

@@ -28,6 +28,10 @@
 #include <numeric>
 #include <vector>
 
+class SparseTensorCrdVal
+
+class SparseTensorPtrCrdVal
+
 extern "C" {
 
 void * mlir_ciface_sparlaypack() {

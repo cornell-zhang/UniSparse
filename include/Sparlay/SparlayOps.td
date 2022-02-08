@@ -47,11 +47,16 @@ def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
     let description = [{
         Example:
         ```mlir
-        %A_crd, %A_val = sparlay.pack %A 
+        // %A_crd, %A_val = sparlay.pack %A 
+        //     { reduce_dim = "j", padding = "none", 
+        //     storage_order = affine_map<(i,j) -> (i,j)> } :
+        //     tensor<4x4xf32> to 
+        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
+        %A_COO = sparlay.pack (%A) 
             { reduce_dim = "j", padding = "none", 
             storage_order = affine_map<(i,j) -> (i,j)> } :
             tensor<4x4xf32> to 
-            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
+            !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>>
         ```
     }];
     let arguments = (ins Sparlay_Type:$input,
@@ -75,13 +80,18 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     let description = [{
         Example:
         ```mlir
-        %csr_ptr, %csr_crd, %csr_val = sparlay.compress %in_crd, %in_val 
+        // %csr_ptr, %csr_crd, %csr_val = sparlay.compress %in_crd, %in_val 
+        //     { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
+        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
+        //     tensor<?xf32> to 
+        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
+        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
+        //     tensor<?xf32>
+        %A_CSR = sparlay.compress (%A_COO)
             { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
-            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
-            tensor<?xf32> to 
-            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
-            !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
-            tensor<?xf32>
+            !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>> to 
+            !sparlay.struct<!sparlay.struct<tensor<?xindex>>, !sparlay.struct<tensor<?xindex>>,
+            tensor<?xf32>>
         ```
     }];
     // let arguments = (ins Sparlay_Type:$in_indices,
