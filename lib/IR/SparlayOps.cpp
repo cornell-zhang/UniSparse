@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Sparlay/SparlayOps.h"
-#include "Sparlay/SparlayDialect.h"
+#include "IR/SparlayOps.h"
+#include "IR/SparlayDialect.h"
 #include "mlir/IR/OpImplementation.h"
 
 #include "mlir/IR/Dialect.h"
@@ -61,4 +61,4 @@ OpFoldResult StructAccessOp::fold(ArrayRef<Attribute> operands) {
 }
 
 #define GET_OP_CLASSES
-#include "Sparlay/SparlayOps.cpp.inc"
+#include "IR/SparlayOps.cpp.inc"

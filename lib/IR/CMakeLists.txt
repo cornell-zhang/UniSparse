@@ -3,7 +3,7 @@ add_mlir_dialect_library(MLIRSparlay
         SparlayOps.cpp
 
         ADDITIONAL_HEADER_DIRS
-        ${PROJECT_SOURCE_DIR}/include/Sparlay
+        ${PROJECT_SOURCE_DIR}/include/IR
 
         DEPENDS
         MLIRSparlayOpsIncGen

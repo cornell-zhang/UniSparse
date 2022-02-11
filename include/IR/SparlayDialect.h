@@ -24,7 +24,7 @@ struct StructTypeStorage;
 } // end namespace sparlay
 } // end namespace mlir
 
-#include "Sparlay/SparlayOpsDialect.h.inc"
+#include "IR/SparlayOpsDialect.h.inc"
 
 namespace mlir {
 namespace sparlay {

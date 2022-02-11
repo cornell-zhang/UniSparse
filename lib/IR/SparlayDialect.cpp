@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Sparlay/SparlayDialect.h"
-#include "Sparlay/SparlayOps.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayOps.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -18,7 +18,7 @@
 using namespace mlir;
 using namespace mlir::sparlay;
 
-#include "Sparlay/SparlayOpsDialect.cpp.inc"
+#include "IR/SparlayOpsDialect.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Sparlay Types
@@ -160,7 +160,7 @@ void SparlayDialect::printType(mlir::Type type,
 void SparlayDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "Sparlay/SparlayOps.cpp.inc"
+#include "IR/SparlayOps.cpp.inc"
       >();
   addTypes<StructType>();
 }
