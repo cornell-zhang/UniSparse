@@ -20,6 +20,7 @@
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Dialect/Vector/VectorOps.h"
 #include "mlir/Analysis/Utils.h"
@@ -73,21 +74,83 @@ public:
         Value index_arr = rewriter.create<memref::AllocaOp>(loc, indexArrTp);
 
         std::vector<int64_t> reduce_shape;
+        int64_t reduceDimValue = reduceDim.getSExtValue();
         for (unsigned i = 0; i < shape.size(); i++) {
-            if (i != reduceDim.getSExtValue()) {
-                // LLVM_DEBUG(llvm::dbgs() << "i = " << i <<" | reduceDim = " << reduceDim.getSExtValue() <<"\n");
+            if (i != reduceDimValue) {
                 reduce_shape.push_back(shape[i]);
             }
         }
-        // for (auto elm : reduce_shape) 
-        //     LLVM_DEBUG(llvm::dbgs() << " reduce_shape vector: " << elm <<"\n");
 
         // ArrayRef<int64_t> reduce_shape_arr(reduce_shape);
         auto nnzPerRowTp = MemRefType::get(ArrayRef<int64_t>(reduce_shape), indexTp);
         Value nnz_per_row = rewriter.create<memref::AllocaOp>(loc, nnzPerRowTp);
 
         Value zero = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(0));
+        Value dim = rewriter.create<memref::DimOp>(loc, input, zero);
         rewriter.create<linalg::FillOp>(loc, zero, nnz_per_row);
+        rewriter.create<linalg::FillOp>(loc, dim, index_arr);
+
+        SmallVector<Value> lb_outer, lb;
+        SmallVector<Value> hb_outer, hb;
+        SmallVector<Value> step_outer, step;
+        Value one = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(1));
+        for (unsigned i = 0; i < shape.size(); i++) {
+            if (i != reduceDimValue) {
+                lb_outer.push_back(zero);
+                Value dimSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(shape[i]));
+                hb_outer.push_back(dimSize);
+                step_outer.push_back(one);
+            }
+        }
+        lb.assign(lb_outer.begin(), lb_outer.end());
+        hb.assign(hb_outer.begin(), hb_outer.end());
+        step.assign(step_outer.begin(), step_outer.end());
+        lb.push_back(zero);
+        Value reduceDimSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(shape[reduceDimValue]));
+        hb.push_back(reduceDimSize);
+        step.push_back(one);        
+        scf::buildLoopNest(rewriter, loc, lb, hb, step, 
+            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
+                Value elm = builder.create<memref::LoadOp>(loc, input, ivs);
+                Value not_zero = builder.create<CmpFOp>(loc, CmpFPredicate::ONE, 
+                                    elm, zero);
+                builder.create<scf::IfOp>(loc, not_zero, [&](OpBuilder &b, Location loc) {
+                    SmallVector<Value, 3> ivs_vec(lb.size());
+                    ivs_vec.assign(ivs.begin(), ivs.end());
+                    auto outer_ivs = llvm::makeArrayRef(ivs_vec).take_front(shape.size());
+                    Value old_nnz = b.create<memref::LoadOp>(loc, nnz_per_row, outer_ivs);
+                    Value new_nnz = b.create<AddIOp>(loc, old_nnz, one);
+                    b.create<memref::StoreOp>(loc, new_nnz, nnz_per_row, outer_ivs);
+                    auto inner_iv = ivs_vec.pop_back_val();
+                    ivs_vec.push_back(old_nnz);
+                    ValueRange index_arr_idx = llvm::makeArrayRef(ivs_vec);
+                    b.create<memref::StoreOp>(loc, inner_iv, index_arr, index_arr_idx);
+                    return;
+                });
+            });
+        
+        // auto nnz_count_tp = MemRefType::get(ArrayRef({1}), indexTp);
+        Value nnz_count = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
+        rewriter.create<memref::StoreOp>(loc, zero, nnz_count, zero);
+        Value max_nnz = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
+        rewriter.create<memref::StoreOp>(loc, zero, max_nnz, zero);
+        scf::buildLoopNest(rewriter, loc, lb_outer, hb_outer, step_outer, 
+            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
+                Value row_nnz = builder.create<memref::LoadOp>(loc, nnz_per_row, ivs);
+                Value tmp_count = builder.create<memref::LoadOp>(loc, nnz_count, zero);
+                Value sum = builder.create<AddIOp>(loc, row_nnz, tmp_count);
+                builder.create<memref::StoreOp>(loc, sum, nnz_count, zero);
+                Value tmp_max = builder.create<memref::LoadOp>(loc, max_nnz, zero);
+                Value is_row_nnz_greater = builder.create<CmpIOp>(loc, CmpIPredicate::ugt, row_nnz, tmp_max);
+                builder.create<scf::IfOp>(loc, is_row_nnz_greater, [&](OpBuilder &b, Location loc) {
+                    b.create<memref::StoreOp>(loc, row_nnz, max_nnz, zero);
+                });
+                return;
+            });
+        
+        // Allcate result arrays
+        Value nnz = rewriter.create<memref::LoadOp>(loc, nnz_count, zero);
+        for 
 
         rewriter.eraseOp(op);
         // LLVM_DEBUG(llvm::dbgs() << "hello!\n"); 
@@ -106,7 +169,8 @@ struct LowerFormatConversionPass :
 public PassWrapper<LowerFormatConversionPass, FunctionPass> {
     void getDependentDialects(DialectRegistry &registry) const override {
         registry.insert<scf::SCFDialect, memref::MemRefDialect, 
-                        vector::VectorDialect, StandardOpsDialect>();
+                        vector::VectorDialect, linalg::LinalgDialect,
+                        StandardOpsDialect>();
     }
     void runOnFunction() final;
 };
@@ -123,7 +187,8 @@ void LowerFormatConversionPass::runOnFunction() {
     // this lowering. In our case, we are lowering to a combination of the
     // `Affine`, `MemRef` and `Standard` dialects.
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
-                           vector::VectorDialect, StandardOpsDialect>();
+                           vector::VectorDialect, linalg::LinalgDialect,
+                           StandardOpsDialect>();
 
     // We also define the Sparlay dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
