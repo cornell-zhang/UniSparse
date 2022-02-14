@@ -21,7 +21,9 @@ def LowerFormatConversion : Pass<"lower-format-conversion"> {
     let dependentDialects = [
         "memref::MemRefDialect",
         "scf::SCFDialect",
-        "StandardOpsDialect"
+        "StandardOpsDialect",
+        "vector::VectorDialect",
+        "linalg::LinalgDialect"
     ];
 }
 

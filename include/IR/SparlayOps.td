@@ -48,28 +48,28 @@ def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
         Example:
         ```mlir
         // %A_crd, %A_val = sparlay.pack %A 
-        //     { reduce_dim = "j", padding = "none", 
+        //     { reduce_dim = 1, padding = "none", 
         //     storage_order = affine_map<(i,j) -> (i,j)> } :
         //     tensor<4x4xf32> to 
         //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
         %A_COO = sparlay.pack (%A) 
-            { reduce_dim = "j", padding = "none", 
+            { reduce_dim = 1, padding = "none", 
             storage_order = affine_map<(i,j) -> (i,j)> } :
             tensor<4x4xf32> to 
             !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>>
         ```
     }];
     let arguments = (ins Sparlay_Type:$input,
-                        StrAttr:$reduce_dim,
+                        IndexAttr:$reduce_dim,
                         StrAttr:$padding,
                         AffineMapAttr:$storage_order);
     // let results = (outs Sparlay_Type:$out_indices,
     //                     Sparlay_Type:$out_values);
     let results = (outs Sparlay_Type:$output);
-    let builders = [
-        OpBuilder<(ins "Value":$input, "StringRef":$reduce_dim,
-                        "StringRef":$padding, "AffineMapAttr":$storage_order)>,
-    ];
+    // let builders = [
+    //     OpBuilder<(ins "Value":$input, "IndexAttr":$reduce_dim,
+    //                     "StringRef":$padding, "AffineMapAttr":$storage_order)>,
+    // ];
     let assemblyFormat = [{
         `(` $input `)` attr-dict `:` type($input) `to` type($output) 
     }];
@@ -81,14 +81,14 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
         Example:
         ```mlir
         // %csr_ptr, %csr_crd, %csr_val = sparlay.compress %in_crd, %in_val 
-        //     { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
+        //     { compress_dim = 0, storage_order = affine_map<(i,j)->(i,j)> } :
         //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
         //     tensor<?xf32> to 
         //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
         //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
         //     tensor<?xf32>
         %A_CSR = sparlay.compress (%A_COO)
-            { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
+            { compress_dim = 0, storage_order = affine_map<(i,j)->(i,j)> } :
             !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>> to 
             !sparlay.struct<!sparlay.struct<tensor<?xindex>>, !sparlay.struct<tensor<?xindex>>,
             tensor<?xf32>>
@@ -99,7 +99,7 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     //                      StrAttr:$compress_dim,
     //                      AffineMapAttr:$storage_order);
     let arguments = (ins Sparlay_Type:$input,
-                         StrAttr:$compress_dim,
+                         IndexAttr:$compress_dim,
                          AffineMapAttr:$storage_order);
 
     // let results = (outs Sparlay_Type:$out_pointers,
