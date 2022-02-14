@@ -15,7 +15,7 @@
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Translation.h"
 
-#include "Sparlay/SparlayDialect.h"
+#include "IR/SparlayDialect.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllTranslations();
