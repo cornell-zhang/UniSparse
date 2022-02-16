@@ -83,7 +83,7 @@ public:
 
         Value zero = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(0));
         Value one = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(1));
-        Value dim = rewriter.create<memref::DimOp>(loc, input, zero);
+        // Value dim = rewriter.create<memref::DimOp>(loc, input, zero);
 
         SmallVector<Value> lb_outer, lb, lb_orig;
         SmallVector<Value> hb_outer, hb, hb_orig;
@@ -116,7 +116,7 @@ public:
             });
         scf::buildLoopNest(rewriter, loc, lb_orig, hb_orig, step_orig, 
             [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                builder.create<memref::StoreOp>(loc, dim, index_arr, ivs);
+                builder.create<memref::StoreOp>(loc, reduceDimSize, index_arr, ivs);
                 return;
             });
 
@@ -126,9 +126,15 @@ public:
                 SmallVector<Value, 3> ivs_vec(lb.size());
                 ivs_vec.assign(ivs.begin(), ivs.end());
                 auto outer_ivs = llvm::makeArrayRef(ivs_vec).take_front(shape.size() - 1); // wrong size?
-                auto inner_iv = ivs_vec.pop_back_val();
-                auto inner_reduce_dim_ivs = llvm::makeArrayRef(ivs_vec).drop_back(shape.size() - reduceDimValue - 1);
+                Value inner_iv = ivs_vec.pop_back_val();
+                unsigned drop_back_size = shape.size() - reduceDimValue - 1;
+                // if (drop_back_size > 0)
+                auto inner_reduce_dim_ivs = llvm::makeArrayRef(ivs_vec).drop_back(drop_back_size);
                 ivs_vec.pop_back_n(shape.size() - reduceDimValue - 1);
+                // LLVM_DEBUG(llvm::dbgs() << "shape size = " << shape.size() << "\n");
+                // LLVM_DEBUG(llvm::dbgs() << "reduce dim size = " << reduceDimValue << "\n");
+                // LLVM_DEBUG(llvm::dbgs() << "drop_back size = " << shape.size() - reduceDimValue - 1 << "\n");
+                // LLVM_DEBUG(llvm::dbgs() << "inner_reduce_dim_ivs.size = " << inner_reduce_dim_ivs.size() << "\n");
                 
                 Value elm = builder.create<memref::LoadOp>(loc, input, ivs);
                 Value not_zero = builder.create<CmpFOp>(loc, CmpFPredicate::ONE, 
@@ -138,10 +144,18 @@ public:
                     Value new_nnz = b.create<AddIOp>(loc, old_nnz, one);
                     b.create<memref::StoreOp>(loc, new_nnz, nnz_per_row, outer_ivs);
                     
+                    // LLVM_DEBUG(llvm::dbgs() << "ivs_vec.size before = " << ivs_vec.size() << "\n");
                     ivs_vec.push_back(old_nnz);
-                    for (unsigned i = 0; i < inner_reduce_dim_ivs.size(); i++) {
+                    for (unsigned i = 0; i < drop_back_size; i++) {
+                        // Value tmp = inner_reduce_dim_ivs[i];
+                        // LLVM_DEBUG(llvm::dbgs()<<"inner_reduce_dim_ivs: " << tmp << "\n");
                         ivs_vec.push_back(inner_reduce_dim_ivs[i]);
                     }
+                    // for (unsigned i = 0; i < ivs_vec.size(); i++) {
+                    //     Value tmp = ivs_vec[i];
+                    //     // LLVM_DEBUG(llvm::dbgs()<<"ivs_vec: " << tmp << "\n");
+                    // }
+                    // LLVM_DEBUG(llvm::dbgs() << "ivs_vec.size = " << ivs_vec.size() << "\n");
 
                     ValueRange index_arr_idx = llvm::makeArrayRef(ivs_vec);
                     b.create<memref::StoreOp>(loc, inner_iv, index_arr, index_arr_idx);
@@ -149,7 +163,6 @@ public:
                 });
             });
         
-        // auto nnz_count_tp = MemRefType::get(ArrayRef({1}), indexTp);
         Value nnz_count = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
         rewriter.create<memref::StoreOp>(loc, zero, nnz_count, zero);
         Value max_nnz = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
@@ -169,7 +182,7 @@ public:
                 return;
             });
         
-        // Allcate result arrays
+        // Allocate result arrays
         Value nnz = rewriter.create<memref::LoadOp>(loc, nnz_count, zero);
         MemRefType dynamicIndexType = MemRefType::get(-1, indexTp);
         MemRefType dynamicDataType = MemRefType::get(-1, input.getType().cast<MemRefType>().getElementType());
@@ -201,12 +214,12 @@ public:
          
         Value max_nnz_val = rewriter.create<memref::LoadOp>(loc, max_nnz, zero);
         Value len_count = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
-        rewriter.create<memref::StoreOp>(loc, zero, len_count, zero);
+        rewriter.create<memref::StoreOp>(loc, zero, len_count, zero); //////
         // affine_map: reorder lb, hb 
         SmallVector<Value> lb_ordered, hb_ordered, step_ordered;
         for (unsigned i = 0; i < shape.size(); i++) {
             unsigned reorderedDimPos = storageOrder.getDimPosition(i);
-            LLVM_DEBUG(llvm::dbgs() << "storage order dim = " << reorderedDimPos <<
+            LLVM_DEBUG(llvm::dbgs() << "storage order dim = " << storageOrder.getDimPosition(i) <<
                     " | permuted dim = " << storageOrder.getPermutedPosition(i) << "\n");
             if (reorderedDimPos != reduceDimValue) {
                 lb_ordered.push_back(zero);
@@ -222,17 +235,24 @@ public:
         }
         scf::buildLoopNest(rewriter, loc, lb_ordered, hb_ordered, step_ordered, 
             [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                Value reordered_idx = builder.create<memref::LoadOp>(loc, index_arr, ivs);
+                // prepare the reordered loading index of the reordered index array
+                SmallVector<Value, 3> index_load_dim;
+                for (unsigned i = 0; i < shape.size(); i++) {
+                    unsigned reorderedDimPos = storageOrder.getPermutedPosition(i);
+                    index_load_dim.push_back(ivs[reorderedDimPos]);
+                }
+
+                Value reordered_idx = builder.create<memref::LoadOp>(loc, index_arr, llvm::makeArrayRef(index_load_dim));
                 if (padding == "none") {
-                    Value valid_idx = builder.create<CmpIOp>(loc, CmpIPredicate::ult, reordered_idx, dim);
+                    Value valid_idx = builder.create<CmpIOp>(loc, CmpIPredicate::ult, reordered_idx, reduceDimSize);
                     builder.create<scf::IfOp>(loc, valid_idx, [&](OpBuilder &b, Location loc) {
                         Value len_count_val = b.create<memref::LoadOp>(loc, len_count, zero);
                         
                         // prepare the reordered loading index of input A, store indices into index arrays
                         SmallVector<Value, 3> load_dim;
                         for (unsigned i = 0; i < shape.size(); i++) {
-                            unsigned reorderedDimPos = storageOrder.getDimPosition(i);
-                            if (reorderedDimPos != reduceDimValue) {
+                            unsigned reorderedDimPos = storageOrder.getPermutedPosition(i);
+                            if (i != reduceDimValue) {
                                 b.create<memref::StoreOp>(loc, ivs[reorderedDimPos], idx_array[i], len_count_val);
                                 load_dim.push_back(ivs[reorderedDimPos]);
                             } else {
