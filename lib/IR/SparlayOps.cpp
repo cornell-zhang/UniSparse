@@ -8,6 +8,7 @@
 
 #include "IR/SparlayOps.h"
 #include "IR/SparlayDialect.h"
+#include "IR/SparlayTypes.h"
 #include "mlir/IR/OpImplementation.h"
 
 #include "mlir/IR/Dialect.h"

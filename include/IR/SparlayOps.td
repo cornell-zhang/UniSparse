@@ -15,6 +15,17 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 
+//===----------------------------------------------------------------------===//
+// Base sparlay operation definition.
+//===----------------------------------------------------------------------===//
+
+class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
+        Op<Sparlay_Dialect, mnemonic, traits>;
+
+//===----------------------------------------------------------------------===//
+// sparlay::FooOp
+//===----------------------------------------------------------------------===//
+
 def Sparlay_FooOp : Sparlay_Op<"foo", [NoSideEffect,
                                              SameOperandsAndResultType]> {
     let summary = "Illustrates how to define an operation.";
@@ -117,6 +128,42 @@ def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
     // let verifier = [{ return ::verify(*this); }];
 }
 
+def Sparlay_MultiplyOp : Sparlay_Op<"multiply", [NoSideEffect]> {
+    let summary = "multiply";
+    let description = [{
+
+    }];
+    let arguments = (ins Variadic<Sparlay_Type>:$input, 
+                        StrAttr:$target,
+                        StrAttr:$pattern);
+
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input)
+    }];
+
+    // let builders = [
+    //     OpBuilder<(ins "Value":$input, "size_t":$index)>
+    // ];
+}
+
+def Sparlay_StructConstructOp : Sparlay_Op<"struct_construct", [NoSideEffect]> {
+    let summary = "struct construct";
+    let description = [{
+
+    }];
+    let arguments = (ins Variadic<Sparlay_Type>:$input);
+    let results = (outs Sparlay_StructType:$output);
+
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `to` type($output)
+    }];
+
+    // let builders = [
+    //     OpBuilder<(ins "Value":$input, "size_t":$index)>
+    // ];
+    // let verifier = [{ return ::verify(*this); }];
+    // let hasFolder = 1;
+}
 
 def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]> {
     let summary = "struct access";

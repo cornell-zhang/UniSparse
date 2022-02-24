@@ -31,11 +31,11 @@ def Sparlay_Dialect : Dialect {
 }
 
 //===----------------------------------------------------------------------===//
-// Base sparlay operation definition.
+// Base sparlay type definition.
 //===----------------------------------------------------------------------===//
 
-class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
-        Op<Sparlay_Dialect, mnemonic, traits>;
+// class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
+//         Op<Sparlay_Dialect, mnemonic, traits>;
 
 
 def Sparlay_StructType :

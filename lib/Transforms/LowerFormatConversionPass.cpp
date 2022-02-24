@@ -13,6 +13,7 @@
 #include "Transforms/Passes.h"
 #include "IR/SparlayDialect.h"
 #include "IR/SparlayOps.h"
+#include "IR/SparlayDialect.h"
 
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
@@ -278,11 +279,40 @@ public:
                 return;
             });
 
+        // StructType 
+        // Value crd_struct = rewriter.create<sparlay::StructConstructOp>(loc, )
         rewriter.eraseOp(op);
         // LLVM_DEBUG(llvm::dbgs() << "hello!\n"); 
         return success();
     }
 }; 
+
+//===----------------------------------------------------------------------===//
+// RewritePatterns: Multiply operations
+//===----------------------------------------------------------------------===//
+
+class MultiplyOpLowering : public OpConversionPattern<sparlay::MultiplyOp> {
+public:
+    using OpConversionPattern<sparlay::MultiplyOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(sparlay::MultiplyOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        // Location loc = op->getLoc();
+        // Value output = op->getOperand(0);
+        // Value input_A = op->getOperand(1);
+        // Value input_B = op->getOperand(2);
+        // StringRef target = op.target();
+        // StringRef pattern = op.pattern();
+
+        // if (target == "CPU" && pattern == "inner") {
+
+
+        // } else
+        //     LLVM_DEBUG(llvm::dbgs() << "Target or pattern not supported yet.\n");
+    }
+};
+
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
@@ -323,6 +353,7 @@ void LowerFormatConversionPass::runOnFunction() {
     target.addIllegalDialect<sparlay::SparlayDialect>();
     target.addLegalOp<sparlay::CompressOp>();
     target.addLegalOp<sparlay::StructAccessOp>();
+    target.addLegalOp<sparlay::StructConstructOp>();
     target.addLegalOp<sparlay::FooOp>();
     target.addLegalOp<linalg::FillOp>(); //?
 
@@ -330,6 +361,7 @@ void LowerFormatConversionPass::runOnFunction() {
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
     patterns.add<PackOpLowering>(&getContext());
+    patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the

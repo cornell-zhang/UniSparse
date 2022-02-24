@@ -15,15 +15,19 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Support/MlirOptMain.h"
+
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/ErrorOr.h"
 
 #include "IR/SparlayDialect.h"
 #include "Transforms/Passes.h"
 
 // using namespace sparlay;
+// using namespace mlir;
 namespace cl = llvm::cl;
 
 static cl::opt<std::string> inputFilename(cl::Positional,
@@ -39,17 +43,12 @@ static cl::opt<bool> lowerFormatConversion("lower-format-conversion",
                                            cl::desc("Enable Format Lowering"));
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
-  // if (inputType != InputType::MLIR &&
-  //     !llvm::StringRef(inputFilename).endswith(".mlir")) {
-  //   llvm::errs() << "Error: Cannot parse non .mlir file " << inputFilename << "\n";
-  // }
-
   // Read the input mlir.
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
       llvm::MemoryBuffer::getFileOrSTDIN(inputFilename);
   if (std::error_code EC = fileOrErr.getError()) {
     llvm::errs() << "Could not open input file: " << EC.message() << "\n";
-    return -1;
+    return 1;
   }
 
   // Parse the input mlir.
@@ -58,7 +57,7 @@ int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   module = mlir::parseSourceFile(sourceMgr, &context);
   if (!module) {
     llvm::errs() << "Error can't load file " << inputFilename << "\n";
-    return 1;
+    return 2;
   }
   return 0;
 }
@@ -72,15 +71,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   mlir::PassManager pm(&context);
   // Apply any generic pass manager command line options and run the pipeline.
   applyPassManagerCLOptions(pm);
+  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
 
   if (lowerFormatConversion) {
     // pm.addPass(mlir::createLowerFormatConversionPass());
-    mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
     optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
   }
 
   if (mlir::failed(pm.run(*module)))
-    return 2;
+    return 3;
   return 0;
 }
 
@@ -93,7 +92,7 @@ int main(int argc, char **argv) {
 
   mlir::MLIRContext context;
 
-  mlir::DialectRegistry registry = context.getDialectRegistry();
+  // mlir::DialectRegistry registry = context.getDialectRegistry();
   registerAllDialects(context);
   context.loadAllAvailableDialects();
 
@@ -123,10 +122,15 @@ int main(int argc, char **argv) {
   auto outfile = mlir::openOutputFile(outputFilename, &errorMessage);
   if (!outfile) {
     llvm::errs() << errorMessage << "\n";
-    return 3;
+    return 4;
   }
+
+  // if (failed(MlirOptMain(outfile->os(), std::move(file), passPipeline, registry,
+  //                        splitInputFile, verifyDiagnostics, verifyPasses,
+  //                        allowUnregisteredDialects, preloadDialectsInContext)))
+  //   return failure();
   module->print(outfile->os());
-  // outfile->os() << "\n";
+  outfile->keep();
 
   // return mlir::asMainReturnCode(
   //     mlir::MlirOptMain(argc, argv, "Sparlay optimizer driver\n", registry));
