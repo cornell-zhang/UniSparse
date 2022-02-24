@@ -194,77 +194,60 @@ mlir::Type SparlayDialect::parseType(mlir::DialectAsmParser &parser) const {
   SmallVector<mlir::Type, 1> elementTypes;
   std::string getIdentifier;
   SmallVector<AffineMap, 1> elmOrders;
+  bool isParsingType = true;
   do {
     // Parse the current element type.
     llvm::SMLoc typeLoc = parser.getCurrentLocation();
     mlir::Type elementType;
     AffineMap elmOrder;
 
-    auto parseType = parser.parseOptionalType(elementType);
-
-    if (!parseType.hasValue()) {
-      if (parser.parseOptionalString(&getIdentifier)) {
-        if (parser.parseAffineMap(elmOrder)) {
+    if (isParsingType) {
+      auto parseType = parser.parseOptionalType(elementType);
+      if (!parseType.hasValue()) {
+        if (parser.parseOptionalString(&getIdentifier)) {
           return nullptr;
         } else {
-          LLVM_DEBUG(llvm::dbgs() << "is an affine_map type\n");
-          elmOrders.push_back(elmOrder);
+          isParsingType = false;
+          LLVM_DEBUG(llvm::dbgs() << "is a string type: " << getIdentifier << "\n");
         }
       } else {
-      LLVM_DEBUG(llvm::dbgs() << "is a string type: " << getIdentifier << "\n");
+        LLVM_DEBUG(llvm::dbgs() << "is a memref type\n");
+        if (elementType.isa<mlir::TensorType, mlir::MemRefType, StructType>())
+          elementTypes.push_back(elementType);
+        else {
+          parser.emitError(typeLoc, "element type for a struct must either "
+                                "be a TensorType, a MemrefType or a StructType, StringRef, AffineMap, got: ")
+              << elementType;
+          return Type();
+        }
       }
     } else {
-      LLVM_DEBUG(llvm::dbgs() << "is a memref type\n");
-      if (elementType.isa<mlir::TensorType, mlir::MemRefType, StructType>())
-        elementTypes.push_back(elementType);
-      else {
-        parser.emitError(typeLoc, "element type for a struct must either "
-                              "be a TensorType, a MemrefType or a StructType, StringRef, AffineMap, got: ")
-            << elementType;
-        return Type();
+      if (parser.parseAffineMap(elmOrder)) {
+        return nullptr;
+      } else {
+        LLVM_DEBUG(llvm::dbgs() << "is an affine_map type\n");
+        elmOrders.push_back(elmOrder);
       }
     }
-    
-    // if (parser.parseAffineMap(elmOrder)) {
+
+    // if (!parseType.hasValue()) {
     //   if (parser.parseOptionalString(&getIdentifier)) {
-    //     if (parser.parseOptionalType(elementType)) {
+    //     if (parser.parseAffineMap(&elmOrder)) {
     //       return nullptr;
     //     } else {
-    //       LLVM_DEBUG(llvm::dbgs() << "is a memref type\n");
-    //       if (elementType.isa<mlir::TensorType, mlir::MemRefType, StructType>())
-    //         elementTypes.push_back(elementType);
-    //       else {
-    //         parser.emitError(typeLoc, "element type for a struct must either "
-    //                               "be a TensorType, a MemrefType or a StructType, StringRef, AffineMap, got: ")
-    //             << elementType;
-    //         return Type();
-    //       }
+    //       LLVM_DEBUG(llvm::dbgs() << "is an affine_map type\n");
+    //       elmOrders.push_back(elmOrder);
     //     }
     //   } else {
-    //   LLVM_DEBUG(llvm::dbgs() << "is a string type: " << getIdentifier << "\n");
+    //     LLVM_DEBUG(llvm::dbgs() << "is a string type: " << getIdentifier << "\n");
     //   }
     // } else {
-    //   LLVM_DEBUG(llvm::dbgs() << "is an affine_map type\n");
-    //   elmOrders.push_back(elmOrder);
-    // }
-
-    // if (parser.parseType(elementType)) {
-    //   if (parser.parseString(&elmIdentifier)) {
-    //     LLVM_DEBUG(llvm::dbgs() << "is a string type\n");
-    //     if (parser.parseAffineMap(elmOrder)) {
-    //     LLVM_DEBUG(llvm::dbgs() << "is an affine_map type\n");
-    //       return nullptr;
-    //     }
-    //   }
-    //   // elmIdentifier = StringRef(elmIdentifier_copy);
-    // } else {
-    //   // Check that the type is a TensorType, MemRefType or another StructType.
-    //   if (elementType.isa<mlir::TensorType, mlir::MemRefType, StructType>()) {
-    //     LLVM_DEBUG(llvm::dbgs() << "is a memref type\n");
+    //   LLVM_DEBUG(llvm::dbgs() << "is a memref type\n");
+    //   if (elementType.isa<mlir::TensorType, mlir::MemRefType, StructType>())
     //     elementTypes.push_back(elementType);
-    //   } else {
+    //   else {
     //     parser.emitError(typeLoc, "element type for a struct must either "
-    //                               "be a TensorType, a MemrefType or a StructType, StringRef, AffineMap, got: ")
+    //                           "be a TensorType, a MemrefType or a StructType, StringRef, AffineMap, got: ")
     //         << elementType;
     //     return Type();
     //   }
