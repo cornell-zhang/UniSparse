@@ -40,7 +40,8 @@ struct StructTypeStorage : public mlir::TypeStorage {
   /// instance. This type will be used when uniquing an instance of the type
   /// storage. For our struct type, we will unique each instance structurally on
   /// the elements that it contains.
-  using KeyTy = std::tuple<llvm::ArrayRef<mlir::Type>, llvm::StringRef, llvm::ArrayRef<AffineMap>>;
+  using KeyTy = std::tuple<llvm::ArrayRef<int64_t>, llvm::ArrayRef<mlir::Type>, 
+                            llvm::StringRef, llvm::ArrayRef<AffineMap>>;
 
   /// A constructor for the type storage instance.
   // StructTypeStorage(llvm::ArrayRef<mlir::Type> elementTypes)
@@ -50,20 +51,24 @@ struct StructTypeStorage : public mlir::TypeStorage {
   //                   Attribute identifier)
   //     : elementTypes(elementTypes), identifier(identifier) {}
   
-  StructTypeStorage(llvm::ArrayRef<mlir::Type> elementTypes, 
+  StructTypeStorage(llvm::ArrayRef<int64_t> dimSizes,
+                    llvm::ArrayRef<mlir::Type> elementTypes, 
                     llvm::StringRef identifier,
                     llvm::ArrayRef<AffineMap> order)
-      : elementTypes(elementTypes), identifier(identifier), order(order) {}
+      : dimSizes(dimSizes), elementTypes(elementTypes), 
+        identifier(identifier), order(order) {}
 
   /// Define the comparison function for the key type with the current storage
   /// instance. This is used when constructing a new instance to ensure that we
   /// haven't already uniqued an instance of the given key.
   bool operator==(const KeyTy &key) const {
-    if (!(elementTypes == std::get<0>(key)))
+    if (!(dimSizes == std::get<0>(key)))
       return false;
-    if (!(identifier == std::get<1>(key)))
+    if (!(elementTypes == std::get<1>(key)))
       return false;
-    if (!(order == std::get<2>(key)))
+    if (!(identifier == std::get<2>(key)))
+      return false;
+    if (!(order == std::get<3>(key)))
       return false;
     return true;
     // if ( !hasIdentifier() && !hasOrder() ) {
@@ -79,7 +84,8 @@ struct StructTypeStorage : public mlir::TypeStorage {
   /// Note: This method isn't necessary as both llvm::ArrayRef and mlir::Type
   /// have hash functions available, so we could just omit this entirely.
   static llvm::hash_code hashKey(const KeyTy &key) {
-    return llvm::hash_combine(std::get<0>(key), std::get<1>(key), std::get<2>(key));
+    return llvm::hash_combine(std::get<0>(key), std::get<1>(key), 
+                              std::get<2>(key), std::get<3>(key));
   }
 
   /// Define a construction function for the key type from a set of parameters.
@@ -100,10 +106,12 @@ struct StructTypeStorage : public mlir::TypeStorage {
   static StructTypeStorage *construct(mlir::TypeStorageAllocator &allocator,
                                       const KeyTy &key) {
     // Copy the elements from the provided `KeyTy` into the allocator.
-    auto elementTypes = std::get<0>(key);
-    auto identifier = std::get<1>(key);
-    auto order = std::get<2>(key);
+    auto dimSizes = std::get<0>(key);
+    auto elementTypes = std::get<1>(key);
+    auto identifier = std::get<2>(key);
+    auto order = std::get<3>(key);
 
+    dimSizes = allocator.copyInto(dimSizes);
     elementTypes = allocator.copyInto(elementTypes);
     identifier = allocator.copyInto(identifier);
     order = allocator.copyInto(order);
@@ -121,7 +129,7 @@ struct StructTypeStorage : public mlir::TypeStorage {
 
     // Allocate the storage instance and construct it.
     return new (allocator.allocate<StructTypeStorage>())
-        StructTypeStorage(elementTypes, identifier, order);
+        StructTypeStorage(dimSizes, elementTypes, identifier, order);
   }
 
   // bool hasOrder() const { return !order.isEmpty(); }
@@ -135,6 +143,7 @@ struct StructTypeStorage : public mlir::TypeStorage {
   // llvm::ArrayRef<AffineMap> getOrder() const { return order; }
 
   /// The following field contains the element types of the struct.
+  llvm::ArrayRef<int64_t> dimSizes;
   llvm::ArrayRef<mlir::Type> elementTypes;
   llvm::StringRef identifier;
   llvm::ArrayRef<AffineMap> order;
@@ -145,7 +154,8 @@ struct StructTypeStorage : public mlir::TypeStorage {
 
 /// Create an instance of a `StructType` with the given element types. There
 /// *must* be at least one element type.
-StructType StructType::get(llvm::ArrayRef<mlir::Type> elementTypes,
+StructType StructType::get(llvm::ArrayRef<int64_t> dimSizes,
+                           llvm::ArrayRef<mlir::Type> elementTypes,
                            llvm::StringRef identifier,
                            llvm::ArrayRef<AffineMap> order) {
   assert(!elementTypes.empty() && "expected at least 1 element type");
@@ -159,7 +169,11 @@ StructType StructType::get(llvm::ArrayRef<mlir::Type> elementTypes,
   // else if (order.isEmpty())
   //   return Base::get(ctx, elementTypes, identifier);
   // else
-  return Base::get(ctx, elementTypes, identifier, order);
+  return Base::get(ctx, dimSizes, elementTypes, identifier, order);
+}
+
+llvm::ArrayRef<int64_t> StructType::getDimSizes() {
+  return getImpl()->dimSizes;
 }
 
 /// Returns the element types of this struct type.
@@ -195,6 +209,26 @@ mlir::Type SparlayDialect::parseType(mlir::DialectAsmParser &parser) const {
   std::string getIdentifier;
   SmallVector<AffineMap, 1> elmOrders;
   bool isParsingType = true;
+
+  SmallVector<int64_t, 1> dimSizes;
+  LLVM_DEBUG(llvm::dbgs() << "before parsing [\n");
+  // parse index list
+  if (!(parser.parseOptionalLSquare())) {
+    llvm::SMLoc typeLoc = parser.getCurrentLocation();
+    do {
+      int64_t dim;
+      auto parseInt = parser.parseOptionalInteger(dim);
+      if (parseInt.hasValue())
+        dimSizes.push_back(dim);
+    } while (succeeded(parser.parseOptionalComma()));
+    if (parser.parseOptionalRSquare()) {
+      parser.emitError(typeLoc, "Missing right square.\n");
+      return nullptr;
+    }
+    if (failed(parser.parseOptionalComma())) 
+    return nullptr;
+  }
+
   do {
     // Parse the current element type.
     llvm::SMLoc typeLoc = parser.getCurrentLocation();
@@ -261,7 +295,7 @@ mlir::Type SparlayDialect::parseType(mlir::DialectAsmParser &parser) const {
     return Type();
   
   llvm::StringRef elmIdentifier(getIdentifier);
-  return StructType::get(elementTypes, elmIdentifier, elmOrders);
+  return StructType::get(dimSizes, elementTypes, elmIdentifier, elmOrders);
 }
 
 /// Print an instance of a type registered to the toy dialect.
@@ -272,6 +306,11 @@ void SparlayDialect::printType(mlir::Type type,
 
   // Print the struct type according to the parser format.
   printer << "struct<";
+  if (!structType.getDimSizes().empty()) {
+    printer << "[";
+    llvm::interleaveComma(structType.getDimSizes(), printer);
+    printer << "], ";
+  }
   llvm::interleaveComma(structType.getElementTypes(), printer);
   if (!structType.getIdentifier().empty())
     printer << ", " << "\"" << structType.getIdentifier() << "\"";

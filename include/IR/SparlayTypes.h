@@ -35,9 +35,11 @@ public:
 
   /// Create an instance of a `StructType` with the given element types. There
   /// *must* be atleast one element type.
-  static StructType get(llvm::ArrayRef<mlir::Type> elementTypes,
+  static StructType get(llvm::ArrayRef<int64_t> dimSizes,
+                        llvm::ArrayRef<mlir::Type> elementTypes,
                         llvm::StringRef identifier,
                         llvm::ArrayRef<AffineMap> order);
+  llvm::ArrayRef<int64_t> getDimSizes();
 
   /// Returns the element types of this struct type.
   llvm::ArrayRef<mlir::Type> getElementTypes();

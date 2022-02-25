@@ -26,7 +26,7 @@ func @main() {
     // Inst 1:
     %A_COO = sparlay.struct_construct (%A_COO_crd, %A_val_mem) : 
         !sparlay.struct<memref<7xindex>, memref<7xindex>, "crd", (i,j)->(i,j)>, memref<7xf32> to
-        !sparlay.struct< !sparlay.struct<memref<7xindex>, memref<7xindex>, "crd", (i,j)->(i,j)>, memref<7xf32> >
+        !sparlay.struct< [4,6], !sparlay.struct<memref<7xindex>, memref<7xindex>, "crd", (i,j)->(i,j)>, memref<7xf32> >
     
     // Inst 2:
     %A_CSR_ptr = sparlay.struct_construct (%A_ptr_mem) : memref<5xindex> to    
@@ -40,12 +40,12 @@ func @main() {
     %A_CSR = sparlay.struct_construct (%A_CSR_ptr, %A_CSR_crd, %A_val_mem) : 
         !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
         !sparlay.struct<memref<7xindex>, "crd", (i,j)->(j)>, memref<7xf32> to
-        !sparlay.struct< !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
+        !sparlay.struct< [4,6], !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
                          !sparlay.struct<memref<7xindex>, "crd", (i,j)->(j)> , memref<7xf32> >
     
     // Inst 5: fold with Inst 4, replace result with %A_CSR_ptr
     %access_A_CSR_ptr = sparlay.struct_access %A_CSR[0] : 
-        !sparlay.struct< !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
+        !sparlay.struct< [4,6], !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
                          !sparlay.struct<memref<7xindex>, "crd", (i,j)->(j)> , memref<7xf32> > to
         !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>
     
@@ -55,7 +55,7 @@ func @main() {
     
     // Inst 7: fold with Inst 4, replace result with %A_CSR_crd
     %access_A_CSR_crd = sparlay.struct_access %A_CSR[1] : 
-        !sparlay.struct< !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
+        !sparlay.struct< [4,6], !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
                          !sparlay.struct<memref<7xindex>, "crd", (i,j)->(j)> , memref<7xf32> > to
         !sparlay.struct<memref<7xindex>, "crd", (i,j)->(j)>
     
@@ -65,7 +65,7 @@ func @main() {
     
     // Inst 9: fold with Inst 4, replace result with %A_val_mem
     %access_A_val_mem = sparlay.struct_access %A_CSR[2] : 
-        !sparlay.struct< !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
+        !sparlay.struct< [4,6], !sparlay.struct<memref<5xindex>, "ptr", (i,j)->(j)>,
                          !sparlay.struct<memref<7xindex>, "crd", (i,j)->(j)> , memref<7xf32> > to
         memref<7xf32>
            
