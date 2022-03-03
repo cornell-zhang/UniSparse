@@ -53,6 +53,36 @@ def Sparlay_FooOp : Sparlay_Op<"foo", [NoSideEffect,
     }];
 }
 
+def Sparlay_NewOp : Sparlay_Op<"new", [NoSideEffect]> {
+    let summary = "Construct a sparlay tensor type from .";
+    let description = [{
+        Example:
+        ```mlir
+        // %A_crd, %A_val = sparlay.pack %A 
+        //     { reduce_dim = 1, padding = "none", 
+        //     storage_order = affine_map<(i,j) -> (i,j)> } :
+        //     tensor<4x4xf32> to 
+        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
+        %A_COO = sparlay.pack (%A) 
+            { reduce_dim = 1, padding = "none", 
+            storage_order = affine_map<(i,j) -> (i,j)> } :
+            tensor<4x4xf32> to 
+            !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>>
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    // let results = (outs Sparlay_Type:$out_indices,
+    //                     Sparlay_Type:$out_values);
+    let results = (outs Sparlay_Type:$output);
+    // let builders = [
+    //     OpBuilder<(ins "Value":$input, "IndexAttr":$reduce_dim,
+    //                     "StringRef":$padding, "AffineMapAttr":$storage_order)>,
+    // ];
+    let assemblyFormat = [{
+       `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+    }];
+}
+
 def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
     let summary = "Remove zero elements selectively from the input tensor.";
     let description = [{

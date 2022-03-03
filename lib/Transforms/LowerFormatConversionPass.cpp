@@ -14,6 +14,7 @@
 #include "IR/SparlayDialect.h"
 #include "IR/SparlayOps.h"
 #include "IR/SparlayDialect.h"
+#include "IR/SparlayTypes.h"
 
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
@@ -34,12 +35,102 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <cstdio>
+#include <cstring>
+
 using namespace mlir;
 using namespace sparlay;
 
 #define DEBUG_TYPE "lower-format-conversion"
 
 namespace {
+//===----------------------------------------------------------------------===//
+// RewritePatterns: New operations
+//===----------------------------------------------------------------------===//
+
+/// Returns a function reference (first hit also inserts into module). Sets
+/// the "_emit_c_interface" on the function declaration when requested,
+/// so that LLVM lowering generates a wrapper function that takes care
+/// of ABI complications with passing in and returning MemRefs to C functions.
+static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
+                                 TypeRange resultType, ValueRange operands,
+                                 bool emitCInterface = false) {
+  MLIRContext *context = op->getContext();
+  auto module = op->getParentOfType<ModuleOp>();
+  auto result = SymbolRefAttr::get(context, name);
+  auto func = module.lookupSymbol<FuncOp>(result.getAttr());
+  if (!func) {
+    OpBuilder moduleBuilder(module.getBodyRegion());
+    func = moduleBuilder.create<FuncOp>(
+        op->getLoc(), name,
+        FunctionType::get(context, operands.getTypes(), resultType));
+    func.setPrivate();
+    if (emitCInterface)
+      func->setAttr("llvm.emit_c_interface", UnitAttr::get(context));
+  }
+  return result;
+}
+
+class NewOpLowering : public OpConversionPattern<sparlay::NewOp> {
+public:
+    using OpConversionPattern<sparlay::NewOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(sparlay::NewOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        
+        Value fileName = op->getOperand(0);
+        auto resType = op->getResult(0).getType().dyn_cast<StructType>();
+
+        // if (resType.isa<StructType>())
+        //     LLVM_DEBUG(llvm::dbgs() << "is a struct type\n");
+        
+        llvm::ArrayRef<mlir::Type> elmTypes = resType.getElementTypes();
+        Type crdType = elmTypes.front();
+        Type dataType = elmTypes.back();
+        auto resDimSizes = resType.getDimSizes();
+        uint64_t resSize = resDimSizes.size();
+
+        CallOp indicesOp[resSize];
+        CallOp valueOp;
+
+        auto indexTp = rewriter.getIndexType();
+        Type idxResType = MemRefType::get({ShapedType::kDynamicSize}, indexTp);
+        // auto f32Tp = rewriter.getF32Type();
+        // Type valResType = MemRefType::get({ShapedType::kDynamicSize}, f32Tp);
+        StringRef idxFuncName = "getTensorIndices";
+        StringRef valFuncName = "getTensorValues";
+        
+        for (unsigned i = 0; i < resSize; i++) {
+            SmallVector<Value, 3> idxParams;
+            idxParams.push_back(fileName);
+            idxParams.push_back(
+                rewriter.create<ConstantOp>(loc, rewriter.getI64IntegerAttr(i)));
+            indicesOp[i] = rewriter.create<CallOp>(loc, idxResType, 
+                getFunc(op, idxFuncName, idxResType, idxParams, /*emitCInterface=*/true),
+                idxParams);
+        }
+        SmallVector<Value, 3> valParams;
+        valParams.push_back(fileName);
+        valueOp = rewriter.create<CallOp>(loc, dataType, 
+            getFunc(op, valFuncName, dataType, valParams, /*emitCInterface=*/true),
+            valParams);
+            
+        // use struct_construct to construct them into the sparse data structure
+        // which will be folded with struct_access or eliminated with DCE in finalize_sparlay_lowering
+        SmallVector<Value, 3> input_vec;
+        for (unsigned i = 0; i < resSize; i++) {
+            input_vec.push_back(indicesOp[i].getResult(0));
+        }
+        ValueRange input = llvm::makeArrayRef(input_vec);
+
+        Value crdStructOp = rewriter.create<sparlay::StructConstructOp>(loc, crdType, input);
+        rewriter.replaceOpWithNewOp<sparlay::StructConstructOp>(op, resType, 
+            ValueRange({crdStructOp, valueOp.getResult(0)}));
+        return success();
+    }
+};
 
 //===----------------------------------------------------------------------===//
 // RewritePatterns: Pack operations
@@ -360,6 +451,7 @@ void LowerFormatConversionPass::runOnFunction() {
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
+    patterns.add<NewOpLowering>(&getContext());
     patterns.add<PackOpLowering>(&getContext());
     patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
