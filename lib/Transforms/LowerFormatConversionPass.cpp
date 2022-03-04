@@ -379,6 +379,32 @@ public:
 }; 
 
 //===----------------------------------------------------------------------===//
+// RewritePatterns: Compress operations
+//===----------------------------------------------------------------------===//
+
+class CompressOpLowering : public OpConversionPattern<sparlay::CompressOp> {
+public:
+    using OpConversionPattern<sparlay::CompressOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(sparlay::CompressOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        // Value output = op->getOperand(0);
+        // Value input_A = op->getOperand(1);
+        // Value input_B = op->getOperand(2);
+        // StringRef target = op.target();
+        // StringRef pattern = op.pattern();
+
+        // if (target == "CPU" && pattern == "inner") {
+
+
+        // } else
+        //     LLVM_DEBUG(llvm::dbgs() << "Target or pattern not supported yet.\n");
+    }
+};
+
+//===----------------------------------------------------------------------===//
 // RewritePatterns: Multiply operations
 //===----------------------------------------------------------------------===//
 
@@ -451,9 +477,10 @@ void LowerFormatConversionPass::runOnFunction() {
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
-    patterns.add<NewOpLowering>(&getContext());
-    patterns.add<PackOpLowering>(&getContext());
-    patterns.add<MultiplyOpLowering>(&getContext());
+    patterns.add<NewOpLowering, PackOpLowering,
+                 CompressOpLowering, MultiplyOpLowering>(&getContext());
+    // patterns.add<PackOpLowering>(&getContext());
+    // patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
