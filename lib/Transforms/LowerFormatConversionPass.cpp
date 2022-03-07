@@ -390,17 +390,110 @@ public:
         matchAndRewrite(sparlay::CompressOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
-        // Value output = op->getOperand(0);
-        // Value input_A = op->getOperand(1);
-        // Value input_B = op->getOperand(2);
-        // StringRef target = op.target();
-        // StringRef pattern = op.pattern();
+        Value input = op->getOperand(0);
+        Value output = op->getResult(0);
+        auto compressDim = op.compress_dim();
+        // AffineMap storageOrder = op.storage_order();
 
-        // if (target == "CPU" && pattern == "inner") {
+        auto inputType = input.getType().dyn_cast<StructType>();
+        auto outputType = output.getType().dyn_cast<StructType>();
 
+        llvm::ArrayRef<mlir::Type> inputElmTypes = inputType.getElementTypes();
+        llvm::ArrayRef<mlir::Type> outputElmTypes = outputType.getElementTypes();
+        int64_t compressDimValue = compressDim.getSExtValue();
+        Type inputCrdType = inputElmTypes.front();
+        Type inputDataType = inputElmTypes.back();
+        llvm::ArrayRef<int64_t> inputDimSizes = inputType.getDimSizes();
+        uint64_t inputSize = inputDimSizes.size();
+        Type outputPtrType = outputElmTypes[0];
+        Type outputCrdType = outputElmTypes[1];
+        // Type outputValType = outputElmTypes[2];
+        auto indexTp = rewriter.getIndexType();
+        Type idxMemRefType = MemRefType::get({ShapedType::kDynamicSize}, indexTp);
 
-        // } else
-        //     LLVM_DEBUG(llvm::dbgs() << "Target or pattern not supported yet.\n");
+        // compose the new crd struct 
+        Value i0 = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(0));
+        Value i1 = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(1));
+        Value crd_old = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input, 0);
+        Value val_old = rewriter.create<sparlay::StructAccessOp>(loc, inputDataType, input, 1);
+        std::vector<Value> crdArray;
+        for (uint64_t i = 0; i < inputSize; i++) {
+            // Value constI = rewriter.create<ConstantOp>(loc, rewriter.getI64IntegerAttr(i));
+            crdArray.push_back(rewriter.create<sparlay::StructAccessOp>(loc, idxMemRefType, crd_old, i));
+        }
+        Value crd_new = rewriter.create<sparlay::StructConstructOp>(loc, outputCrdType, 
+            llvm::makeArrayRef(crdArray).take_back(inputSize - compressDimValue));
+
+        // compose the ptr struct
+        // %ptr = memref.alloca() : memref<4xindex>
+        int64_t ptrSizeVal = 1;
+        for (int64_t i = 0; i < compressDimValue; i++) {
+            ptrSizeVal = ptrSizeVal * inputDimSizes[i];
+        }
+        ptrSizeVal += 1;
+        Value ptrSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(ptrSizeVal));
+        MemRefType dynamicPtrType = MemRefType::get(-1, indexTp);
+        Value ptr = rewriter.create<memref::AllocOp>(loc, dynamicPtrType, ptrSize);
+
+        // memref.store %i0, %ptr[%i0] : memref<4xindex>
+        // ValueRange idx0 = llvm::makeArrayRef(i0);
+        rewriter.create<memref::StoreOp>(loc, i0, ptr, i0);
+
+        // %ptr_dim = memref.dim %ptr, %i0 : memref<4xindex>
+        // Value ptr_dim = rewriter.create<memref::DimOp>(loc, ptr, i0);
+
+        // scf.for
+        SmallVector<Value, 1> lb, hb, step;
+        lb.push_back(i1);
+        hb.push_back(ptrSize);
+        step.push_back(i1);
+        scf::buildLoopNest(rewriter, loc, lb, hb, step, 
+            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
+                SmallVector<Type, 3> resTypes;
+                SmallVector<Value, 3> initArgs;
+                resTypes.push_back(indexTp);
+                initArgs.push_back(i0);
+                auto whileOp = rewriter.create<scf::WhileOp>(loc, resTypes, initArgs);
+
+                // The before block of the while loop.
+                Block *before = rewriter.createBlock(&whileOp.before(), {}, resTypes); 
+                rewriter.setInsertionPointToStart(&whileOp.before().front());
+
+                // %crd_val = memref.load %crd_0[%arg1] : memref<7xindex>
+                Value crd_val = rewriter.create<memref::LoadOp>(whileOp.getLoc(), crdArray.front(), before->getArgument(0));
+                // %cond = cmpi ult, %crd_val, %arg0 : index
+                Value cond = builder.create<CmpIOp>(whileOp.getLoc(), CmpIPredicate::ult, crd_val, ivs[0]);
+                // scf.condition (%cond) %arg1 : index
+                rewriter.create<scf::ConditionOp>(whileOp.getLoc(), cond, before->getArguments());
+
+                // ----------------Please revise the logic for general purpose ---------
+                // Value i5 = rewriter.create<ConstantOp>(whileOp.getLoc(), rewriter.getIndexAttr(5));
+                // Value isLessThanFive = rewriter.create<CmpIOp>(whileOp.getLoc(), 
+                //     CmpIPredicate::ult, before->getArgument(0), i5);
+                // rewriter.create<scf::ConditionOp>(whileOp.getLoc(), isLessThanFive, before->getArguments());
+                
+                // The after block of the while loop.
+                Block *after = rewriter.createBlock(&whileOp.after(), {}, resTypes);
+                rewriter.setInsertionPointToStart(&whileOp.after().front());
+
+                // %sum = addi %arg2, %i1 : index
+                Value sum = builder.create<AddIOp>(whileOp.getLoc(), after->getArgument(0), i1);
+                // scf.yield %sum : index
+                rewriter.create<scf::YieldOp>(whileOp.getLoc(), ValueRange({sum}));
+
+                rewriter.setInsertionPointAfter(whileOp);
+                // memref.store %next_sum, %ptr[%arg0] : memref<4xindex>
+                builder.create<memref::StoreOp>(loc, whileOp.getResult(0), ptr, ivs);
+                return;
+            });
+
+        // compose the compressed struct
+        Value ptr_new = rewriter.create<sparlay::StructConstructOp>(loc, outputPtrType, ptr);
+        rewriter.replaceOpWithNewOp<sparlay::StructConstructOp>(op, output.getType(), 
+            ValueRange({ptr_new, crd_new, val_old}));
+        // rewriter.eraseOp(op);
+        return success();
+        // DCE to remove redundant constant allocation - after finalizing lowering
     }
 };
 
@@ -468,7 +561,7 @@ void LowerFormatConversionPass::runOnFunction() {
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
     target.addIllegalDialect<sparlay::SparlayDialect>();
-    target.addLegalOp<sparlay::CompressOp>();
+    // target.addLegalOp<sparlay::CompressOp>();
     target.addLegalOp<sparlay::StructAccessOp>();
     target.addLegalOp<sparlay::StructConstructOp>();
     target.addLegalOp<sparlay::FooOp>();
