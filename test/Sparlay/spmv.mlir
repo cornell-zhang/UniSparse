@@ -29,7 +29,7 @@ module {
         //     tensor<4x4xf32> to 
         //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
         %A_COO = sparlay.pack (%A_mem) 
-            { reduce_dim = "j", padding = "none", 
+            { reduce_dim = 1: index, padding = "none", 
             storage_order = affine_map<(i,j) -> (i,j)> } :
             memref<4x4xf32> to 
             !sparlay.struct<!sparlay.struct<memref<?xindex>, memref<?xindex>>, memref<?xf32>>
@@ -41,10 +41,25 @@ module {
         //     !sparlay.struct<tensor<?xindex>>,
         //     tensor<?xf32>  
         %A_CSR = sparlay.compress (%A_COO)
-            { compress_dim = "i", storage_order = affine_map<(i,j)->(i,j)> } :
+            { compress_dim = 0: index, storage_order = affine_map<(i,j)->(i,j)> } :
             !sparlay.struct<!sparlay.struct<memref<?xindex>, memref<?xindex>>, memref<?xf32>> to 
             !sparlay.struct<!sparlay.struct<memref<?xindex>>, !sparlay.struct<memref<?xindex>>,
             memref<?xf32>>
+
+        // /* Potential compute operation
+        // %C_mem = linalg.generic {target = "CPU", pattern = "inner"}
+        //     ins(%A_CSR, %B_mem: 
+        //         !sparlay.struct<!sparlay.struct<memref<?xindex>>, 
+        //                         !sparlay.struct<memref<?xindex>>,
+        //                         memref<?xf32>>, 
+        //         memref<4xf32>)
+        //     outs(%C_mem: memref<4x4xf32>) {
+        //     ^bb(%a: f64, %b: f64, %x: f64):
+        //         %0 = mulf %a, %b : f64
+        //         %1 = addf %x, %0 : f64
+        //         linalg.yield %1 : f64
+        //     } -> memref<4x4xf32>
+        // */
 
         // %A_pointer = sparlay.struct_access %csr_ptr[0] : 
         //     !sparlay.struct<tensor<?xindex>> to tensor<?xindex>
