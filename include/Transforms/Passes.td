@@ -27,4 +27,14 @@ def LowerFormatConversion : Pass<"lower-format-conversion"> {
     ];
 }
 
+def LowerStruct : Pass<"lower-struct"> {
+    let summary = "Lower struct conversion";
+    let constructor = "mlir::sparlay::createLowerStructPass()";
+}
+
+def DeadCodeElimination : Pass<"dce"> {
+    let summary = "dead code elimination";
+    let constructor = "mlir::sparlay::createDeadCodeEliminationPass()";
+}
+
 #endif // MLIR_DIALECT_SPARLAY_PASSES

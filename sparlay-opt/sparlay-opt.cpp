@@ -41,6 +41,13 @@ static cl::opt<std::string> outputFilename("o",
 static cl::opt<bool> lowerFormatConversion("lower-format-conversion",
                                            cl::init(false),
                                            cl::desc("Enable Format Lowering"));
+static cl::opt<bool> lowerStruct("lower-struct",
+                                  cl::init(false),
+                                  cl::desc("Enable Struct Lowering"));
+static cl::opt<bool> dce("dce",
+                        cl::init(false),
+                        cl::desc("dead code elimination"));
+
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Read the input mlir.
@@ -76,6 +83,16 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (lowerFormatConversion) {
     // pm.addPass(mlir::createLowerFormatConversionPass());
     optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
+  }
+
+  if (lowerStruct) {
+    // pm.addPass(mlir::createLowerFormatConversionPass());
+    optPM.addPass(mlir::sparlay::createLowerStructPass());
+  }
+
+  if (dce) {
+    // pm.addPass(mlir::createLowerFormatConversionPass());
+    optPM.addPass(mlir::sparlay::createDeadCodeEliminationPass());
   }
 
   if (mlir::failed(pm.run(*module)))
