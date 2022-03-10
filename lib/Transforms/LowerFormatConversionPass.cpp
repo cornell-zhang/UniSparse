@@ -81,6 +81,7 @@ public:
         Location loc = op->getLoc();
         
         Value fileName = op->getOperand(0);
+        Type inputType = fileName.getType();
         auto resType = op->getResult(0).getType().dyn_cast<StructType>();
 
         // if (resType.isa<StructType>())
@@ -92,6 +93,7 @@ public:
         auto resDimSizes = resType.getDimSizes();
         uint64_t resSize = resDimSizes.size();
 
+        CallOp tensorOp;
         CallOp indicesOp[resSize];
         CallOp valueOp;
 
@@ -99,12 +101,19 @@ public:
         Type idxResType = MemRefType::get({ShapedType::kDynamicSize}, indexTp);
         // auto f32Tp = rewriter.getF32Type();
         // Type valResType = MemRefType::get({ShapedType::kDynamicSize}, f32Tp);
+        StringRef readTensorName =  "readSparseCoordinate";
         StringRef idxFuncName = "getTensorIndices";
         StringRef valFuncName = "getTensorValues";
+
+        SmallVector<Value, 1> readParams;
+        readParams.push_back(fileName);
+        tensorOp = rewriter.create<CallOp>(loc, inputType, 
+            getFunc(op, readTensorName, inputType, readParams, /*emitCInterface=*/false),
+            readParams); //
         
         for (unsigned i = 0; i < resSize; i++) {
             SmallVector<Value, 3> idxParams;
-            idxParams.push_back(fileName);
+            idxParams.push_back(tensorOp.getResult(0));
             idxParams.push_back(
                 rewriter.create<ConstantOp>(loc, rewriter.getI64IntegerAttr(i)));
             indicesOp[i] = rewriter.create<CallOp>(loc, idxResType, 
@@ -112,7 +121,7 @@ public:
                 idxParams);
         }
         SmallVector<Value, 3> valParams;
-        valParams.push_back(fileName);
+        valParams.push_back(tensorOp.getResult(0));
         valueOp = rewriter.create<CallOp>(loc, dataType, 
             getFunc(op, valFuncName, dataType, valParams, /*emitCInterface=*/true),
             valParams);
@@ -438,6 +447,7 @@ public:
         // memref.store %i0, %ptr[%i0] : memref<4xindex>
         // ValueRange idx0 = llvm::makeArrayRef(i0);
         rewriter.create<memref::StoreOp>(loc, i0, ptr, i0);
+        Value crd_dim = rewriter.create<memref::DimOp>(loc, crdArray.front(), i0);
 
         // %ptr_dim = memref.dim %ptr, %i0 : memref<4xindex>
         // Value ptr_dim = rewriter.create<memref::DimOp>(loc, ptr, i0);
@@ -458,11 +468,14 @@ public:
                 // The before block of the while loop.
                 Block *before = rewriter.createBlock(&whileOp.before(), {}, resTypes); 
                 rewriter.setInsertionPointToStart(&whileOp.before().front());
-
+                // %cond1 = cmpi ult, %arg1, %dim : index
+                Value cond1 = builder.create<CmpIOp>(whileOp.getLoc(), CmpIPredicate::ult, before->getArguments()[0], crd_dim);
                 // %crd_val = memref.load %crd_0[%arg1] : memref<7xindex>
                 Value crd_val = rewriter.create<memref::LoadOp>(whileOp.getLoc(), crdArray.front(), before->getArgument(0));
-                // %cond = cmpi ult, %crd_val, %arg0 : index
-                Value cond = builder.create<CmpIOp>(whileOp.getLoc(), CmpIPredicate::ult, crd_val, ivs[0]);
+                // %cond2 = cmpi ult, %crd_val, %arg0 : index
+                Value cond2 = builder.create<CmpIOp>(whileOp.getLoc(), CmpIPredicate::ult, crd_val, ivs[0]);
+                // %cond = and %cond1, %cond2 : i1
+                Value cond = builder.create<AndOp>(whileOp.getLoc(), cond1, cond2);
                 // scf.condition (%cond) %arg1 : index
                 rewriter.create<scf::ConditionOp>(whileOp.getLoc(), cond, before->getArguments());
 

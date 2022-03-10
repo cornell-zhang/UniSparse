@@ -5,7 +5,7 @@
 module {
     // CHECK-LABEL: func @spmv()
     func private @getTensorFilename(index) -> (!Filename)
-    func @spmv() {
+    func @main() {
         %i0 = constant 0: index
         %i1 = constant 1: index
         %i4 = constant 4: index
@@ -164,15 +164,6 @@ module {
         // // call @print_memref_f32(%C_mem) : (memref<4xf32>) -> ()
         // %result = vector.transfer_read %C_mem[%i0], %f0 : memref<4xf32>, vector<4xf32>
         // vector.print %result : vector<4xf32>
-
-        // // memref.dealloc %A_ptr_mem : memref<?xindex>
-        // // memref.dealloc %A_crd_mem : memref<?xindex>
-        // // memref.dealloc %A_val_mem : memref<?xf32>
-        // memref.dealloc %A_mem : memref<4x4xf32>
-        memref.dealloc %B_mem : memref<4xf32>
-        memref.dealloc %C_mem : memref<4xf32>
-        
-
         return
     }
 }

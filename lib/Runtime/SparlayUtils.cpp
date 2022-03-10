@@ -197,6 +197,7 @@ extern "C" {
         ref->strides[0] =1; 
 
         printf("ref->basePtr: %x\n", ref->basePtr);
+        printf("ref->size: %zu\n", index->size());
         printf("ref->data: ");
         for (unsigned i = 0; i < index->size(); i++) {
             printf("%lu  ", *(ref->data + ref->offset + i * ref->strides[0]));
@@ -220,6 +221,7 @@ extern "C" {
         ref->strides[0] = 1; 
 
         printf("ref->basePtr: %x\n", ref->basePtr);
+        printf("ref->size: %zu\n", value->size());
         printf("ref->data: ");
         for (unsigned i = 0; i < value->size(); i++) {
             printf("%f  ", *(ref->data + ref->offset + i * ref->strides[0]));
