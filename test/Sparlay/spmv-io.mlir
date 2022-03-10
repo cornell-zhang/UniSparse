@@ -1,4 +1,11 @@
-// RUN: sparlay-opt %s | sparlay-opt | FileCheck %s
+// RUN: sparlay-opt %s -lower-format-conversion -lower-struct -dce | \
+// RUN: mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
+// RUN:     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
+// RUN:     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-cast | \
+// RUN: mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 | as - -o |
+// RUN: clang++ -L${YOUR_PROJECT_PATH}/sparlay/build/lib -lmlir_sparlay_runner_utils \
+// RUN:     -L${LLVM_PROJECT_PATH}/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec
+// RUN: ./exec
 
 !Filename = type !llvm.ptr<i8>
 
