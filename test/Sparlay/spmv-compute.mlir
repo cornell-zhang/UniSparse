@@ -52,6 +52,17 @@ module {
                          !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> , memref<?xf32> >,
             memref<4xf32>
         
+        // Comment this block before running. sparlay.multiply gets lowered to 
+        %A_ptr_struct = sparlay.struct_access %A_CSR[0] : !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>,
+                !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> , memref<?xf32> > to !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>
+        %A_ptr = sparlay.struct_access %A_ptr_struct[0] : !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)> to memref<?xindex>
+        %A_crd_struct = sparlay.struct_access %A_CSR[1] : !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>,
+                !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> , memref<?xf32> > to !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)>
+        %A_crd = sparlay.struct_access %A_crd_struct[0] : !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> to memref<?xindex>
+        %A_val = sparlay.struct_access %A_CSR[2] : !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>,
+                !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> , memref<?xf32> > to memref<?xf32>
+        %result = call @CSR_SPMV (%A_ptr, %A_crd, %A_val, %B_mem) : (memref<?xindex>, memref<?xindex>, memref<?xf32>, memref<4xf32>) -> (memref<?xf32>)
+        
         // %crd_old = sparlay.struct_access %A_input[0] : 
         //      !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)>, 
         //                      memref<?xf32>> to
