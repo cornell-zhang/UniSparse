@@ -230,6 +230,15 @@ extern "C" {
 
     }
 
+    void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, StridedMemRefType<uint64_t, 1> *ptr, StridedMemRefType<uint64_t, 1> *col, StridedMemRefType<uint64_t, 1> *value, StridedMemRefType<double, 1> *input) {
+      uint64_t row = ptr->sizes[0] - 1;
+      for(uint64_t i = 0; i < row; i++) {
+	for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
+	  out->data[i] += value->data[j] * input->data[col->data[j]];
+	}
+      }
+    }  
+
     // void delSparseCoordinate(void *tensor) {
     //     delete static_cast<SparseCoordinate<uint64_t, double> *>(tensor);
     // }

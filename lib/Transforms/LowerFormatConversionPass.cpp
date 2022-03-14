@@ -395,7 +395,7 @@ class CompressOpLowering : public OpConversionPattern<sparlay::CompressOp> {
 public:
     using OpConversionPattern<sparlay::CompressOp>::OpConversionPattern;
 
-    LogicalResult 
+    LogicalResult
         matchAndRewrite(sparlay::CompressOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
@@ -519,12 +519,39 @@ public:
     using OpConversionPattern<sparlay::MultiplyOp>::OpConversionPattern;
 
     LogicalResult 
-        matchAndRewrite(sparlay::MultiplyOp op, OpAdaptor adaptor,
+	    matchAndRewrite(sparlay::MultiplyOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
-        // Location loc = op->getLoc();
-        // Value output = op->getOperand(0);
-        // Value input_A = op->getOperand(1);
-        // Value input_B = op->getOperand(2);
+      Location loc = op->getLoc();
+      Value output = op->getOperand(0);
+      auto output_0 = output.getType().dyn_cast<StructType>();
+      Value input_A = op->getOperand(1);
+      auto inputType_A = input_A.getType().dyn_cast<StructType>();
+      Value input_B = op->getOperand(2);
+      auto inputType_B = input_B.getType().dyn_cast<StructType>();
+      llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
+      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
+      llvm::ArrayRef<mlir::Type> outputElmTypes = output_0.getElementTypes();
+      
+      Type inputPtrType = inputElmTypes[0];
+      Type inputCrdType = inputElmTypes[1];
+      Type inputValType = inputElmTypes[2];
+      Type inputdense_vecType = inputElmTypes_B[0];
+      Type outputType = outputElmTypes[0];
+      Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
+      Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 1);
+      Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
+      CallOp csr_spmv;
+      StringRef call_spmv_name = "calculateCSRSpMV";
+      SmallVector<Value, 4> readParams;
+      readParams.push_back(ptr);
+      readParams.push_back(crd);
+      readParams.push_back(val);
+      readParams.push_back(input_B);
+      csr_spmv = rewriter.create<CallOp>(loc, outputType, 
+		 getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
+		 readParams);
+      rewriter.eraseOp(op);
+      return success();
         // StringRef target = op.target();
         // StringRef pattern = op.pattern();
 
