@@ -523,20 +523,20 @@ public:
                         ConversionPatternRewriter &rewriter) const final {
       Location loc = op->getLoc();
       Value output = op->getOperand(0);
-      auto output_0 = output.getType().dyn_cast<StructType>();
+      auto outputType = output.getType();
       Value input_A = op->getOperand(1);
       auto inputType_A = input_A.getType().dyn_cast<StructType>();
       Value input_B = op->getOperand(2);
-      auto inputType_B = input_B.getType().dyn_cast<StructType>();
+      auto inputdense_vecType = input_B.getType();
       llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
-      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
-      llvm::ArrayRef<mlir::Type> outputElmTypes = output_0.getElementTypes();
+//      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
+//      llvm::ArrayRef<mlir::Type> outputElmTypes = output_0.getElementTypes();
       
       Type inputPtrType = inputElmTypes[0];
       Type inputCrdType = inputElmTypes[1];
       Type inputValType = inputElmTypes[2];
-      Type inputdense_vecType = inputElmTypes_B[0];
-      Type outputType = outputElmTypes[0];
+//      Type inputdense_vecType = inputElmTypes_B[0];
+//      Type outputType = outputElmTypes[0];
       Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
       Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 1);
       Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
