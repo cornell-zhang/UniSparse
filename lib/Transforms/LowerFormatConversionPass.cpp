@@ -538,13 +538,21 @@ public:
 //      Type inputdense_vecType = inputElmTypes_B[0];
 //      Type outputType = outputElmTypes[0];
       Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
+      auto ptrtype = ptr.getType().dyn_cast<StructType>();
+      llvm::ArrayRef<mlir::Type> ptrElmtypes = ptrtype.getElementTypes();
+      Type input_ptr_type = ptrElmtypes[0];
+      Value ptr_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_ptr_type, ptr, 0);
       Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 1);
+      auto crdtype = crd.getType().dyn_cast<StructType>();
+      llvm::ArrayRef<mlir::Type> crdElmtypes = ptrtype.getElementTypes();
+      Type input_crd_type = crdElmtypes[0];
+      Value crd_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_type, crd, 0);
       Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
       CallOp csr_spmv;
       StringRef call_spmv_name = "calculateCSRSpMV";
       SmallVector<Value, 4> readParams;
-      readParams.push_back(ptr);
-      readParams.push_back(crd);
+      readParams.push_back(ptr_memref);
+      readParams.push_back(crd_memref);
       readParams.push_back(val);
       readParams.push_back(input_B);
       csr_spmv = rewriter.create<CallOp>(loc, outputType, 
