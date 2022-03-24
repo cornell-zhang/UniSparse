@@ -21,14 +21,14 @@ BUILD_DIR=./build
 # 	g++ -std=c++11 -O3 -I${GBLAS_INCLUDE_DIR} -Wl,-rpath,${GBLAS_LIBRARY_DIR} -L${GBLAS_LIBRARY_DIR} \
 # 		graphblas_spmm.cpp -o $(BUILD_DIR)/graphblas_spmm -llagraph -lgraphblas -lm -lcnpy
 
-# mkl_spmm: mkl_spmm.cpp
-# 	mkdir -p $(BUILD_DIR)
-# 	g++ -std=c++11 -O3 -I${CNPY_INCLUDE_DIR} -L${CNPY_LIBRARY_DIR} -I${MKL_INCLUDE_DIR} \
-# 		-Wl,--no-as-needed \
-# 		mkl_spmm.cpp -o $(BUILD_DIR)/mkl_spmm \
-# 		-Wl,--start-group ${MKL_LIBRARY_DIR}/libmkl_intel_lp64.a \
-# 		${MKL_LIBRARY_DIR}/libmkl_core.a ${MKL_LIBRARY_DIR}/libmkl_gnu_thread.a -Wl,--end-group \
-# 		-fopenmp -lpthread -lm -ldl -lcnpy
+mkl_spmm: mkl_spmm.cpp
+	mkdir -p $(BUILD_DIR)
+	g++ -std=c++11 -O3 -I${MKL_INCLUDE_DIR} \
+		-Wl,--no-as-needed \
+		mkl_spmm.cpp -o $(BUILD_DIR)/mkl_spmm \
+		-Wl,--start-group ${MKL_LIBRARY_DIR}/libmkl_intel_lp64.a \
+		${MKL_LIBRARY_DIR}/libmkl_core.a ${MKL_LIBRARY_DIR}/libmkl_gnu_thread.a -Wl,--end-group \
+		-fopenmp -lpthread -lm -ldl
 
 mkl_spmv: mkl_spmv.cpp
 	mkdir -p $(BUILD_DIR)
