@@ -166,9 +166,9 @@ def Sparlay_MultiplyOp : Sparlay_Op<"multiply", [NoSideEffect]> {
     let arguments = (ins Variadic<Sparlay_Type>:$input, 
                         StrAttr:$target,
                         StrAttr:$pattern);
-
+    let results = (outs Sparlay_Type:$output);
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input)
+        `(` $input `)` attr-dict `:` type($input) `to` type($output)
     }];
 
     // let builders = [

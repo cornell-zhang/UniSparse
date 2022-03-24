@@ -14,18 +14,11 @@ module {
     func private @getTensorFilename(index) -> (!Filename)
     func @main() {
         %i0 = constant 0: index
-        %i1 = constant 1: index
-        %i4 = constant 4: index
-        %f0 = constant 0.0e+00 : f32
          
         %B = constant dense<[3.0e+00, 2.0e+00, 1.0e+00, 4.0e+00]> : tensor<4xf32>
-        %C = constant dense<[0.0e+00, 0.0e+00, 0.0e+00, 0.0e+00]> : tensor<4xf32>
-
         %B_mem = memref.buffer_cast %B : memref<4xf32>
-        %C_mem = memref.buffer_cast %C : memref<4xf32>
  
         %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)
-          
         %A_input = sparlay.new (%fileName) : !Filename to
             !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)>, 
                              memref<?xf32>>
@@ -46,11 +39,10 @@ module {
             !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>,
                          !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> , memref<?xf32> >
         
-        sparlay.multiply (%C_mem, %A_CSR, %B_mem) { target = "CPU", pattern = "inner" } :
-            memref<4xf32>, 
+        %C = sparlay.multiply (%A_CSR, %B_mem) { target = "CPU", pattern = "inner" } : 
             !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>,
                          !sparlay.struct<memref<?xindex>, "crd", (i,j)->(j)> , memref<?xf32> >,
-            memref<4xf32>
+            memref<4xf32> to memref<4xf32>
         
         // Comment this block before running. sparlay.multiply gets lowered to 
 //        %A_ptr_struct = sparlay.struct_access %A_CSR[0] : !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, "ptr", (i,j)->(j)>,
