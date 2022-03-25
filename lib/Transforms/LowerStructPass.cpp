@@ -55,7 +55,7 @@ namespace {
 //         Value output = op->getResult(0);
 //         uint64_t index = op.index();
 //         Operation* defOp = input.getDefiningOp();
-//         Value replaceInput = defOp->getOperands()[index];
+//         Value replaceInput = defOp->getOperand(index);
 //         output.replaceAllUsesWith(replaceInput);
 //         LLVM_DEBUG(llvm::dbgs() << "inst: " << op->getName() << "' with "
 //                   << op->getNumOperands() << " operands and "
@@ -84,19 +84,22 @@ public PassWrapper<LowerStructPass, FunctionPass> {
                 Value output = accessOp->getResult(0);
                 uint64_t index = accessOp.index();
                 Operation* defOp = input.getDefiningOp();
-                Value replaceInput = defOp->getOperand(index);
+                Value replaceInput;
+                replaceInput = defOp->getOperand(index);
+                // if (!replaceInput.getType().isa<mlir::MemRefType>()) {
+                //     Operation* defOp_1 = replaceInput.getDefiningOp();
+                //     replaceInput = defOp_1->getOperand(0);
+                // }
                 output.replaceAllUsesWith(replaceInput);
-                LLVM_DEBUG(llvm::dbgs() << "inst: " << accessOp->getName() << "' with "
-                        << accessOp->getNumOperands() << " operands and "
-                        << accessOp->getNumResults() << " results\n");
-                LLVM_DEBUG(llvm::dbgs() << "def inst: " << defOp->getName() << "' with "
-                        << defOp->getNumOperands() << " operands and "
-                        << defOp->getNumResults() << " results\n");
+                LLVM_DEBUG(llvm::dbgs() << "inst: " << accessOp->getName() << 
+                    "loc: " << accessOp->getLoc() << "\n");
+                LLVM_DEBUG(llvm::dbgs() << "def inst: " << defOp->getName() << 
+                    "loc: " << defOp->getLoc() << "\n");
                 op->erase();
             }
         });
 
-        // FuncOp funcOp = getFunction();
+        // FuncOp function = getFunction();
         // MLIRContext *ctx = function.getContext();
         // RewritePatternSet patterns(ctx);
         // patterns.add<StructLowering>(&getContext());

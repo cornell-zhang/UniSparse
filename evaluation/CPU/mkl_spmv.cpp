@@ -41,26 +41,58 @@ float test_spmv(sparse_matrix_t* AdjMatrix, struct matrix_descr descrAdjMatrix,
 int main(int argc, char* argv[]) {
     char *file_name = argv[1];
 
-    parse_COO<double> input(file_name);
+    parse_CSC<double> input(file_name);
 
-    int num_dst_vertices = input.num_rows;
-    int num_src_vertices = input.num_cols;
+    int num_dst_vertices = input.num_cols;
+    int num_src_vertices = input.num_rows;
 
     sparse_matrix_t AdjMatrix;
-    mkl_sparse_d_create_coo(&AdjMatrix,
+    // mkl_sparse_d_create_csc(&AdjMatrix,
+    //                         SPARSE_INDEX_BASE_ONE,
+    //                         input.num_rows,
+    //                         input.num_cols,
+    //                         input.cscColPtr,
+    //                         input.cscColPtr + 1,
+    //                         input.cscRowInd,
+    //                         input.cscValue);
+    
+    mkl_sparse_d_create_csr(&AdjMatrix,
                             SPARSE_INDEX_BASE_ONE,
-                            input.num_rows,
                             input.num_cols,
-                            input.num_nnz,
-                            input.cooRowInd,
-                            input.cooColInd,
-                            input.cooValue);
+                            input.num_rows,
+                            input.cscColPtr,
+                            input.cscColPtr + 1,
+                            input.cscRowInd,
+                            input.cscValue);
+
+    
+    // printf("cscColPtr: \n");
+    // for (unsigned i = 0; i < input.num_cols + 1; i++) {
+    //     printf("%d  ", *(input.cscColPtr + i));
+    // }
+    // printf("\n");
+
+    // parse_COO<double> input(file_name);
+
+    // int num_dst_vertices = input.num_rows;
+    // int num_src_vertices = input.num_cols;
+
+    // sparse_matrix_t AdjMatrix;
+    // mkl_sparse_d_create_coo(&AdjMatrix,
+    //                         SPARSE_INDEX_BASE_ONE,
+    //                         input.num_rows,
+    //                         input.num_cols,
+    //                         input.num_nnz,
+    //                         input.cooRowInd,
+    //                         input.cooColInd,
+    //                         input.cooValue);
+
     mkl_sparse_optimize(AdjMatrix);
 
     struct matrix_descr descrAdjMatrix;
     descrAdjMatrix.type = SPARSE_MATRIX_TYPE_GENERAL;
 
-    int num_runs = 10;
+    int num_runs = 50;
     float average_time_in_sec = test_spmv(&AdjMatrix, descrAdjMatrix, num_src_vertices, num_dst_vertices, num_runs);
     std::cout << "average_time = " << average_time_in_sec * 1000 << " ms" << std::endl;
     float throughput = input.num_nnz / average_time_in_sec / 1000 / 1000 / 1000;

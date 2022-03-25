@@ -83,13 +83,12 @@ static char *toLower(char *token) {
   return token;
 }
 
-static void readMTXHeader(FILE* file, char* fileName, uint64_t* metaData) {
+static void readMTXHeader(FILE* file, char* fileName, uint64_t* metaData, char* field, char* symmetry) {
     char line[1025];
     char header[64];
     char object[64];
     char format[64];
-    char field[64];
-    char symmetry[64];
+    
     // Read header line.
     printf("read MTX filename %s\n", fileName);                                                       
     if (fscanf(file, "%63s %63s %63s %63s %63s\n", header, object, format, field,
@@ -100,10 +99,9 @@ static void readMTXHeader(FILE* file, char* fileName, uint64_t* metaData) {
     // Make sure this is a general sparse matrix.
     if (strcmp(toLower(header), "%%matrixmarket") ||
         strcmp(toLower(object), "matrix") ||
-        strcmp(toLower(format), "coordinate") || strcmp(toLower(field), "real") ||
-        strcmp(toLower(symmetry), "general")) {
+        strcmp(toLower(format), "coordinate")) {
         fprintf(stderr,
-                "Cannot find a general sparse matrix with type real in %s\n", fileName);
+                "Cannot find a coordinate sparse matrix in %s\n", fileName);
         exit(1);
     }
     // Skip comments.
@@ -131,7 +129,9 @@ static void readFROSTTHeader(FILE* file, char* fileName, uint64_t* metaData) {
 extern "C" {
     // refactor into a swiss army knife function in the future
     void* readSparseCoordinate(void* ptr) {
-        char* fileName = static_cast<char *>(ptr);                                                  
+        char* fileName = static_cast<char *>(ptr);   
+        char field[64];
+        char symmetry[64];                                               
                                                                                                     
         FILE *file = fopen(fileName, "r");   
         printf("filename %s\n", fileName);                                                       
@@ -142,7 +142,7 @@ extern "C" {
                                                                                                     
         uint64_t metaData[512];                                                                     
         if (strstr(fileName, ".mtx")) {                                                             
-            readMTXHeader(file, fileName, metaData);                                                
+            readMTXHeader(file, fileName, metaData, field, symmetry);                                                
         } else if (strstr(fileName, ".tns")) {                                                      
             readFROSTTHeader(file, fileName, metaData);                                             
         } else {                                                                                    
@@ -155,7 +155,17 @@ extern "C" {
             printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
                                                                                                     
         uint64_t rank = metaData[0];    
-        uint64_t nnz = metaData[1];                                                                 
+        uint64_t nnz = metaData[1]; 
+
+        bool notFieldPattern = strcmp(toLower(field), "pattern");
+        if (!strcmp(toLower(field), "complex")) {
+            fprintf(stderr, "Complex data type not yet supported.\n");                                       
+            exit(1); 
+        } 
+        if (strcmp(toLower(symmetry), "general")) {
+            fprintf(stderr, "Non general matrix structure not yet supported.\n");                                       
+            exit(1); 
+        }                                                               
         
         static SparseCoordinate<uint64_t, double> tensor(rank);
         // read data                                              
@@ -170,9 +180,14 @@ extern "C" {
                 indices.push_back(idx - 1);
             }
             double val;
-            if (fscanf(file, "%lg\n", &val) != 1) {
-                fprintf(stderr, "Cannot find next value in %s\n", fileName);
-                exit(1);
+            if (!notFieldPattern) {
+                // Field is pattern
+                val = 1;
+            } else {
+                if (fscanf(file, "%lg\n", &val) != 1) {
+                    fprintf(stderr, "Cannot find next value in %s\n", fileName);
+                    exit(1);
+                }
             }
             tensor.insert(indices, val);
         }
@@ -234,7 +249,7 @@ extern "C" {
       uint64_t row = ptr->sizes[0] - 1;
 //      printf("row size is: %d\n", row);
       for(uint64_t i = 0; i < row; i++) {
-	float temp = 0;
+	double temp = 0;
 	for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
 	  temp += value->data[j] * input->data[col->data[j]];
 //	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
@@ -243,6 +258,27 @@ extern "C" {
 //        printf("outdata[%d] is %f\n", i, out->data[i]);
       }
     }  
+
+    void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, StridedMemRefType<uint64_t, 1> *row, StridedMemRefType<uint64_t, 1> *col, StridedMemRefType<double, 1> *value, StridedMemRefType<double, 1> *input) {
+      uint64_t nnz = row->sizes[0];
+      uint64_t out_size = input->sizes[0];
+      printf("nnz is: %d\n", nnz);
+      double result[out_size];
+      for (uint64_t i = 0; i < out_size; i++)
+        result[i] = 0;
+
+      for(uint64_t i = 0; i < nnz; i++) {
+        // double temp = 0;
+        uint64_t rowInd = row->data[i];
+        uint64_t colInd = col->data[i];
+        result[rowInd] += value->data[i] * input->data[colInd];
+        printf("value->data is: %f, input->data[%d] is: %d \n", value->data[i], colInd, input->data[colInd]);
+        printf("outdata[%d] is %f\n", i, result[rowInd]);
+      }
+
+      for (uint64_t i = 0; i < out_size; i++)
+        out->data[i] = result[i];
+    } 
 
     // void delSparseCoordinate(void *tensor) {
     //     delete static_cast<SparseCoordinate<uint64_t, double> *>(tensor);

@@ -527,36 +527,68 @@ public:
       Value input_A = op->getOperand(0);
       auto inputType_A = input_A.getType().dyn_cast<StructType>();
       Value input_B = op->getOperand(1);
-      auto inputdense_vecType = input_B.getType();
+    //   auto inputdense_vecType = input_B.getType();
       llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
 //      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
 //      llvm::ArrayRef<mlir::Type> outputElmTypes = output_0.getElementTypes();
       
-      Type inputPtrType = inputElmTypes[0];
-      Type inputCrdType = inputElmTypes[1];
-      Type inputValType = inputElmTypes[2];
-//      Type inputdense_vecType = inputElmTypes_B[0];
-//      Type outputType = outputElmTypes[0];
-      Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
-      auto ptrtype = ptr.getType().dyn_cast<StructType>();
-      llvm::ArrayRef<mlir::Type> ptrElmtypes = ptrtype.getElementTypes();
-      Type input_ptr_type = ptrElmtypes[0];
-      Value ptr_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_ptr_type, ptr, 0);
-      Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 1);
-      auto crdtype = crd.getType().dyn_cast<StructType>();
-      llvm::ArrayRef<mlir::Type> crdElmtypes = ptrtype.getElementTypes();
-      Type input_crd_type = crdElmtypes[0];
-      Value crd_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_type, crd, 0);
-      Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
-      StringRef call_spmv_name = "calculateCSRSpMV";
-      SmallVector<Value, 4> readParams;
-      readParams.push_back(ptr_memref);
-      readParams.push_back(crd_memref);
-      readParams.push_back(val);
-      readParams.push_back(input_B);
-      rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
-		 getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
-		 readParams);
+      if (inputElmTypes.size() > 2) {
+        Type inputPtrType = inputElmTypes[0];
+        Type inputCrdType = inputElmTypes[1];
+        Type inputValType = inputElmTypes[2];
+    //      Type inputdense_vecType = inputElmTypes_B[0];
+    //      Type outputType = outputElmTypes[0];
+        Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
+        auto ptrtype = ptr.getType().dyn_cast<StructType>();
+        llvm::ArrayRef<mlir::Type> ptrElmtypes = ptrtype.getElementTypes();
+        Type input_ptr_type = ptrElmtypes[0];
+        Value ptr_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_ptr_type, ptr, 0);
+        Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 1);
+        auto crdtype = crd.getType().dyn_cast<StructType>();
+        llvm::ArrayRef<mlir::Type> crdElmtypes = crdtype.getElementTypes();
+        Type input_crd_type = crdElmtypes[0];
+        Value crd_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_type, crd, 0);
+        Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
+        StringRef call_spmv_name = "calculateCSRSpMV";
+        SmallVector<Value, 4> readParams;
+        readParams.push_back(ptr_memref);
+        readParams.push_back(crd_memref);
+        readParams.push_back(val);
+        readParams.push_back(input_B);
+        rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
+            getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
+            readParams);
+      } else {
+        Type inputCrdType = inputElmTypes[0];
+        Type inputValType = inputElmTypes[1];
+    //      Type inputdense_vecType = inputElmTypes_B[0];
+    //      Type outputType = outputElmTypes[0];
+        // Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
+        // auto ptrtype = ptr.getType().dyn_cast<StructType>();
+        // llvm::ArrayRef<mlir::Type> ptrElmtypes = ptrtype.getElementTypes();
+        // Type input_ptr_type = ptrElmtypes[0];
+        // Value ptr_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_ptr_type, ptr, 0);
+
+        Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 0);
+        auto crdtype = crd.getType().dyn_cast<StructType>();
+        llvm::ArrayRef<mlir::Type> crdElmtypes = crdtype.getElementTypes();
+        Type input_crd_0_type = crdElmtypes[0];
+        Type input_crd_1_type = crdElmtypes[1];
+        Value crd_0_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_0_type, crd, 0);
+        Value crd_1_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_1_type, crd, 1);
+        
+        Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 1);
+        StringRef call_spmv_name = "calculateCOOSpMV";
+        SmallVector<Value, 4> readParams;
+        // readParams.push_back(ptr_memref);
+        readParams.push_back(crd_0_memref);
+        readParams.push_back(crd_1_memref);
+        readParams.push_back(val);
+        readParams.push_back(input_B);
+        rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
+            getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
+            readParams);
+      }
       return success();
         // StringRef target = op.target();
         // StringRef pattern = op.pattern();

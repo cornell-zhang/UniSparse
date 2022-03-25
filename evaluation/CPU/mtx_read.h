@@ -96,13 +96,13 @@ public:
         // for (unsigned i = 0; i < 4; i++)
         //     printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
                                                                                                     
-        uint64_t nnz = metaData[1]; 
+        num_nnz = metaData[1]; 
         num_rows = metaData[2];
         num_cols = metaData[3];
 
         cscColPtr = (MKL_INT*)malloc((num_cols + 1) * sizeof(MKL_INT));
-        cscRowInd = (MKL_INT*)malloc(nnz * sizeof(MKL_INT));
-        cscValue = (valueTp*)malloc(nnz * sizeof(valueTp));
+        cscRowInd = (MKL_INT*)malloc(num_nnz * sizeof(MKL_INT));
+        cscValue = (valueTp*)malloc(num_nnz * sizeof(valueTp));
 
         bool isFieldPattern = strcmp(toLower(field), "pattern");
 
@@ -118,7 +118,7 @@ public:
 
         MKL_INT lastRowInd = 0;
         // cscColPtr[0] = 0;
-        for (unsigned i = 0; i < nnz; i++) {
+        for (unsigned i = 0; i < num_nnz; i++) {
             MKL_INT rowInd = -1;                                                                      
             MKL_INT colInd = -1;                                                                      
             if (fscanf(file, "%" PRIu64, &rowInd) != 1) {                                          
@@ -145,6 +145,7 @@ public:
                 cscValue[i] = value;
             }
         }
+        cscColPtr[num_cols] = num_nnz;
     }
 
     ~parse_CSC() {
@@ -153,7 +154,7 @@ public:
         free(cscValue);
     }
 
-    int num_rows, num_cols;
+    int num_rows, num_cols, num_nnz;
     MKL_INT* cscColPtr;
     MKL_INT* cscRowInd;
     valueTp* cscValue;
