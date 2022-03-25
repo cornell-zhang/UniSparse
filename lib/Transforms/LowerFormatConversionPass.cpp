@@ -522,11 +522,11 @@ public:
 	    matchAndRewrite(sparlay::MultiplyOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
       Location loc = op->getLoc();
-      Value output = op->getOperand(0);
+      Value output = op->getResult(0);
       auto outputType = output.getType();
-      Value input_A = op->getOperand(1);
+      Value input_A = op->getOperand(0);
       auto inputType_A = input_A.getType().dyn_cast<StructType>();
-      Value input_B = op->getOperand(2);
+      Value input_B = op->getOperand(1);
       auto inputdense_vecType = input_B.getType();
       llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
 //      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
@@ -548,17 +548,15 @@ public:
       Type input_crd_type = crdElmtypes[0];
       Value crd_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_type, crd, 0);
       Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
-      CallOp csr_spmv;
       StringRef call_spmv_name = "calculateCSRSpMV";
       SmallVector<Value, 4> readParams;
       readParams.push_back(ptr_memref);
       readParams.push_back(crd_memref);
       readParams.push_back(val);
       readParams.push_back(input_B);
-      csr_spmv = rewriter.create<CallOp>(loc, outputType, 
+      rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
 		 getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
 		 readParams);
-      rewriter.eraseOp(op);
       return success();
         // StringRef target = op.target();
         // StringRef pattern = op.pattern();

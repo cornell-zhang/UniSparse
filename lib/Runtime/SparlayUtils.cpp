@@ -220,9 +220,9 @@ extern "C" {
         ref->sizes[0] = value->size();  
         ref->strides[0] = 1; 
 
-        printf("ref->basePtr: %x\n", ref->basePtr);
-        printf("ref->size: %zu\n", value->size());
-        printf("ref->data: ");
+        printf("value->basePtr: %x\n", ref->basePtr);
+        printf("value->size: %zu\n", value->size());
+        printf("value->data: ");
         for (unsigned i = 0; i < value->size(); i++) {
             printf("%f  ", *(ref->data + ref->offset + i * ref->strides[0]));
         }
@@ -230,12 +230,17 @@ extern "C" {
 
     }
 
-    void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, StridedMemRefType<uint64_t, 1> *ptr, StridedMemRefType<uint64_t, 1> *col, StridedMemRefType<uint64_t, 1> *value, StridedMemRefType<double, 1> *input) {
+    void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, StridedMemRefType<uint64_t, 1> *ptr, StridedMemRefType<uint64_t, 1> *col, StridedMemRefType<double, 1> *value, StridedMemRefType<double, 1> *input) {
       uint64_t row = ptr->sizes[0] - 1;
+//      printf("row size is: %d\n", row);
       for(uint64_t i = 0; i < row; i++) {
+	float temp = 0;
 	for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
-	  out->data[i] += value->data[j] * input->data[col->data[j]];
+	  temp += value->data[j] * input->data[col->data[j]];
+//	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
 	}
+        out->data[i] = temp;
+//        printf("outdata[%d] is %f\n", i, out->data[i]);
       }
     }  
 
