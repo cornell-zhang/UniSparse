@@ -262,18 +262,27 @@ extern "C" {
 
     }
 
-    void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, StridedMemRefType<uint64_t, 1> *ptr, StridedMemRefType<uint64_t, 1> *col, StridedMemRefType<double, 1> *value, StridedMemRefType<double, 1> *input) {
+    void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, 
+                                       StridedMemRefType<uint64_t, 1> *ptr, 
+                                       StridedMemRefType<uint64_t, 1> *col, 
+                                       StridedMemRefType<double, 1> *value, 
+                                       StridedMemRefType<double, 1> *input) {
       uint64_t row = ptr->sizes[0] - 1;
+      double *result = new double[row];
 //      printf("row size is: %d\n", row);
       for(uint64_t i = 0; i < row; i++) {
-	double temp = 0;
-	for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
-	  temp += value->data[j] * input->data[col->data[j]];
-//	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
-	}
-        out->data[i] = temp;
+        double temp = 0;
+        for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
+        temp += value->data[j] * input->data[col->data[j]];
+    //	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
+        }
+        result[i] = temp;
 //        printf("outdata[%d] is %f\n", i, out->data[i]);
       }
+        out->data = result;
+        out->basePtr = result;
+        out->offset = 0;  
+        out->strides[0] = 1;
     }  
 
     void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
@@ -286,7 +295,7 @@ extern "C" {
     //   uint64_t out_size = out->sizes[0];
     //   printf("out size = %lu \n", out_size);
     //   printf("nnz is: %lu\n", nnz);
-      double result[size_0];
+      double *result = new double[size_0];
       for (uint64_t i = 0; i < size_0; i++) {
         // out->data[i] = 0;
         result[i] = 0;
@@ -305,15 +314,19 @@ extern "C" {
         out->basePtr = result;
         out->offset = 0;  
         out->strides[0] = 1;
-
+        
     //     printf("output: (");
     //   for (uint64_t i = 0; i < size_0; i++) {
     //     printf("%f ", out->data[i]);
     //     // out->data[i] = result[i];
     //   }
     //   printf(")\n");
-    //   delete[] result;
+      delete[] result;
     } 
+
+    // void _mlir_ciface_release(void *ptr) {
+    //     delete []ptr;
+    // }
 
     // void delSparseCoordinate(void *tensor) {
     //     delete static_cast<SparseCoordinate<uint64_t, double> *>(tensor);
