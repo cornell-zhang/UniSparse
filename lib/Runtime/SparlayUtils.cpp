@@ -40,7 +40,7 @@ public:
     ~SparseCoordinate() {}
 
     void insert(const std::vector<indexTp> &indices_read, const valueTp value_read) {
-        printf("indices_read size = %zu, getRank = %lu\n", indices_read.size() , getRank());
+        // printf("indices_read size = %zu, getRank = %lu\n", indices_read.size() , getRank());
         // assert(getRank() == indices_read.size());
         for (unsigned i = 0; i < indices_read.size(); i++) {
             indices[i].push_back(indices_read[i]);
@@ -82,6 +82,23 @@ static char *toLower(char *token) {
     *c = tolower(*c);
   return token;
 }
+
+// template<typename valueTp>
+// class SparseComputeOutput {
+
+// public:
+//     SparseComputeOutput(std::vector<uint64_t> sizes) {
+//         uint64_t total_size = 1;
+//         for (uint64_t i = 0; i < sizes.size(); i++) {
+//             total_size *= sizes[i];
+//         }
+//         output = new valueTp[total_size];
+//     }
+
+//     ~SparseComputeOutput() {}
+
+//     valueTp *output;
+// }
 
 static void readMTXHeader(FILE* file, char* fileName, uint64_t* metaData, char* field, char* symmetry) {
     char line[1025];
@@ -150,9 +167,9 @@ extern "C" {
             exit(1);                                                                                
         } 
 
-        printf("in getTensorIndices  :\n");
-        for (unsigned i = 0; i < 4; i++)
-            printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
+        // printf("in getTensorIndices  :\n");
+        // for (unsigned i = 0; i < 4; i++)
+        //     printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
                                                                                                     
         uint64_t rank = metaData[0];    
         uint64_t nnz = metaData[1]; 
@@ -211,13 +228,13 @@ extern "C" {
         ref->sizes[0] = index->size();  
         ref->strides[0] =1; 
 
-        printf("ref->basePtr: %x\n", ref->basePtr);
-        printf("ref->size: %zu\n", index->size());
-        printf("ref->data: ");
-        for (unsigned i = 0; i < index->size(); i++) {
-            printf("%lu  ", *(ref->data + ref->offset + i * ref->strides[0]));
-        }
-        printf("\n");
+        // printf("ref->basePtr: %x\n", ref->basePtr);
+        // printf("ref->size: %zu\n", index->size());
+        // printf("ref->data: ");
+        // for (unsigned i = 0; i < index->size(); i++) {
+        //     printf("%lu  ", *(ref->data + ref->offset + i * ref->strides[0]));
+        // }
+        // printf("\n");
     }
 
 // #define GETVALUES(TYPE)
@@ -235,13 +252,13 @@ extern "C" {
         ref->sizes[0] = value->size();  
         ref->strides[0] = 1; 
 
-        printf("value->basePtr: %x\n", ref->basePtr);
-        printf("value->size: %zu\n", value->size());
-        printf("value->data: ");
-        for (unsigned i = 0; i < value->size(); i++) {
-            printf("%f  ", *(ref->data + ref->offset + i * ref->strides[0]));
-        }
-        printf("\n");
+        // printf("value->basePtr: %x\n", ref->basePtr);
+        // printf("value->size: %zu\n", value->size());
+        // printf("value->data: ");
+        // for (unsigned i = 0; i < value->size(); i++) {
+        //     printf("%f  ", *(ref->data + ref->offset + i * ref->strides[0]));
+        // }
+        // printf("\n");
 
     }
 
@@ -259,25 +276,43 @@ extern "C" {
       }
     }  
 
-    void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, StridedMemRefType<uint64_t, 1> *row, StridedMemRefType<uint64_t, 1> *col, StridedMemRefType<double, 1> *value, StridedMemRefType<double, 1> *input) {
+    void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
+                                       StridedMemRefType<uint64_t, 1> *row, 
+                                       StridedMemRefType<uint64_t, 1> *col, 
+                                       StridedMemRefType<double, 1> *value, 
+                                       StridedMemRefType<double, 1> *input,
+                                       uint64_t size_0, uint64_t size_1) {
       uint64_t nnz = row->sizes[0];
-      uint64_t out_size = input->sizes[0];
-      printf("nnz is: %d\n", nnz);
-      double result[out_size];
-      for (uint64_t i = 0; i < out_size; i++)
+    //   uint64_t out_size = out->sizes[0];
+    //   printf("out size = %lu \n", out_size);
+    //   printf("nnz is: %lu\n", nnz);
+      double result[size_0];
+      for (uint64_t i = 0; i < size_0; i++) {
+        // out->data[i] = 0;
         result[i] = 0;
+      }
 
       for(uint64_t i = 0; i < nnz; i++) {
         // double temp = 0;
         uint64_t rowInd = row->data[i];
         uint64_t colInd = col->data[i];
         result[rowInd] += value->data[i] * input->data[colInd];
-        printf("value->data is: %f, input->data[%d] is: %d \n", value->data[i], colInd, input->data[colInd]);
-        printf("outdata[%d] is %f\n", i, result[rowInd]);
+        // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
+        // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
       }
 
-      for (uint64_t i = 0; i < out_size; i++)
-        out->data[i] = result[i];
+        out->data = result;    
+        out->basePtr = result;
+        out->offset = 0;  
+        out->strides[0] = 1;
+
+    //     printf("output: (");
+    //   for (uint64_t i = 0; i < size_0; i++) {
+    //     printf("%f ", out->data[i]);
+    //     // out->data[i] = result[i];
+    //   }
+    //   printf(")\n");
+    //   delete[] result;
     } 
 
     // void delSparseCoordinate(void *tensor) {

@@ -521,14 +521,15 @@ public:
     LogicalResult 
 	    matchAndRewrite(sparlay::MultiplyOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
-      Location loc = op->getLoc();
-      Value output = op->getResult(0);
-      auto outputType = output.getType();
-      Value input_A = op->getOperand(0);
-      auto inputType_A = input_A.getType().dyn_cast<StructType>();
-      Value input_B = op->getOperand(1);
+        Location loc = op->getLoc();
+        Value output = op->getResult(0);
+        auto outputType = output.getType();
+        Value input_A = op->getOperand(0);
+        auto inputType_A = input_A.getType().dyn_cast<StructType>();
+        Value input_B = op->getOperand(1);
     //   auto inputdense_vecType = input_B.getType();
-      llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
+        llvm::ArrayRef<int64_t> dimSizes = inputType_A.getDimSizes();
+        llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
 //      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
 //      llvm::ArrayRef<mlir::Type> outputElmTypes = output_0.getElementTypes();
       
@@ -585,6 +586,9 @@ public:
         readParams.push_back(crd_1_memref);
         readParams.push_back(val);
         readParams.push_back(input_B);
+        for (unsigned i = 0; i < dimSizes.size(); i++) {
+            readParams.push_back(rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(dimSizes[i])));
+        }
         rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
             getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
             readParams);
