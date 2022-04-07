@@ -121,13 +121,13 @@ public:
         for (unsigned i = 0; i < num_nnz; i++) {
             MKL_INT rowInd = -1;                                                                      
             MKL_INT colInd = -1;                                                                      
-            if (fscanf(file, "%" PRIu64, &rowInd) != 1) {                                          
-                fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+            if (fscanf(file, "%d", &rowInd) != 1) {                                          
+                fprintf(stderr, "Cannot find next row index at line %lu\n", i);                    
                 exit(1);                                                                        
             }
             cscRowInd[i] = rowInd;
-            if (fscanf(file, "%" PRIu64, &colInd) != 1) {                                          
-                fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+            if (fscanf(file, "%d", &colInd) != 1) {                                          
+                fprintf(stderr, "Cannot find next col index at line %lu\n", i);                    
                 exit(1);                                                                        
             }
             while (colInd > lastRowInd) {
@@ -138,8 +138,8 @@ public:
                 cscValue[i] = 1;
             } else {
                 valueTp value;
-                if (fscanf(file, "%" PRIu64, &value) != 1) {                                          
-                    fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+                if (fscanf(file, "%lf", &value) != 1) {                                          
+                    fprintf(stderr, "Cannot find next value at line %lu\n", i);                    
                     exit(1);                                                                        
                 }
                 cscValue[i] = value;
@@ -158,6 +158,98 @@ public:
     MKL_INT* cscColPtr;
     MKL_INT* cscRowInd;
     valueTp* cscValue;
+};
+
+template <typename valueTp>
+class parse_CSR {
+public:
+    parse_CSR(char* fileName) {
+        FILE *file = fopen(fileName, "r");   
+        printf("filename %s\n", fileName);                                                       
+        if (!file) {                                                                                
+            fprintf(stderr, "Cannot find %s\n", fileName);                                          
+            exit(1);                                                                                
+        }                                                                                           
+                                                                                                    
+        uint64_t metaData[512];  
+        char field[64];
+        char symmetry[64];                                                                   
+        if (strstr(fileName, ".mtx")) {                                                             
+            readMTXHeader(file, fileName, metaData, field, symmetry);                                                
+        } else if (strstr(fileName, ".tns")) {                                                      
+            readFROSTTHeader(file, fileName, metaData);                                             
+        } else {                                                                                    
+            fprintf(stderr, "Unknown format %s\n", fileName);                                       
+            exit(1);                                                                                
+        } 
+
+        // printf("in getTensorIndices  :\n");
+        // for (unsigned i = 0; i < 4; i++)
+        //     printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
+                                                                                                    
+        num_nnz = metaData[1]; 
+        num_rows = metaData[2];
+        num_cols = metaData[3];
+
+        csrRowPtr = (MKL_INT*)malloc((num_rows + 1) * sizeof(MKL_INT));
+        csrColInd = (MKL_INT*)malloc(num_nnz * sizeof(MKL_INT));
+        csrValue = (valueTp*)malloc(num_nnz * sizeof(valueTp));
+
+        bool isFieldPattern = strcmp(toLower(field), "pattern");
+
+        if (!strcmp(toLower(field), "complex")) {
+            fprintf(stderr, "Complex data type not yet supported.\n");                                       
+            exit(1); 
+        } 
+
+        if (strcmp(toLower(symmetry), "general")) {
+            fprintf(stderr, "Non general matrix structure not yet supported.\n");                                       
+            exit(1); 
+        } 
+
+        MKL_INT lastRowInd = 0;
+        // csrRowPtr[0] = 0;
+        for (unsigned i = 0; i < num_nnz; i++) {
+            MKL_INT rowInd = -1;                                                                      
+            MKL_INT colInd = -1;                                                                      
+            if (fscanf(file, "%d", &rowInd) != 1) {                                          
+                fprintf(stderr, "Cannot find next row index at line %lu\n", i);                    
+                exit(1);                                                                        
+            }
+            while (rowInd > lastRowInd) {
+                csrRowPtr[lastRowInd++] = i;
+            }
+            if (fscanf(file, "%d", &colInd) != 1) {                                          
+                fprintf(stderr, "Cannot find next col index at line %lu\n", i);                    
+                exit(1);                                                                        
+            }
+            csrColInd[i] = colInd;
+            
+            if (!isFieldPattern) {
+                // Field is Pattern
+                csrValue[i] = 1;
+            } else {
+                valueTp value;
+                if (fscanf(file, "%lf", &value) != 1) {                                          
+                    fprintf(stderr, "Cannot find next value at line %lu\n", i);                    
+                    exit(1);                                                                        
+                }
+                csrValue[i] = value;
+            }
+        }
+        csrRowPtr[num_rows] = num_nnz;
+    }
+
+    ~parse_CSR() {
+        free(csrRowPtr);
+        free(csrColInd);
+        free(csrValue);
+    }
+
+    int num_rows, num_cols, num_nnz;
+    MKL_INT* csrRowPtr;
+    MKL_INT* csrColInd;
+    valueTp* csrValue;
 };
 
 template <typename valueTp>
@@ -211,12 +303,12 @@ public:
             MKL_INT rowInd = -1;
             MKL_INT colInd = -1;                                                                      
             if (fscanf(file, "%d", &rowInd) != 1) {                                          
-                fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+                fprintf(stderr, "Cannot find next row index at line %lu\n", i);                    
                 exit(1);                                                                        
             }
             cooRowInd[i] = rowInd;
             if (fscanf(file, "%d", &colInd) != 1) {                                          
-                fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+                fprintf(stderr, "Cannot find next col index at line %lu\n", i);                    
                 exit(1);                                                                        
             }
             cooColInd[i] = colInd;
@@ -225,8 +317,8 @@ public:
                 cooValue[i] = 1;
             } else {
                 valueTp value;
-                if (fscanf(file, "%f", &value) != 1) {                                          
-                    fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+                if (fscanf(file, "%lf", &value) != 1) {                                          
+                    fprintf(stderr, "Cannot find next value at line %lu\n", i);                    
                     exit(1);                                                                        
                 }
                 cooValue[i] = value;
