@@ -7,6 +7,7 @@ add_mlir_dialect_library(MLIRSparlay
 
         DEPENDS
         MLIRSparlayOpsIncGen
+        MLIRSparselayAttrIncGen
 
 	LINK_LIBS PUBLIC
 	MLIRIR

@@ -11,7 +11,7 @@
 
 include "SparlayDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-
+include "SparlayAttr.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 
