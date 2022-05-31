@@ -643,11 +643,9 @@ void LowerFormatConversionPass::runOnFunction() {
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
     target.addIllegalDialect<sparlay::SparlayDialect>();
-    // target.addLegalOp<sparlay::CompressOp>();
     target.addLegalOp<sparlay::StructAccessOp>();
     target.addLegalOp<sparlay::StructConstructOp>();
-    target.addLegalOp<sparlay::FooOp>();
-    target.addLegalOp<linalg::FillOp>(); //?
+    target.addLegalOp<linalg::FillOp>(); 
 
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
