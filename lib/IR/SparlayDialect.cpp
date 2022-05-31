@@ -216,6 +216,7 @@ void SparlayDialect::printAttribute(Attribute attr,
 //===----------------------------------------------------------------------===//
 
 void SparlayDialect::initialize() {
+  registerTypes();
   addAttributes<
 #define GET_ATTRDEF_LIST
 #include "IR/SparlayAttr.cpp.inc"

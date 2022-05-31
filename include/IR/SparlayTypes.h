@@ -16,14 +16,10 @@
 //===----------------------------------------------------------------------===//
 namespace mlir {
 namespace sparlay {
+  
 namespace detail {
 struct StructTypeStorage;
 } // end namespace detail
-} // end namespace sparlay
-} // end namespace mlir
-
-namespace mlir {
-namespace sparlay {
 
 //===----------------------------------------------------------------------===//
 // Sparlay Types
