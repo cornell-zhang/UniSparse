@@ -37,4 +37,16 @@ def DeadCodeElimination : Pass<"dce"> {
     let constructor = "mlir::sparlay::createDeadCodeEliminationPass()";
 }
 
+def SparlayCodegen : Pass<"sparlay-codegen"> {
+    let summary = "Automatically generate sparse tensor code from sparlay sparse tensor types";
+    let constructor = "mlir::sparlay::createSparlayCodegenPass()";
+    let dependentDialects = [
+      "AffineDialect",
+      "memref::MemRefDialect",
+      "scf::SCFDialect",
+      "sparlay::SparlayDialect",
+      "vector::VectorDialect"
+    ];   
+}
+
 #endif // MLIR_DIALECT_SPARLAY_PASSES
