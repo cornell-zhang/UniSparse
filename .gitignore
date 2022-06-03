@@ -1,3 +1,4 @@
 ./build/*
 ./scripts/*
 evaluation/CPU/build*
+scripts/bin-path.sh
