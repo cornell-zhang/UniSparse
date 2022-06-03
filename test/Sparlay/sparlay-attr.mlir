@@ -5,10 +5,12 @@
 func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()
 
 #2 = #sparlay.encoding<{
-  secondaryMap = #sparlay.affine<(a1)->(trim a1)>
+  primaryMap = affine_map<(a1,a2,a3)->(a1)>,
+  secondaryMap = #sparlay.affine<(a2,a3)->(trim a2)>
 }>
 
 #3 = #sparlay.encoding<{
+  primaryMap = affine_map<(i,j,k)->(j,k,i)>,
   secondaryMap = #sparlay.affine<()->()>
 }>
 

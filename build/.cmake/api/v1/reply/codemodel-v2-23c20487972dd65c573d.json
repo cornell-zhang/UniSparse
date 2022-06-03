@@ -1,0 +1,480 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1,
+						4,
+						8,
+						9,
+						10
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						8,
+						18,
+						19,
+						20,
+						21,
+						22,
+						26
+					]
+				},
+				{
+					"build" : "include",
+					"childIndexes" : 
+					[
+						2,
+						3
+					],
+					"jsonFile" : "directory-include-7ead17b99bffc88b66bb.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "include"
+				},
+				{
+					"build" : "include/IR",
+					"jsonFile" : "directory-include.IR-dac293e2193147bc191a.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 0,
+					"source" : "include/IR",
+					"targetIndexes" : 
+					[
+						1,
+						4,
+						5,
+						6
+					]
+				},
+				{
+					"build" : "include/Transforms",
+					"jsonFile" : "directory-include.Transforms-f09bee418c2a94048f25.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 0,
+					"source" : "include/Transforms",
+					"targetIndexes" : 
+					[
+						3,
+						7
+					]
+				},
+				{
+					"build" : "lib",
+					"childIndexes" : 
+					[
+						5,
+						6,
+						7
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-lib-c12f15c6f888b43a891c.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "lib"
+				},
+				{
+					"build" : "lib/IR",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-lib.IR-afa671d3ab2c56fb4a1f.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 4,
+					"projectIndex" : 0,
+					"source" : "lib/IR",
+					"targetIndexes" : 
+					[
+						0,
+						12,
+						13,
+						24
+					]
+				},
+				{
+					"build" : "lib/Transforms",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-lib.Transforms-548e01dc0a6c24d80028.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 4,
+					"projectIndex" : 0,
+					"source" : "lib/Transforms",
+					"targetIndexes" : 
+					[
+						2,
+						14,
+						15,
+						25
+					]
+				},
+				{
+					"build" : "lib/Runtime",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-lib.Runtime-ba0c6d24f598549f2c4c.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 4,
+					"projectIndex" : 0,
+					"source" : "lib/Runtime",
+					"targetIndexes" : 
+					[
+						16,
+						17,
+						23
+					]
+				},
+				{
+					"build" : "test",
+					"jsonFile" : "directory-test-451c0598f41488bb20b9.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "test",
+					"targetIndexes" : 
+					[
+						9,
+						10,
+						11
+					]
+				},
+				{
+					"build" : "sparlay-opt",
+					"jsonFile" : "directory-sparlay-opt-c208819838a9a2eb60c6.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "sparlay-opt",
+					"targetIndexes" : 
+					[
+						27
+					]
+				},
+				{
+					"build" : "sparlay-translate",
+					"jsonFile" : "directory-sparlay-translate-a3fdf299accdc37dc1e7.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13.4"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "sparlay-translate",
+					"targetIndexes" : 
+					[
+						28
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10
+					],
+					"name" : "sparlay-dialect",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18,
+						19,
+						20,
+						21,
+						22,
+						23,
+						24,
+						25,
+						26,
+						27,
+						28
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 5,
+					"id" : "MLIRSparlay::@fbfd63cd06ffdf52319f",
+					"jsonFile" : "target-MLIRSparlay-1e3a2f0a228156c4c883.json",
+					"name" : "MLIRSparlay",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "MLIRSparlayOpsIncGen::@381170b28ab870bb2ee9",
+					"jsonFile" : "target-MLIRSparlayOpsIncGen-fd9e185583e615c5920b.json",
+					"name" : "MLIRSparlayOpsIncGen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "MLIRSparlayTransforms::@a94c6babf0d7671c720f",
+					"jsonFile" : "target-MLIRSparlayTransforms-651fcc32104d871942ce.json",
+					"name" : "MLIRSparlayTransforms",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 3,
+					"id" : "MLIRSparlayTransformsIncGen::@3bc5166be65c2492e466",
+					"jsonFile" : "target-MLIRSparlayTransformsIncGen-a25a55e85d3b0531ff9a.json",
+					"name" : "MLIRSparlayTransformsIncGen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "MLIRSparselayAttrIncGen::@381170b28ab870bb2ee9",
+					"jsonFile" : "target-MLIRSparselayAttrIncGen-47e2a8dbf25158e62d4d.json",
+					"name" : "MLIRSparselayAttrIncGen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "SparlayDialectDocGen::@381170b28ab870bb2ee9",
+					"jsonFile" : "target-SparlayDialectDocGen-a284fec07196808942cd.json",
+					"name" : "SparlayDialectDocGen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "SparlayOpsDocGen::@381170b28ab870bb2ee9",
+					"jsonFile" : "target-SparlayOpsDocGen-1e7137f5c9c7b498a581.json",
+					"name" : "SparlayOpsDocGen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 3,
+					"id" : "TransformsPassesDocGen::@3bc5166be65c2492e466",
+					"jsonFile" : "target-TransformsPassesDocGen-aa1732d066188750e465.json",
+					"name" : "TransformsPassesDocGen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "acc_gen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-acc_gen-0134028aae85f2a4cda0.json",
+					"name" : "acc_gen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 8,
+					"id" : "check-sparlay::@36f028580bb02cc8272a",
+					"jsonFile" : "target-check-sparlay-fe4a2ecfeb6b57913b7e.json",
+					"name" : "check-sparlay",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 8,
+					"id" : "check-sparlay-data::@36f028580bb02cc8272a",
+					"jsonFile" : "target-check-sparlay-data-d1518d2d973dfde3aff9.json",
+					"name" : "check-sparlay-data",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 8,
+					"id" : "check-sparlay-sparlay::@36f028580bb02cc8272a",
+					"jsonFile" : "target-check-sparlay-sparlay-c45ec1e68f9011569cfb.json",
+					"name" : "check-sparlay-sparlay",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "install-MLIRSparlay::@fbfd63cd06ffdf52319f",
+					"jsonFile" : "target-install-MLIRSparlay-0c0689c7804f1633e888.json",
+					"name" : "install-MLIRSparlay",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "install-MLIRSparlay-stripped::@fbfd63cd06ffdf52319f",
+					"jsonFile" : "target-install-MLIRSparlay-stripped-90e5291f11c1f2ec9e4d.json",
+					"name" : "install-MLIRSparlay-stripped",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "install-MLIRSparlayTransforms::@a94c6babf0d7671c720f",
+					"jsonFile" : "target-install-MLIRSparlayTransforms-271df50810f86e3b56d9.json",
+					"name" : "install-MLIRSparlayTransforms",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "install-MLIRSparlayTransforms-stripped::@a94c6babf0d7671c720f",
+					"jsonFile" : "target-install-MLIRSparlayTransforms-stripped-3f423b8f3067434fdff5.json",
+					"name" : "install-MLIRSparlayTransforms-stripped",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 7,
+					"id" : "install-mlir_sparlay_runner_utils::@656887e8f36e5f7d68cc",
+					"jsonFile" : "target-install-mlir_sparlay_runner_utils-a8d4939b29f8f8afa257.json",
+					"name" : "install-mlir_sparlay_runner_utils",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 7,
+					"id" : "install-mlir_sparlay_runner_utils-stripped::@656887e8f36e5f7d68cc",
+					"jsonFile" : "target-install-mlir_sparlay_runner_utils-stripped-ee82fbf37d0f045b603c.json",
+					"name" : "install-mlir_sparlay_runner_utils-stripped",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "intrinsics_gen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-intrinsics_gen-350cc9c0a5c45cd12ea7.json",
+					"name" : "intrinsics_gen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "mlir-doc::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-mlir-doc-3481d0371fe867386908.json",
+					"name" : "mlir-doc",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "mlir-generic-headers::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-mlir-generic-headers-a979a842e169767c02cf.json",
+					"name" : "mlir-generic-headers",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "mlir-headers::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-mlir-headers-cc0edbaa526d575d6ce0.json",
+					"name" : "mlir-headers",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "mlir-tablegen-targets::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-mlir-tablegen-targets-3bcda6cdc82952b1c900.json",
+					"name" : "mlir-tablegen-targets",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 7,
+					"id" : "mlir_sparlay_runner_utils::@656887e8f36e5f7d68cc",
+					"jsonFile" : "target-mlir_sparlay_runner_utils-5e632a371d6d5b03e38a.json",
+					"name" : "mlir_sparlay_runner_utils",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "obj.MLIRSparlay::@fbfd63cd06ffdf52319f",
+					"jsonFile" : "target-obj.MLIRSparlay-c5a3b53271b7fc76dd76.json",
+					"name" : "obj.MLIRSparlay",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "obj.MLIRSparlayTransforms::@a94c6babf0d7671c720f",
+					"jsonFile" : "target-obj.MLIRSparlayTransforms-10409472967260eeda81.json",
+					"name" : "obj.MLIRSparlayTransforms",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "omp_gen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-omp_gen-5a6d8588a27facb848ce.json",
+					"name" : "omp_gen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 9,
+					"id" : "sparlay-opt::@c49330b24e586a0ef661",
+					"jsonFile" : "target-sparlay-opt-b048454dffdd54bda9c1.json",
+					"name" : "sparlay-opt",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 10,
+					"id" : "sparlay-translate::@348da1dc5464183aa89b",
+					"jsonFile" : "target-sparlay-translate-6ad88120e2176a6fe2c0.json",
+					"name" : "sparlay-translate",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/dingzj/sparse/Sparse_Layout_Dialect/build",
+		"source" : "/home/dingzj/sparse/Sparse_Layout_Dialect"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 4
+	}
+}

@@ -1,0 +1,103 @@
+{
+	"backtrace" : 4,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_custom_target",
+			"add_llvm_install_targets",
+			"add_mlir_library_install",
+			"add_mlir_library",
+			"add_dependencies"
+		],
+		"files" : 
+		[
+			"/home/dingzj/sparse/tmp/LLVM/llvm/cmake/modules/AddLLVM.cmake",
+			"/home/dingzj/sparse/tmp/LLVM/build/lib/cmake/mlir/AddMLIR.cmake",
+			"lib/Runtime/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 2
+			},
+			{
+				"command" : 3,
+				"file" : 2,
+				"line" : 7,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 1,
+				"line" : 135,
+				"parent" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 158,
+				"parent" : 2
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 732,
+				"parent" : 3
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 742,
+				"parent" : 3
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 5,
+			"id" : "mlir_sparlay_runner_utils::@656887e8f36e5f7d68cc"
+		}
+	],
+	"id" : "install-mlir_sparlay_runner_utils-stripped::@656887e8f36e5f7d68cc",
+	"name" : "install-mlir_sparlay_runner_utils-stripped",
+	"paths" : 
+	{
+		"build" : "lib/Runtime",
+		"source" : "lib/Runtime"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "",
+			"sourceIndexes" : 
+			[
+				0
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				1
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 4,
+			"isGenerated" : true,
+			"path" : "build/lib/Runtime/CMakeFiles/install-mlir_sparlay_runner_utils-stripped",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/lib/Runtime/CMakeFiles/install-mlir_sparlay_runner_utils-stripped.rule",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "UTILITY"
+}

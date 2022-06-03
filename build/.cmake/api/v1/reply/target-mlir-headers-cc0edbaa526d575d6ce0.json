@@ -1,0 +1,73 @@
+{
+	"backtrace" : 3,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_custom_target",
+			"find_package",
+			"add_dependencies",
+			"add_mlir_dialect"
+		],
+		"files" : 
+		[
+			"/home/dingzj/sparse/tmp/LLVM/build/lib/cmake/mlir/MLIRConfig.cmake",
+			"CMakeLists.txt",
+			"/home/dingzj/sparse/tmp/LLVM/build/lib/cmake/mlir/AddMLIR.cmake",
+			"include/IR/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 8,
+				"parent" : 0
+			},
+			{
+				"file" : 0,
+				"parent" : 1
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 32,
+				"parent" : 2
+			},
+			{
+				"file" : 3
+			},
+			{
+				"command" : 3,
+				"file" : 3,
+				"line" : 1,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 20,
+				"parent" : 5
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 6,
+			"id" : "MLIRSparlayOpsIncGen::@381170b28ab870bb2ee9"
+		}
+	],
+	"id" : "mlir-headers::@6890427a1f51a3e7e1df",
+	"name" : "mlir-headers",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

@@ -33,8 +33,8 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
 
     ```mlir
     #BCSR = #sparlay.encoding<{
-      secondaryMap = (d0, d1, d2, d3) -> (fuse trim d0, d1),
-      primaryMap = (d0, d1, d2, d3) -> (d2, d3)
+      secondaryMap = #sparlay.affine<(d0, d1, d2, d3) -> (fuse trim d0, d1)>,
+      primaryMap = affine_map<(d0, d1, d2, d3) -> (d2, d3)>
       bitwidth = 8
     }>
  

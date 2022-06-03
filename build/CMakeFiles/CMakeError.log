@@ -1,0 +1,88 @@
+Performing C++ SOURCE FILE Test CXX_SUPPORTS_CLASS_MEMACCESS_FLAG failed with the following output:
+Change Dir: /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/local/bin/ninja cmTC_bb6c3 && [1/2] Building CXX object CMakeFiles/cmTC_bb6c3.dir/src.cxx.o
+warning: unknown warning option '-Wclass-memaccess'; did you mean '-Wclass-varargs'? [-Wunknown-warning-option]
+1 warning generated.
+[2/2] Linking CXX executable cmTC_bb6c3
+
+
+Source file was:
+int main() { return 0; }
+Performing C++ SOURCE FILE Test CXX_SUPPORTS_SUGGEST_OVERRIDE_FLAG failed with the following output:
+Change Dir: /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/local/bin/ninja cmTC_9fe96 && [1/2] Building CXX object CMakeFiles/cmTC_9fe96.dir/src.cxx.o
+warning: unknown warning option '-Wsuggest-override'; did you mean '-Wshift-overflow'? [-Wunknown-warning-option]
+1 warning generated.
+[2/2] Linking CXX executable cmTC_9fe96
+
+
+Source file was:
+int main() { return 0; }
+Performing C SOURCE FILE Test C_SUPPORTS_MISLEADING_INDENTATION_FLAG failed with the following output:
+Change Dir: /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/local/bin/ninja cmTC_e0788 && [1/2] Building C object CMakeFiles/cmTC_e0788.dir/src.c.o
+FAILED: CMakeFiles/cmTC_e0788.dir/src.c.o 
+/usr/bin/clang -DC_SUPPORTS_MISLEADING_INDENTATION_FLAG  -fPIC -Werror=date-time -Werror=unguarded-availability-new -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wmissing-field-initializers -Wimplicit-fallthrough -Wcovered-switch-default -Wstring-conversion    -Werror -Wmisleading-indentation -MD -MT CMakeFiles/cmTC_e0788.dir/src.c.o -MF CMakeFiles/cmTC_e0788.dir/src.c.o.d -o CMakeFiles/cmTC_e0788.dir/src.c.o -c /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp/src.c
+error: unknown warning option '-Wmisleading-indentation'; did you mean '-Wbinding-in-condition'? [-Werror,-Wunknown-warning-option]
+ninja: build stopped: subcommand failed.
+
+
+Source file was:
+int main(void) { return 0; }
+Performing C++ SOURCE FILE Test CXX_SUPPORTS_MISLEADING_INDENTATION_FLAG failed with the following output:
+Change Dir: /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/local/bin/ninja cmTC_80164 && [1/2] Building CXX object CMakeFiles/cmTC_80164.dir/src.cxx.o
+FAILED: CMakeFiles/cmTC_80164.dir/src.cxx.o 
+/usr/bin/clang++ -DCXX_SUPPORTS_MISLEADING_INDENTATION_FLAG  -fPIC -fvisibility-inlines-hidden -Werror=date-time -Werror=unguarded-availability-new -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wmissing-field-initializers -Wimplicit-fallthrough -Wcovered-switch-default -Wno-noexcept-type -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -Wstring-conversion    -Werror -Wmisleading-indentation -MD -MT CMakeFiles/cmTC_80164.dir/src.cxx.o -MF CMakeFiles/cmTC_80164.dir/src.cxx.o.d -o CMakeFiles/cmTC_80164.dir/src.cxx.o -c /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp/src.cxx
+error: unknown warning option '-Wmisleading-indentation'; did you mean '-Wbinding-in-condition'? [-Werror,-Wunknown-warning-option]
+ninja: build stopped: subcommand failed.
+
+
+Source file was:
+int main() { return 0; }
+Performing C++ SOURCE FILE Test LINKER_SUPPORTS_COLOR_DIAGNOSTICS failed with the following output:
+Change Dir: /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/local/bin/ninja cmTC_0e83f && [1/2] Building CXX object CMakeFiles/cmTC_0e83f.dir/src.cxx.o
+[2/2] Linking CXX executable cmTC_0e83f
+FAILED: cmTC_0e83f 
+: && /usr/bin/clang++ -fPIC -fvisibility-inlines-hidden -Werror=date-time -Werror=unguarded-availability-new -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wmissing-field-initializers -Wimplicit-fallthrough -Wcovered-switch-default -Wno-noexcept-type -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -Wstring-conversion -fdiagnostics-color -Wl,--color-diagnostics CMakeFiles/cmTC_0e83f.dir/src.cxx.o -o cmTC_0e83f   && :
+/usr/bin/ld: unrecognized option '--color-diagnostics'
+/usr/bin/ld: use the --help option for usage information
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.
+
+
+Source file was:
+int main() { return 0; }
+Determining if the os_signpost_interval_begin exist failed with the following output:
+Change Dir: /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/local/bin/ninja cmTC_59c6e && [1/2] Building C object CMakeFiles/cmTC_59c6e.dir/CheckSymbolExists.c.o
+FAILED: CMakeFiles/cmTC_59c6e.dir/CheckSymbolExists.c.o 
+/usr/bin/clang   -fPIC  -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wmissing-field-initializers -Wimplicit-fallthrough -Wcovered-switch-default -Wstring-conversion -fdiagnostics-color -ffunction-sections -fdata-sections -MD -MT CMakeFiles/cmTC_59c6e.dir/CheckSymbolExists.c.o -MF CMakeFiles/cmTC_59c6e.dir/CheckSymbolExists.c.o.d -o CMakeFiles/cmTC_59c6e.dir/CheckSymbolExists.c.o -c /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c
+/home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:2:10: fatal error: 'os/signpost.h' file not found
+#include <os/signpost.h>
+         ^~~~~~~~~~~~~~~
+1 error generated.
+ninja: build stopped: subcommand failed.
+
+
+File /home/dingzj/sparse/Sparse_Layout_Dialect/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <os/signpost.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef os_signpost_interval_begin
+  return ((int*)(&os_signpost_interval_begin))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}

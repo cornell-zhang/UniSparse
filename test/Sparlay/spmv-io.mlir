@@ -50,7 +50,7 @@ module {
         //      !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)>, 
         //                      memref<?xf32>> to
         //      !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)>
-        // %crd_0 = sparlay.struct_access %crd_old[0] : 
+        // %crd_0 = sparlay.struct_access %  [0] : 
         //      !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)> to
         //      memref<?xindex>
         // %crd_1 = sparlay.struct_access %crd_old[1] : 

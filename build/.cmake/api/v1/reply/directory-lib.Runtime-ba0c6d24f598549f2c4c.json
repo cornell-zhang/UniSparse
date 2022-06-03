@@ -1,0 +1,74 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"install",
+			"add_mlir_library_install",
+			"add_mlir_library"
+		],
+		"files" : 
+		[
+			"/home/dingzj/sparse/tmp/LLVM/build/lib/cmake/mlir/AddMLIR.cmake",
+			"lib/Runtime/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 2,
+				"file" : 1,
+				"line" : 7,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 135,
+				"parent" : 1
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 150,
+				"parent" : 2
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 3,
+			"component" : "mlir_sparlay_runner_utils",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"lib/libmlir_sparlay_runner_utils.so.14git"
+			],
+			"targetId" : "mlir_sparlay_runner_utils::@656887e8f36e5f7d68cc",
+			"targetIndex" : 23,
+			"targetInstallNamelink" : "skip",
+			"type" : "target"
+		},
+		{
+			"backtrace" : 3,
+			"component" : "mlir_sparlay_runner_utils",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"lib/libmlir_sparlay_runner_utils.so"
+			],
+			"targetId" : "mlir_sparlay_runner_utils::@656887e8f36e5f7d68cc",
+			"targetIndex" : 23,
+			"targetInstallNamelink" : "only",
+			"type" : "target"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "lib/Runtime",
+		"source" : "lib/Runtime"
+	}
+}

@@ -1,0 +1,67 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"install",
+			"add_mlir_library_install",
+			"add_mlir_library",
+			"add_mlir_dialect_library"
+		],
+		"files" : 
+		[
+			"/home/dingzj/sparse/tmp/LLVM/build/lib/cmake/mlir/AddMLIR.cmake",
+			"lib/IR/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 3,
+				"file" : 1,
+				"line" : 1,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 193,
+				"parent" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 135,
+				"parent" : 2
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 150,
+				"parent" : 3
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 4,
+			"component" : "MLIRSparlay",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"lib/libMLIRSparlay.a"
+			],
+			"targetId" : "MLIRSparlay::@fbfd63cd06ffdf52319f",
+			"targetIndex" : 0,
+			"type" : "target"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "lib/IR",
+		"source" : "lib/IR"
+	}
+}
