@@ -28,15 +28,14 @@ def Sparlay_Dialect : Dialect {
         working inside of the LLVM source tree.
     }];
     let cppNamespace = "::mlir::sparlay";
+    let extraClassDeclaration = [{
+        void registerTypes();
+    }];
 }
 
 //===----------------------------------------------------------------------===//
 // Base sparlay type definition.
 //===----------------------------------------------------------------------===//
-
-// class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
-//         Op<Sparlay_Dialect, mnemonic, traits>;
-
 
 def Sparlay_StructType :
     DialectType<Sparlay_Dialect, CPred<"$_self.isa<StructType>()">,

@@ -16,13 +16,6 @@
 #include "mlir/Interfaces/CastInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-namespace mlir {
-namespace sparlay {
-namespace detail {
-struct StructTypeStorage;
-} // end namespace detail
-} // end namespace sparlay
-} // end namespace mlir
 
 #include "IR/SparlayOpsDialect.h.inc"
 
