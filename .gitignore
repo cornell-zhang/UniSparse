@@ -1,4 +1,5 @@
-./build/*
-./scripts/*
+build/*
+/build*
+/scripts*
+scripts/*
 evaluation/CPU/build*
-scripts/bin-path.sh
