@@ -19,7 +19,7 @@ func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()
   bitWidth=3
 }>
 
-func private @F1(%arg0: tensor<?x?x?xf64, #2>) -> ()
+func private @F1(%arg0: tensor<?x?x?xf64, #2>) -> (tensor<?x?x?xf64, #1>)
 
 func private @F2(%arg0: tensor<?x?x?xf64, #3>) -> ()
 

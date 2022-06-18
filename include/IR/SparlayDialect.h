@@ -19,5 +19,13 @@
 
 #include "IR/SparlayOpsDialect.h.inc"
 
+#include "IR/SparlayAttr.h"
+
+namespace mlir {
+namespace sparlay {
+  // SparlayEncodingAttr getSparlayEncoding(Type type);
+}
+}
+
 
 #endif // SPARLAY_SPARLAYDIALECT_H

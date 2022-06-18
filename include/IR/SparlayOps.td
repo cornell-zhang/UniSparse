@@ -47,11 +47,40 @@ def Sparlay_NewOp : Sparlay_Op<"new", [NoSideEffect]> {
     }];
 }
 
+def Sparlay_fromFileOp: Sparlay_Op<"fromFile", [NoSideEffect]> {
+    let summary = "Construct a sparlay tensor from COO file.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_COO = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    let results = (outs AnyTensor:$output);
+    let assemblyFormat = [{
+       `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+    }];
+}
+
+def Sparlay_printStorageOp: Sparlay_Op<"printStorage", [NoSideEffect]> {
+    let summary = "Print the Storage of a tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        sparlay.printStorage %A_CSR : tensor<?x?xf32, #CSR>
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input)
+    }];
+}
+
 //===----------------------------------------------------------------------===//
 // sparlay::ConvertOp
 //===----------------------------------------------------------------------===//
 
-def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect]> {
+def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect,SameOperandsAndResultType]> {
     let summary = "Convert from the source format to the target format.";
     let description = [{
         Example:

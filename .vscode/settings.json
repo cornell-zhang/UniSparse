@@ -58,6 +58,7 @@
         "thread": "cpp",
         "typeinfo": "cpp",
         "bit": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "iomanip": "cpp"
     }
 }

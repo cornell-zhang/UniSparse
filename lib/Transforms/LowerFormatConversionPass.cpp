@@ -13,7 +13,6 @@
 #include "Transforms/Passes.h"
 #include "IR/SparlayDialect.h"
 #include "IR/SparlayOps.h"
-#include "IR/SparlayDialect.h"
 #include "IR/SparlayTypes.h"
 
 #include "mlir/IR/AffineMap.h"
@@ -137,6 +136,180 @@ public:
         Value crdStructOp = rewriter.create<sparlay::StructConstructOp>(loc, crdType, input);
         rewriter.replaceOpWithNewOp<sparlay::StructConstructOp>(op, resType, 
             ValueRange({crdStructOp, valueOp.getResult(0)}));
+        return success();
+    }
+};
+
+class fromFileOpLowering : public OpConversionPattern<sparlay::fromFileOp> {
+public:
+    using OpConversionPattern<sparlay::fromFileOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::fromFileOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        
+        Value fileName = op->getOperand(0);
+        Type inputType = fileName.getType();
+
+        CallOp readOp;
+
+        StringRef funcName =  "sptFromFile";
+
+        SmallVector<Value, 1> readParams;
+        readParams.push_back(fileName);
+        readOp = rewriter.create<CallOp>(loc, inputType, 
+            getFunc(op, funcName, inputType, readParams, /*emitCInterface=*/true),
+            readParams);
+
+        rewriter.replaceOp(op, readOp.getResult(0));
+        return success();
+    }
+};
+
+SparlayEncodingAttr getSparlayEncoding(Type type) {
+  if (auto ttp = type.dyn_cast<RankedTensorType>())
+    return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
+  return nullptr;
+}
+
+class ConvertOpLowering : public OpConversionPattern<sparlay::ConvertOp> {
+public:
+    using OpConversionPattern<sparlay::ConvertOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::ConvertOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op.getLoc();
+        Type resType = op.getType();
+        Value src = adaptor.getOperands()[0];
+        Type srcType = src.getType();
+        auto encSrc = getSparlayEncoding(op->getOperand(0).getType());
+        auto encDst = getSparlayEncoding(resType);
+
+        auto srcSecond = encSrc.getSecondaryMap();
+        auto dstSecond = encDst.getSecondaryMap();
+
+        auto srcTrim = srcSecond.getTrimIndex();
+        auto dstTrim = dstSecond.getTrimIndex();
+        auto srcFuse = srcSecond.getFuseIndex();
+        auto dstFuse = dstSecond.getTrimIndex();
+
+        StringRef fuseName =  "sptFuse";
+        StringRef separateName = "sptSeparate";
+        StringRef trimName = "sptTrim";
+        StringRef growName = "sptGrow";
+
+        // for (auto ele: srcTrim) {
+        //     std::cerr << ele << ' ';
+        // }
+        // std::cerr << std::endl;
+
+        // for (auto ele: dstTrim) {
+        //     std::cerr << ele << ' ';
+        // }
+        // std::cerr << std::endl;
+
+        bool fuse_vis[10] = {0};
+        Type prevType = srcType;
+        Value prevRes = src;
+        SmallVector<Value, 2> params;
+        for (auto ele: srcFuse) {
+            if (ele >= 10) {
+                std::cerr << "Too many dims." << std::endl;
+                assert(0);
+            }
+            fuse_vis[ele] = 1;
+        }
+        for (auto ele: dstFuse) {
+            if (ele >= 10) {
+                std::cerr << "Too many dims." << std::endl;
+                assert(0);
+            }
+            if (!fuse_vis[ele]) {
+                params.clear();
+                params.push_back(prevRes);
+                auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
+                params.push_back(tmp_const.getResult());
+                auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                    getFunc(op, fuseName, prevType, prevRes, /*emitCInterface=*/true),
+                    params
+                );
+                prevType = prevOp.getType(0);
+                prevRes = prevOp.getResult(0);
+            } else {
+                fuse_vis[ele] = 0;
+            }
+        }
+        for (auto ele: srcFuse) {
+            if (fuse_vis[ele]) {
+                fuse_vis[ele] = 0;
+                params.clear();
+                params.push_back(prevRes);
+                auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
+                params.push_back(tmp_const.getResult());
+                auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                    getFunc(op, separateName, prevType, prevRes, /*emitCInterface=*/true),
+                    params
+                );
+                prevType = prevOp.getType(0);
+                prevRes = prevOp.getResult(0);
+            }
+        }
+
+        int src_mn_trim = 1000;
+        for (auto ele: srcTrim) {
+            src_mn_trim = std::min(src_mn_trim, ele);
+        }
+        int dst_mn_trim = 1000;
+        for (auto ele: dstTrim) {
+            dst_mn_trim = std::min(dst_mn_trim, ele);
+        }
+        if (dst_mn_trim < src_mn_trim) {
+            params.clear();
+            params.push_back(prevRes);
+            auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim));
+            params.push_back(tmp_const.getResult());
+            auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                getFunc(op, trimName, prevType, prevRes, /*emitCInterface=*/true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        } else if (dst_mn_trim > src_mn_trim) {
+            params.clear();
+            params.push_back(prevRes);
+            dst_mn_trim = std::min((unsigned int)(dst_mn_trim), srcSecond.getNumDims()-1);
+            auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim));
+            params.push_back(tmp_const.getResult());
+            auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                getFunc(op, growName, prevType, prevRes, /*emitCInterface=*/true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        }
+
+        rewriter.replaceOp(op, prevRes);
+        return success();
+    }
+};
+
+class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageOp> {
+    using OpConversionPattern<sparlay::printStorageOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::printStorageOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        
+        Value candValue = adaptor.getOperands()[0];
+        CallOp printOp;
+
+        StringRef funcName = "sptPrint";
+
+        SmallVector<Value, 1> printParams;
+        printParams.push_back(candValue);
+
+        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+            getFunc(op, funcName, llvm::None, printParams, /*emitCInterface=*/true),
+            printParams);
         return success();
     }
 };
@@ -651,7 +824,8 @@ void LowerFormatConversionPass::runOnFunction() {
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
     patterns.add<NewOpLowering, PackOpLowering,
-                 CompressOpLowering, MultiplyOpLowering>(&getContext());
+                 CompressOpLowering, MultiplyOpLowering, 
+                 fromFileOpLowering, ConvertOpLowering, printStorageOpLowering>(&getContext());
     // patterns.add<PackOpLowering>(&getContext());
     // patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");

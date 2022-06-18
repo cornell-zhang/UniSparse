@@ -4,6 +4,9 @@
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinTypes.h"
 
+#include <vector>
+#include <iostream>
+
 namespace mlir {
 namespace sparlay {
 class SparlayAffineMap : public AffineMap {
@@ -11,15 +14,17 @@ public:
 
   SparlayAffineMap(): AffineMap(), trimIndex({}), fuseIndex({}) {}
 
-  explicit SparlayAffineMap(AffineMap map, llvm::SmallVector<int>& _trimIndex, llvm::SmallVector<int>& _fuseIndex): 
-    AffineMap(map), trimIndex(_trimIndex), fuseIndex(_fuseIndex) {}
+  explicit SparlayAffineMap(AffineMap map, std::vector<int> _trimIndex, std::vector<int> _fuseIndex): 
+    AffineMap(map), trimIndex(_trimIndex), fuseIndex(_fuseIndex) {
+      // std::cerr << (void*)this << std::endl;
+    }
 
-  llvm::SmallVector<int> getTrimIndex() const { return trimIndex; }
-  llvm::SmallVector<int> getFuseIndex() const { return fuseIndex; }
+  std::vector<int> getTrimIndex() const { return trimIndex; }
+  std::vector<int> getFuseIndex() const { return fuseIndex; }
 
 private:
-  llvm::SmallVector<int> trimIndex;
-  llvm::SmallVector<int> fuseIndex;
+  std::vector<int> trimIndex;
+  std::vector<int> fuseIndex;
 };
 } //endof sparlay
 } //endof mlir

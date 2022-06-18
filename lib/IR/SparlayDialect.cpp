@@ -9,7 +9,6 @@
 #include "IR/SparlayDialect.h"
 #include "IR/SparlayOps.h"
 #include "IR/SparlayTypes.h"
-#include "IR/SparlayAttr.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -55,10 +54,11 @@ ParseResult parseAffineExprGetDim(
 }
 
 Attribute SparlayAffineAttr::parse(DialectAsmParser &parser, Type type) {
-  SmallVector<int> fuseIndex;
-  SmallVector<int> trimIndex;
+  // std::cerr << "JOJOJOJO" << std::endl;
+  auto fuseIndex = new std::vector<int>{};
+  auto trimIndex = new std::vector<int>{};
   SmallVector<AffineExpr> secondaryExprs;
-  static std::string tok_trim = "trim", tok_fuse = "fuse";
+  std::string tok_trim = "trim", tok_fuse = "fuse";
   SmallVector<StringRef, 2> op_token{tok_trim, tok_fuse};
   SmallVector<std::string> mapDimtoID;
   int tot_dim = 0;
@@ -81,9 +81,9 @@ Attribute SparlayAffineAttr::parse(DialectAsmParser &parser, Type type) {
       auto ret = parser.parseOptionalKeyword(&op_key_ref, ArrayRef<StringRef>(op_token));
       if (succeeded(ret)) {
         if (std::string(op_key_ref.str()) == "fuse") {
-          if (!fused) fuseIndex.push_back(image_idx), fused = 1;
+          if (!fused) fuseIndex->push_back(image_idx), fused = 1;
         } else {
-          if (!trimmed) trimIndex.push_back(image_idx), trimmed = 1;
+          if (!trimmed) trimIndex->push_back(image_idx), trimmed = 1;
         }
       } else {
         break;
@@ -112,9 +112,15 @@ Attribute SparlayAffineAttr::parse(DialectAsmParser &parser, Type type) {
   if (failed(parser.parseGreater())) {
     return {};
   }
-  return SparlayAffineAttr::get(
-    parser.getContext(), SparlayAffineMap(AffineMap::get(tot_dim, 0, secondaryExprs, parser.getContext()), trimIndex, fuseIndex)
+  // std::cerr << "THER" << std::endl;
+  // for (auto ele: (*trimIndex)) std::cerr << ele << ' ';
+  // std::cerr << std::endl;
+  auto ret = parser.getChecked<SparlayAffineAttr>(
+    parser.getContext(), SparlayAffineMap(AffineMap::get(tot_dim, 0, secondaryExprs, parser.getContext()), *trimIndex, *fuseIndex)
   );
+  // for (auto ele: tmp2) std::cerr << ele << ' ';
+  // std::cerr << std::endl;
+  return ret;
 }
 
 Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
@@ -122,10 +128,13 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
     return {};
   // Parse the data as a dictionary.
   DictionaryAttr dict;
+  // std::cerr << "Enter Encoding Parse" << std::endl;
   if (failed(parser.parseAttribute(dict)))
     return {};
-  AffineMap primaryMap{};
-  SparlayAffineMap secondaryMap{};
+  if (failed(parser.parseGreater()))
+    return {};
+  AffineMap primaryMap = {};
+  SparlayAffineMap secondaryMap = {};
   unsigned bitWidth = 8;
   for (const auto& attr: dict) {
     if (attr.first == "primaryMap") {
@@ -140,6 +149,12 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
         return {};
       }
       secondaryMap = sparlayAffineAttr.getValue();
+      auto trimIndex = secondaryMap.getTrimIndex();
+      // for (auto ele: trimIndex) std::cerr << ele << ' ';
+      // std::cerr << std::endl;
+      auto fuseIndex = secondaryMap.getFuseIndex();
+      // for (auto ele: fuseIndex) std::cerr << ele << ' ';
+      // std::cerr << std::endl;
     } else if (attr.first == "bitWidth") {
       auto intAttr = attr.second.dyn_cast<IntegerAttr>();
       if (!intAttr) return {};
@@ -148,9 +163,7 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
       return {};
     }
   }
-  if (failed(parser.parseGreater()))
-    return {};
-  return SparlayEncodingAttr::get(parser.getContext(), primaryMap, secondaryMap, bitWidth);
+  return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), primaryMap, secondaryMap, bitWidth);
 }
 
 void SparlayEncodingAttr::print(DialectAsmPrinter &printer) const {
@@ -191,6 +204,12 @@ LogicalResult SparlayEncodingAttr::verifyEncoding(
 ) const {
   return success();
 }
+
+// SparlayEncodingAttr getSparlayEncoding(Type type) {
+//   if (auto ttp = type.dyn_cast<RankedTensorType>())
+//     return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
+//   return nullptr;
+// }
 
 Attribute SparlayDialect::parseAttribute(DialectAsmParser &parser,
                                               Type type) const {
