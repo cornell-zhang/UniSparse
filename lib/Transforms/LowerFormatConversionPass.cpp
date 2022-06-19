@@ -191,7 +191,7 @@ public:
         auto srcTrim = srcSecond.getTrimIndex();
         auto dstTrim = dstSecond.getTrimIndex();
         auto srcFuse = srcSecond.getFuseIndex();
-        auto dstFuse = dstSecond.getTrimIndex();
+        auto dstFuse = dstSecond.getFuseIndex();
 
         StringRef fuseName =  "sptFuse";
         StringRef separateName = "sptSeparate";
@@ -230,7 +230,7 @@ public:
                 auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
                 params.push_back(tmp_const.getResult());
                 auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, fuseName, prevType, prevRes, /*emitCInterface=*/true),
+                    getFunc(op, fuseName, prevType, params, /*emitCInterface=*/true),
                     params
                 );
                 prevType = prevOp.getType(0);
@@ -247,7 +247,7 @@ public:
                 auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
                 params.push_back(tmp_const.getResult());
                 auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, separateName, prevType, prevRes, /*emitCInterface=*/true),
+                    getFunc(op, separateName, prevType, params, /*emitCInterface=*/true),
                     params
                 );
                 prevType = prevOp.getType(0);
@@ -269,7 +269,7 @@ public:
             auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim));
             params.push_back(tmp_const.getResult());
             auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, trimName, prevType, prevRes, /*emitCInterface=*/true),
+                getFunc(op, trimName, prevType, params, /*emitCInterface=*/true),
                 params
             );
             prevType = prevOp.getType(0);
@@ -278,10 +278,10 @@ public:
             params.clear();
             params.push_back(prevRes);
             dst_mn_trim = std::min((unsigned int)(dst_mn_trim), srcSecond.getNumDims()-1);
-            auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim));
+            auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim-1));
             params.push_back(tmp_const.getResult());
             auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, growName, prevType, prevRes, /*emitCInterface=*/true),
+                getFunc(op, growName, prevType, params, /*emitCInterface=*/true),
                 params
             );
             prevType = prevOp.getType(0);
