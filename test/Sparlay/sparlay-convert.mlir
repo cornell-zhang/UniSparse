@@ -2,7 +2,7 @@
 //     mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
 //     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
 //     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-casts | \
-//     mlir-translate -mlir-to-llvmir | opt -O2 -S | llc -O2 | tee sparlay-convert.asm
+//     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 | tee sparlay-convert.asm
 
 // !!! delete the <stdin> in the assembly
 

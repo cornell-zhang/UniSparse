@@ -168,9 +168,9 @@ public:
   bool operator == (const LevelStorage& A) {
     if (type != A.type || size != A.size) return 0;
     if (crd.size() != A.crd.size() || ptr.size() != A.ptr.size() || same_path.size() != A.same_path.size()) return 0;
-    for (int i = 0; i < crd.size(); ++i) if (crd[i] != A.crd[i]) return 0;
-    for (int i = 0; i < ptr.size(); ++i) if (ptr[i] != A.ptr[i]) return 0;
-    for (int i = 0; i < same_path.size(); ++i) if (same_path[i] != A.same_path[i]) return 0;
+    for (size_t i = 0; i < crd.size(); ++i) if (crd[i] != A.crd[i]) return 0;
+    for (size_t i = 0; i < ptr.size(); ++i) if (ptr[i] != A.ptr[i]) return 0;
+    for (size_t i = 0; i < same_path.size(); ++i) if (same_path[i] != A.same_path[i]) return 0;
     return 1;
   }
 };
@@ -182,7 +182,7 @@ public:
   LLStorage(float v) { vec.clear(); vec.push_back(v); }
   bool operator == (const LLStorage& A) {
     if (vec.size() != A.vec.size()) return 0;
-    for (int i = 0; i < vec.size(); ++i) if (vec[i] != A.vec[i]) return 0;
+    for (size_t i = 0; i < vec.size(); ++i) if (vec[i] != A.vec[i]) return 0;
     return 1;
   }
 };
@@ -214,10 +214,10 @@ public:
   void Print(std::ostream& fout, bool verbose=0);
   SparlayStorage copy() {
     SparlayStorage ret;
-    for (int i = 0; i < vLevel.size(); ++i) {
+    for (size_t i = 0; i < vLevel.size(); ++i) {
       ret.vLevel.push_back(std::unique_ptr<LevelStorage>(new LevelStorage(*vLevel[i])));
     }
-    for (int i = 0; i < ptValue.size(); ++i) {
+    for (size_t i = 0; i < ptValue.size(); ++i) {
       ret.ptValue.push_back(std::unique_ptr<LLStorage>(new LLStorage(*ptValue[i])));
     }
     return ret;
@@ -225,8 +225,8 @@ public:
   bool operator == (const SparlayStorage& A) {
     if (A.vLevel.size() != vLevel.size()) return 0;
     if (ptValue.size() != A.ptValue.size()) return 0;
-    for (int i = 0; i < vLevel.size(); ++i) if (!((*vLevel[i]) == (*A.vLevel[i]))) return 0;
-    for (int i = 0; i < ptValue.size(); ++i) if (!((*ptValue[i]) == (*A.ptValue[i]))) return 0;
+    for (size_t i = 0; i < vLevel.size(); ++i) if (!((*vLevel[i]) == (*A.vLevel[i]))) return 0;
+    for (size_t i = 0; i < ptValue.size(); ++i) if (!((*ptValue[i]) == (*A.ptValue[i]))) return 0;
     return 1;
   }
 };
@@ -235,7 +235,7 @@ SparlayStorage* readFromFile(std::istream& fin);
 
 void SparlayStorage::Print(std::ostream& fout, bool verbose) {
   fout << "==============================================" << std::endl;
-  for (int i = 0; i < vLevel.size(); ++i) {
+  for (size_t i = 0; i < vLevel.size(); ++i) {
     fout << "crd: ";
     for (const auto ele: vLevel[i]->crd) {
       fout << std::setw(8) << ele+1;
@@ -312,15 +312,15 @@ SparlayStorage* readFromFile(std::istream& fin) {
   bucket.resize(H, {});
   pos.resize(rowStore->crd.size(), 0);
   oriID.resize(pos.size(), 0);
-  for (int i = 0; i < rowStore->crd.size(); ++i) {
+  for (size_t i = 0; i < rowStore->crd.size(); ++i) {
     assert(rowStore->crd[i] < bucket.size());
     bucket[rowStore->crd[i]].push_back(i);
     pos[i] = i;
     oriID[i] = i;
   }
   int ptr = 0;
-  for (int i = 0; i < bucket.size(); ++i) {
-    for (int j = 0; j < bucket[i].size(); ++j) {
+  for (size_t i = 0; i < bucket.size(); ++i) {
+    for (size_t j = 0; j < bucket[i].size(); ++j) {
       int cur_pos = pos[bucket[i][j]];
       assert(cur_pos >= ptr);
       if (cur_pos != ptr) {
@@ -338,7 +338,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
     }
   }
 
-  for (int i = 1; i < rowStore->crd.size(); ++i) {
+  for (size_t i = 1; i < rowStore->crd.size(); ++i) {
     rowStore->same_path.push_back(rowStore->crd[i] == rowStore->crd[i-1]);
     colStore->same_path.push_back(
       (rowStore->crd[i] == rowStore->crd[i-1]) && (colStore->crd[i] == colStore->crd[i-1])
@@ -396,12 +396,12 @@ std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
   assert(!(vLevel[st_lv]->type&1));
   assert(vLevel[st_lv]->size);
   ret.resize(ed_level_size+1, -1);
-  for (int i = 0; i < vLevel[st_lv]->ptr.size(); ++i) {
+  for (size_t i = 0; i < vLevel[st_lv]->ptr.size(); ++i) {
     if (vLevel[st_lv]->ptr[i] < vLevel[st_lv]->ptr[i+1])
       dfsLowerPtr(st_lv, i, i, ed_lv, ret);
   }
   ret[0] = 0;
-  for (int i = 1; i < ret.size(); ++i) {
+  for (size_t i = 1; i < ret.size(); ++i) {
     if (ret[i] == -1) ret[i] = ret[i-1];
   }
 #ifdef DEBUG
@@ -418,12 +418,12 @@ bool SparlayStorage::grow(const int lv) {
   if (!(vLevel[lv]->type & 1)) { //already not trimmed
     return 1;
   }
-  if (lv == (vLevel.size()-1)) {
+  if (lv == (int)(vLevel.size()-1)) {
     std::cerr << "Error: Attempt to **Grow** the last level" << std::endl;
     assert(0);
   }
   int st_lv = 0;
-  for (int i = 1; i < vLevel.size(); ++i) {
+  for (size_t i = 1; i < vLevel.size(); ++i) {
     if (vLevel[i]->type & 1) { st_lv = i; break; }
   }
   st_lv--;
@@ -470,7 +470,7 @@ bool SparlayStorage::trim(const int lv) {
     if (vLevel[cur_lv]->type & LVFUSE) vLevel[cur_lv]->ptr.push_back(0);
     int cur_lv_size = vLevel[cur_lv]->size;
     if (vLevel[cur_lv]->type & 2) {
-      for (int i = 0; i < cur_ptr.size()-1; ++i) {
+      for (size_t i = 0; i < cur_ptr.size()-1; ++i) {
         if (cur_ptr[i] != cur_ptr[i+1]) {
           vLevel[cur_lv]->crd.push_back(i % cur_lv_size);
           vLevel[cur_lv]->ptr.push_back(cur_ptr[i+1]);
@@ -478,8 +478,8 @@ bool SparlayStorage::trim(const int lv) {
         }
       }
     } else {
-      for (int i = 0; i < cur_ptr.size()-1; ++i) {
-        for (int j = cur_ptr[i]; j < cur_ptr[i+1]; ++j) {
+      for (size_t i = 0; i < cur_ptr.size()-1; ++i) {
+        for (auto j = cur_ptr[i]; j < cur_ptr[i+1]; ++j) {
           vLevel[cur_lv]->crd.push_back(i);
           vLevel[cur_lv]->same_path.push_back((j!=cur_ptr[i]));
         }
@@ -493,7 +493,7 @@ bool SparlayStorage::trim(const int lv) {
     new_cur_ptr.reserve((cur_ptr.size()-1)/cur_lv_size + 1);
     assert((cur_ptr.size()-1) % cur_lv_size == 0);
     new_cur_ptr.push_back(0);
-    for (int i = 0; i < cur_ptr.size()-1; i += cur_lv_size) {
+    for (size_t i = 0; i < cur_ptr.size()-1; i += cur_lv_size) {
       if (vLevel[cur_lv]->type & LVFUSE) {
         int cnt = 0;
         for (int j = 0; j < cur_lv_size; ++j) {
@@ -528,7 +528,7 @@ bool SparlayStorage::fuse(const int lv) {
       assert(vLevel[lv]->ptr.size() == 0);
       vLevel[lv]->ptr.reserve(vLevel[lv]->crd.size()+1);
       vLevel[lv]->ptr.push_back(0);
-      for (int i = 0; i < vLevel[lv]->crd.size(); ++i) {
+      for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
         vLevel[lv]->ptr.push_back(i+1);
       }
       vLevel[lv]->type |= 2;
@@ -541,12 +541,14 @@ bool SparlayStorage::fuse(const int lv) {
       if (!(vLevel[cur_lv]->type&LVINFO)) assert(vLevel[cur_lv]->ptr.size() == vLevel[cur_lv]->crd.size()+1);
       int saved_st_point = 0;
       assert(vLevel[cur_lv]->ptr[0] == 0);
-      for (int i = 0; i < vLevel[cur_lv]->ptr.size()-1; ++i) {
+      register size_t sz = vLevel[cur_lv]->ptr.size()-1;
+      for (size_t i = 0; i < sz; ++i) {
         int cnt = vLevel[cur_lv]->ptr[i+1] - vLevel[cur_lv]->ptr[i];
-        for (int j = saved_st_point; j < vLevel[cur_lv]->ptr[i+1]; ++j) {
+        register auto bound = vLevel[cur_lv]->ptr[i+1];
+        for (auto j = saved_st_point; j < bound; ++j) {
           if (crd_deleted[j]) cnt--;
         }
-        assert(cnt>=0);
+        // assert(cnt>=0);
         saved_st_point = vLevel[cur_lv]->ptr[i+1];
         vLevel[cur_lv]->ptr[i+1] = vLevel[cur_lv]->ptr[i]+cnt;
       }
@@ -559,7 +561,12 @@ bool SparlayStorage::fuse(const int lv) {
      *   1) crd size should === crd[lv]-sum(crd_deleted[lv])
      */
     //TODO: precompute crd size and reserve vectors to speed up
-    for (int cur_lv = upper_lv; cur_lv <= lv; ++cur_lv) {
+    auto sz = crd_deleted.size();
+    int crd_reserve_size = 0;
+    for (size_t i = 0; i < sz; ++i) {
+      crd_reserve_size += (!crd_deleted[i]);
+    }
+    for (auto cur_lv = upper_lv; cur_lv <= lv; ++cur_lv) {
       /*
        * Note: 
        *  1) should update: crd, same_path(must have)
@@ -570,8 +577,11 @@ bool SparlayStorage::fuse(const int lv) {
       assert(vLevel[cur_lv]->crd.size() == vLevel[cur_lv]->same_path.size());
       std::vector<int> new_crd;
       std::vector<bool> new_same_path;
+      new_crd.reserve(crd_reserve_size);
+      new_same_path.reserve(crd_reserve_size);
       bool is_same_path = 1; /** !!!!!!! **/
-      for (int i = 0; i < vLevel[cur_lv]->crd.size(); ++i) {
+      sz = vLevel[cur_lv]->crd.size();
+      for (size_t i = 0; i < sz; ++i) {
         is_same_path &= vLevel[cur_lv]->same_path[i];
         if (!crd_deleted[i]) {
           new_crd.push_back(vLevel[cur_lv]->crd[i]);
@@ -589,22 +599,25 @@ bool SparlayStorage::fuse(const int lv) {
      * Note:
      *  1) Shouldn't be the last level is there is work to do.
      */
-    assert(lv != vLevel.size() - 1);
-    assert(crd_deleted.size() == vLevel[lv+1]->crd.size());
-    assert(!crd_deleted[0]);
+    // assert(lv != vLevel.size() - 1);
+    // assert(crd_deleted.size() == vLevel[lv+1]->crd.size());
+    // assert(!crd_deleted[0]);
     vLevel[lv]->ptr.reserve(vLevel[lv]->crd.size()+1);
     vLevel[lv]->ptr.push_back(0);
     int cnt = 1;
-    for (int i = 1; i < crd_deleted.size(); ++i) {
+    sz = crd_deleted.size();
+    register int prev_pushed = 0;
+    for (size_t i = 1; i < sz; ++i) {
       if (!crd_deleted[i]) {
-        vLevel[lv]->ptr.push_back((*(vLevel[lv]->ptr.end()-1)) + cnt);
+        prev_pushed += cnt;
+        vLevel[lv]->ptr.push_back(prev_pushed);
         cnt = 1;
       } else {
         cnt++;
       }
     }
-    vLevel[lv]->ptr.push_back((*(vLevel[lv]->ptr.end()-1)) + cnt);
-    assert(vLevel[lv]->ptr.size() == vLevel[lv]->crd.size()+1);
+    vLevel[lv]->ptr.push_back(prev_pushed + cnt);
+    // assert(vLevel[lv]->ptr.size() == vLevel[lv]->crd.size()+1);
     vLevel[lv]->type ^= LVFUSE;
   } else {
     vLevel[lv]->type ^= LVFUSE;
@@ -619,17 +632,17 @@ bool SparlayStorage::separate(const int lv) {
     while (upper_lv!=0 && (vLevel[upper_lv-1]->type&1) && !(vLevel[upper_lv-1]->type&2)) upper_lv--;
     //update possibly the ptr of a fused level
     if (upper_lv != 0) {
-      assert(vLevel[upper_lv-1]->type&2); //it must be a fused level
+      // assert(vLevel[upper_lv-1]->type&2); //it must be a fused level
       int cur_lv = upper_lv-1;
-      if (!(vLevel[cur_lv]->type&LVINFO)) assert(vLevel[cur_lv]->ptr.size() == vLevel[cur_lv]->crd.size()+1);
-      assert(vLevel[cur_lv]->ptr[0] == 0);
-      assert(vLevel[lv]->ptr.size()-1 == *(vLevel[cur_lv]->ptr.end()-1));
-      for (int i = 0; i < vLevel[cur_lv]->ptr.size()-1; ++i) {
+      // if (!(vLevel[cur_lv]->type&LVINFO)) assert(vLevel[cur_lv]->ptr.size() == vLevel[cur_lv]->crd.size()+1);
+      // assert(vLevel[cur_lv]->ptr[0] == 0);
+      // assert(vLevel[lv]->ptr.size()-1 == *(vLevel[cur_lv]->ptr.end()-1));
+      for (size_t i = 0; i < vLevel[cur_lv]->ptr.size()-1; ++i) {
         int idR = vLevel[cur_lv]->ptr[i+1]-1;
         vLevel[cur_lv]->ptr[i+1] = vLevel[lv]->ptr[idR+1];
       }
     }
-    assert(vLevel[lv]->ptr.size() == vLevel[lv]->crd.size()+1);
+    // assert(vLevel[lv]->ptr.size() == vLevel[lv]->crd.size()+1);
     //TODO: precompute crd size and reserve vectors to speed up
     for (int cur_lv = upper_lv; cur_lv <= lv; ++cur_lv) {
       /*
@@ -637,13 +650,13 @@ bool SparlayStorage::separate(const int lv) {
        *  1) should update: crd, same_path(must have)
        *  2) should not have ptr
        */
-      if (cur_lv != lv) assert(vLevel[cur_lv]->ptr.size() == 0);
-      assert(vLevel[cur_lv]->crd.size() == vLevel[lv]->crd.size());
-      assert(vLevel[cur_lv]->crd.size() == vLevel[cur_lv]->same_path.size());
+      // if (cur_lv != lv) assert(vLevel[cur_lv]->ptr.size() == 0);
+      // assert(vLevel[cur_lv]->crd.size() == vLevel[lv]->crd.size());
+      // assert(vLevel[cur_lv]->crd.size() == vLevel[cur_lv]->same_path.size());
       std::vector<int> new_crd;
       std::vector<bool> new_same_path;
-      for (int i = 0; i < vLevel[lv]->crd.size(); ++i) {
-        for (int j = vLevel[lv]->ptr[i]; j < vLevel[lv]->ptr[i+1]; ++j) {
+      for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
+        for (auto j = vLevel[lv]->ptr[i]; j < vLevel[lv]->ptr[i+1]; ++j) {
           new_crd.push_back(vLevel[cur_lv]->crd[i]);
           if (j == vLevel[lv]->ptr[i]) new_same_path.push_back(vLevel[cur_lv]->same_path[i]);
           else new_same_path.push_back(1);
