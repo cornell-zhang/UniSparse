@@ -16,11 +16,36 @@ public:
 
   explicit SparlayAffineMap(AffineMap map, std::vector<int> _trimIndex, std::vector<int> _fuseIndex): 
     AffineMap(map), trimIndex(_trimIndex), fuseIndex(_fuseIndex) {
-      // std::cerr << (void*)this << std::endl;
     }
+  
+  bool operator == (const SparlayAffineMap& A) const {
+    if ((AffineMap)(*this) != (AffineMap)A) {
+      return 0;
+    }
+    auto dstTrim = A.getTrimIndex();
+    auto dstFuse = A.getFuseIndex();
+    if (trimIndex.size() != dstTrim.size()) return 0;
+    if (fuseIndex.size() != dstFuse.size()) return 0;
+    for (size_t i = 0; i < trimIndex.size(); ++i) {
+      if (trimIndex[i] != dstTrim[i]) return 0;
+    }
+    for (size_t i = 0; i < fuseIndex.size(); ++i) {
+      if (fuseIndex[i] != dstFuse[i]) return 0;
+    }
+    return 1;
+  }
 
   std::vector<int> getTrimIndex() const { return trimIndex; }
   std::vector<int> getFuseIndex() const { return fuseIndex; }
+
+  void Print() {
+    this->dump();
+    std::cerr << "TrimIndex: ";
+    for (auto ele: trimIndex) {
+      std::cerr << ele << ' ';
+    }
+    std::cerr << std::endl;
+  }
 
 private:
   std::vector<int> trimIndex;

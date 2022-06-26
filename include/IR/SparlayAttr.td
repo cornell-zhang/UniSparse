@@ -18,7 +18,7 @@ class Sparlay_Attr<string name, list<Trait> traits = []>
 
 def SparylayAffineAttr : Sparlay_Attr<"SparlayAffine", []> {
   let mnemonic = "affine";
-  let parameters = (ins "SparlayAffineMap":$value);
+  let parameters = (ins "SparlayAffineMap":$amap);
 }
 
 // Sparse tensor encoding attribute.

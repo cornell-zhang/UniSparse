@@ -54,7 +54,6 @@ ParseResult parseAffineExprGetDim(
 }
 
 Attribute SparlayAffineAttr::parse(DialectAsmParser &parser, Type type) {
-  // std::cerr << "JOJOJOJO" << std::endl;
   auto fuseIndex = new std::vector<int>{};
   auto trimIndex = new std::vector<int>{};
   SmallVector<AffineExpr> secondaryExprs;
@@ -112,14 +111,9 @@ Attribute SparlayAffineAttr::parse(DialectAsmParser &parser, Type type) {
   if (failed(parser.parseGreater())) {
     return {};
   }
-  // std::cerr << "THER" << std::endl;
-  // for (auto ele: (*trimIndex)) std::cerr << ele << ' ';
-  // std::cerr << std::endl;
-  auto ret = parser.getChecked<SparlayAffineAttr>(
+  SparlayAffineAttr ret = SparlayAffineAttr::get(
     parser.getContext(), SparlayAffineMap(AffineMap::get(tot_dim, 0, secondaryExprs, parser.getContext()), *trimIndex, *fuseIndex)
   );
-  // for (auto ele: tmp2) std::cerr << ele << ' ';
-  // std::cerr << std::endl;
   return ret;
 }
 
@@ -148,7 +142,7 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
       if (!sparlayAffineAttr) {
         return {};
       }
-      secondaryMap = sparlayAffineAttr.getValue();
+      secondaryMap = sparlayAffineAttr.getAmap();
       auto trimIndex = secondaryMap.getTrimIndex();
       // for (auto ele: trimIndex) std::cerr << ele << ' ';
       // std::cerr << std::endl;
