@@ -17,13 +17,23 @@
 !Filename = type !llvm.ptr<i8>
 
 #COO = #sparlay.encoding<{
-  primaryMap = affine_map<(i,j)->()>,
-  secondaryMap = #sparlay.affine<(i,j)->(trim i, j)>
+  crdMap = affine_map<(i,j)->(i,j)>,
+  compressMap = #sparlay.compress<trim(0,1)>
 }>
 
 #CSR = #sparlay.encoding<{
-  secondaryMap = #sparlay.affine<(j,i)->(fuse i, trim j)>,
-  primaryMap = affine_map<(i,j)->()>
+  crdMap = affine_map<(i,j)->(i,j)>,
+  compressMap = #sparlay.compress<trim(1,1), fuse(0)>
+}>
+
+#CSC = #sparlay.encoding<{
+  crdMap = affine_map<(i,j)->(j,i)>,
+  compressMap = #sparlay.compress<trim(1,1), fuse(0)>
+}>
+
+#DIA = #sparlay.encoding<{
+  crdMap = affine_map<(i,j)->(j-i,i)>,
+  compressMap = #sparlay.compress<trim(0,0)>
 }>
 
 
@@ -34,18 +44,19 @@ module {
     %i0 = constant 0: index
     %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)
     %A_COO = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-    // sparlay.printStorage (%A_COO) : tensor<?x?xf32, #COO>
-    //Lower to:
-    //%1 = call @sptFromFile(%filename): !llvm.ptr<i8> -> !llvm.ptr<i8>
-    %A_CSR = sparlay.convert (%A_COO) : tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
-    //Lower to:
-    //%2 = call @sptFuse(%1,1): !llvm.ptr<i8> -> !llvm.ptr<i8>
-    //%3 = call @sptGrow(%2,1): !llvm.ptr<i8> -> !llvm.ptr<i8>
-    // sparlay.printStorage (%A_CSR) : tensor<?x?xf32, #CSR>
-    //Lower to:
-    //call @sptPrint(%3,0)
-    %A_BACK = sparlay.convert (%A_CSR) : tensor<?x?xf32, #CSR> to tensor<?x?xf32, #COO>
-    // sparlay.printStorage (%A_BACK) : tensor<?x?xf32, #COO>
+    sparlay.printStorage (%A_COO) : tensor<?x?xf32, #COO>
+
+    %A_CSC = sparlay.convert (%A_COO) : tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSC>
+    sparlay.printStorage (%A_CSC) : tensor<?x?xf32, #CSC>
+
+    %A_CSR = sparlay.convert (%A_CSC) : tensor<?x?xf32, #CSC> to tensor<?x?xf32, #CSR>
+    sparlay.printStorage (%A_CSR) : tensor<?x?xf32, #CSR>
+
+    %A_DIA = sparlay.convert (%A_CSR) : tensor<?x?xf32, #CSR> to tensor<?x?xf32, #DIA>
+    sparlay.printStorage (%A_DIA) : tensor<?x?xf32, #DIA>
+
+    %A_back = sparlay.convert (%A_DIA) : tensor<?x?xf32, #DIA> to tensor<?x?xf32, #COO>
+    sparlay.printStorage (%A_back) : tensor<?x?xf32, #COO>
     return
   }
 

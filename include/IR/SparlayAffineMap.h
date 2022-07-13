@@ -9,19 +9,15 @@
 
 namespace mlir {
 namespace sparlay {
-class SparlayAffineMap : public AffineMap {
+class CompressMap: public AffineMap {
 public:
 
-  SparlayAffineMap(): AffineMap(), trimIndex({}), fuseIndex({}) {}
+  CompressMap(): AffineMap(), trimIndex({}), fuseIndex({}) {}
 
-  explicit SparlayAffineMap(AffineMap map, std::vector<int> _trimIndex, std::vector<int> _fuseIndex): 
-    AffineMap(map), trimIndex(_trimIndex), fuseIndex(_fuseIndex) {
-    }
+  explicit CompressMap(std::vector<int> _trimIndex, std::vector<int> _fuseIndex): 
+    AffineMap(), trimIndex(_trimIndex), fuseIndex(_fuseIndex) {}
   
-  bool operator == (const SparlayAffineMap& A) const {
-    if ((AffineMap)(*this) != (AffineMap)A) {
-      return 0;
-    }
+  bool operator == (const CompressMap& A) const {
     auto dstTrim = A.getTrimIndex();
     auto dstFuse = A.getFuseIndex();
     if (trimIndex.size() != dstTrim.size()) return 0;
@@ -39,9 +35,13 @@ public:
   std::vector<int> getFuseIndex() const { return fuseIndex; }
 
   void Print() {
-    this->dump();
-    std::cerr << "TrimIndex: ";
+    std::cerr << "TrimLevel: ";
     for (auto ele: trimIndex) {
+      std::cerr << ele << ' ';
+    }
+    std::cerr << std::endl;
+    std::cerr << "FuseLevel: ";
+    for (auto ele: fuseIndex) {
       std::cerr << ele << ' ';
     }
     std::cerr << std::endl;

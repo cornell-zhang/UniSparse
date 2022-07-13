@@ -16,9 +16,9 @@ include "mlir/IR/TensorEncoding.td"
 class Sparlay_Attr<string name, list<Trait> traits = []>
 	: AttrDef<Sparlay_Dialect, name, traits>;
 
-def SparylayAffineAttr : Sparlay_Attr<"SparlayAffine", []> {
-  let mnemonic = "affine";
-  let parameters = (ins "SparlayAffineMap":$amap);
+def SparlayCompressAttr : Sparlay_Attr<"SparlayCompress", []> {
+  let mnemonic = "compress";
+  let parameters = (ins "CompressMap":$value);
 }
 
 // Sparse tensor encoding attribute.
@@ -32,21 +32,21 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
     Example:
 
     ```mlir
-    #BCSR = #sparlay.encoding<{
-      secondaryMap = #sparlay.affine<(d0, d1, d2, d3) -> (fuse trim d0, d1)>,
-      primaryMap = affine_map<(d0, d1, d2, d3) -> (d2, d3)>
+    #1 = #sparlay.encoding<{
+      compressMap = #sparlay.compress<trim(0,1), fuse(1)>,
+      crdMap = affine_map<(d0, d1, d2, d3) -> (d2, d3)>
       bitwidth = 8
     }>
- 
-    !sparlay.tensor<?x?x?xf64, #BCSR>
+
+    !sparlay.tensor<?x?x?xf64, #1>
     ```
   }];
 
   // Data in sparse tensor encoding.
   let parameters = (
     ins
-    "AffineMap":$primaryMap,
-    "SparlayAffineMap":$secondaryMap,
+    "AffineMap":$crdMap,
+    "CompressMap":$compressMap,
     "unsigned":$bitWidth
   );
 
