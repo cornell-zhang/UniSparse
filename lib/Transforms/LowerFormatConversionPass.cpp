@@ -15,6 +15,8 @@
 #include "IR/SparlayOps.h"
 #include "IR/SparlayTypes.h"
 #include "Eigen/Dense"
+#include "Parser/Parser.h"
+#include "Parser/Token.h"
 
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
@@ -34,9 +36,11 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "mlir/Parser.h"
 
 #include <cstdio>
 #include <cstring>
+#include <tuple>
 
 using namespace mlir;
 using namespace sparlay;
@@ -183,7 +187,7 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     auto proj1 = getProjectedMap(crdMap, {1});
     int curDim = 0;
     for (AffineExpr expr : proj1.getResults()) {
-        expr.dump();
+        // expr.dump();
         if (expr != getAffineConstantExpr(0, proj1.getContext())) {
             if (expr == getAffineDimExpr(0, proj1.getContext())) ret(curDim, 0) = 1;
             else ret(curDim, 0) = -1;
@@ -193,15 +197,15 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     auto proj0 = getProjectedMap(crdMap, {0});
     curDim = 0;
     for (AffineExpr expr: proj0.getResults()) {
-        expr.dump();
+        // expr.dump();
         if (expr != getAffineConstantExpr(0, proj0.getContext())) {
             if (expr == getAffineDimExpr(0, proj0.getContext())) ret(curDim, 1) = 1;
             else ret(curDim, 1) = -1;
         }
         curDim++;
     }
-    std::cerr << ret << std::endl;
-    std::cerr << "=======================" << std::endl;
+    // std::cerr << ret << std::endl;
+    // std::cerr << "=======================" << std::endl;
     return ret;
 }
 
@@ -219,17 +223,147 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
 
 Matrix2i toIntMatrix(const Matrix2f& M) {
     Matrix2i ret;
-    std::cerr << M << std::endl;
+    std::cerr << "M = " << std::endl << M << std::endl;
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
             int curVal = (int)floor(M(i,j)+1e-4);
-            std::cerr << M(i,j) << ' ' << curVal << std::endl;
             assert(M(i,j) < curVal + 1e-4);
             assert(M(i,j) > curVal-1e-4);
             ret(i,j) = curVal;
         }
     }
     return ret;
+}
+
+enum ConversionOpType {
+    NoOp,
+    TileMerge,
+    TileSplit,
+    Move
+};
+
+struct GeneralConversionOp {
+    int type;
+    std::string name;
+    std::vector<int> args;
+    GeneralConversionOp(int _type = 0, std::string _name = "", std::vector<int> _args = {}) {
+        type = _type, name = _name, args = _args;
+    }
+    void Print(std::ostream& mout) {
+        switch(type) {
+            case 1:
+                mout << "TileMerge(" << args[0] << "," << args[1] << ")" << std::endl;
+            break;
+            case 2:
+                mout << "TileSplit(" << args[0] << "," << args[1] << ")" << std::endl;
+            break;
+            case 3:
+                mout << "Move(" << args[0] << "," << args[1] << ")" << std::endl;
+            break;
+            default:
+                mout << "null()" << std::endl;
+        }
+    }
+};
+
+std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(const AffineMap& crdMap, bool isSplit) {
+    std::cerr << "Enter Rewrite" << std::endl;
+    std::vector<GeneralConversionOp> Ops;
+    std::vector<AffineExpr> newExprs;
+    std::vector<int> pendingMerge;
+    std::vector<AffineExpr> exprs = crdMap.getResults();
+    std::vector<bool> vis;
+    std::vector<bool> needPush;
+    vis.resize(exprs.size(), 0);
+    needPush.resize(exprs.size(), 0);
+    bool hasChanged = 0;
+    do {
+        hasChanged = 0;
+        for (int i = 0; i < exprs.size(); ++i) {
+            if (vis[i]) continue;
+            if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
+                auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
+                assert(binExpr);
+                auto LHS = binExpr.getLHS();
+                auto RHS = binExpr.getRHS();
+                assert(RHS.isSymbolicOrConstant());
+                LHS.dump(), RHS.dump();
+                auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
+                bool found = 0;
+                for (int j = i+1; j < exprs.size(); ++j) {
+                    if (vis[j]) continue;
+                    if (exprs[j].getKind() == targetKind) {
+                        auto _binExpr = exprs[j].dyn_cast<AffineBinaryOpExpr>();
+                        auto _LHS = _binExpr.getLHS();
+                        auto _RHS = _binExpr.getRHS();
+                        assert(_RHS.isSymbolicOrConstant());
+                        if (LHS == _LHS && RHS == _RHS) {
+                            found = 1;
+                            if (targetKind == AffineExprKind::Mod) {
+                                Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j-1}) : std::vector<int>({j, i+1}))));
+                                hasChanged = 1;
+                                if (isSplit) {
+                                    auto svExpr = exprs[i];
+                                    for (int k = i+1; k <= j-1; ++k) exprs[k-1] = exprs[k], vis[k-1] = vis[k];
+                                    exprs[j-1] = svExpr;
+                                    vis[j] = vis[j-1] = 1;
+                                } else {
+                                    auto svExpr = exprs[j];
+                                    for (int k = j-1; k >= i+1; --k) exprs[k+1] = exprs[k], vis[k+1] = vis[k];
+                                    exprs[i+1] = svExpr;
+                                    vis[i] = vis[i+1] = 1;
+                                }
+                            } else {
+                                hasChanged = 1;
+                                Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j}) : std::vector<int>({j, i}))));
+                                if (isSplit) {
+                                    auto svExpr = exprs[i];
+                                    for (int k = i+1; k <= j; ++k) exprs[k-1] = exprs[k], vis[k-1] = vis[k];
+                                    exprs[j] = svExpr;
+                                    vis[j-1] = vis[j] = 1;
+                                } else {
+                                    auto svExpr = exprs[j];
+                                    for (int k = j-1; k >= i; --k) exprs[k+1] = exprs[k], vis[k+1] = vis[k];
+                                    exprs[i] = svExpr;
+                                    vis[i] = vis[i+1] = 1;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                for (int j = 0; j < exprs.size(); ++j) {
+                    exprs[j].dump();
+                }
+                for (int j = 0; j < vis.size(); ++j) {
+                    std::cerr << vis[j] << ' ';
+                }
+                std::cerr << std::endl;
+            }
+        }
+    } while (hasChanged);
+
+    for (int i = 0; i < exprs.size(); ++i) {
+        if (exprs[i].getKind() == AffineExprKind::FloorDiv) {
+            assert(i != exprs.size()-1);
+            assert(exprs[i+1].getKind() == AffineExprKind::Mod);
+            assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
+            assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
+            auto divNum = exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS().dyn_cast<AffineConstantExpr>().getValue();
+            assert(divNum < 5LL);
+            Ops.push_back(GeneralConversionOp(TileMerge, "", {i, (int)divNum}));
+            newExprs.push_back(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS());
+        } else if (exprs[i].getKind() != AffineExprKind::Mod) {
+            newExprs.push_back(exprs[i]);
+        }
+    }
+    for (int i = 0; i < Ops.size(); ++i) {
+        Ops[i].Print(std::cerr);
+    }
+    auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
+    newCrdMap.dump();
+    std::cerr << "Leave Rewrite" << std::endl;
+    return std::make_tuple(newCrdMap, Ops);
 }
 
 class ConvertOpLowering : public OpConversionPattern<sparlay::ConvertOp> {
@@ -267,43 +401,85 @@ public:
         StringRef negName = "sptNeg";
         StringRef vectorizeName = "sptVectorize";
         StringRef devectorizeName = "sptDevectorize";
+        StringRef tileMergeName = "sptTileMerge";
+        StringRef tileSplitName = "sptTileSplit";
+        StringRef moveName = "sptMove"; //partial sort
         // StringRef lazySortName = "sptLazySort";
 
         Type prevType = srcType;
         Value prevRes = src;
         SmallVector<Value, 2> params;
 
-    auto genFunc1V1R = [&](const StringRef& name, const Value& v1) {
-        params = {v1};
-        auto prevOp = rewriter.create<CallOp>(loc, prevType,
-            getFunc(op, name, prevType, params, true),
-            params
-        );
-        prevType = prevOp.getType(0);
-        prevRes = prevOp.getResult(0);
-    };
+        auto genFunc1V1R = [&](const StringRef& name, const Value& v1) {
+            params = {v1};
+            auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                getFunc(op, name, prevType, params, true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        };
 
-    auto genFunc2V1R = [&](const StringRef& name, const Value& v1, const Value& v2) {
-        params = {v1, v2};
-        auto prevOp = rewriter.create<CallOp>(loc, prevType,
-            getFunc(op, name, prevType, params, true),
-            params
-        );
-        prevType = prevOp.getType(0);
-        prevRes = prevOp.getResult(0);
-    };
+        auto genFunc2V1R = [&](const StringRef& name, const Value& v1, const Value& v2) {
+            params = {v1, v2};
+            auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                getFunc(op, name, prevType, params, true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        };
 
-    auto genFunc3V1R = [&](
-        const StringRef& name, const Value& v1, const Value& v2, const Value& v3
-    ) {
-        params = {v1, v2, v3};
-        auto prevOp = rewriter.create<CallOp>(loc, prevType,
-            getFunc(op, name, prevType, params, true),
-            params
-        );
-        prevType = prevOp.getType(0);
-        prevRes = prevOp.getResult(0);
-    };
+        auto genFunc3V1R = [&](
+            const StringRef& name, const Value& v1, const Value& v2, const Value& v3
+        ) {
+            params = {v1, v2, v3};
+            auto prevOp = rewriter.create<CallOp>(loc, prevType,
+                getFunc(op, name, prevType, params, true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        };
+
+        mlir::ConstantOp Const[5];
+        for (int i = 0; i < 5; ++i) {
+            Const[i] = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(i));
+        }
+
+        auto genFuncFromOp = [&](
+            const GeneralConversionOp& gco
+        ) {
+            switch (gco.type) {
+                case TileMerge: //tiling: merge
+                    assert(gco.args.size() == 2);
+                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
+                    genFunc3V1R(tileMergeName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                break;
+                case TileSplit: //tiling: split
+                    assert(gco.args.size() == 2);
+                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
+                    genFunc3V1R(tileSplitName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                break;
+                case Move: //move
+                    assert(gco.args.size() == 2);
+                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
+                    if (gco.args[0] < gco.args[1]) {
+                        for (int i = gco.args[0] + 1; i <= gco.args[1]; ++i) {
+                            genFunc3V1R(moveName, prevRes, Const[i], Const[i-1]);
+                        }
+                    } else {
+                        genFunc3V1R(moveName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                    }
+                break;
+                default:
+                    assert(0);
+                break;
+            }
+        };
 
         bool fuse_vis[10] = {0};
         for (auto ele: srcFuse) {
@@ -325,12 +501,9 @@ public:
             dst_mx_trim = std::max(dst_mx_trim, ele);
         }
 
-        mlir::ConstantOp Const[2];
-        Const[0] = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(0));
-        Const[1] = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(1));
-
-        if (src_mx_trim < dst_mx_trim) {
-            assert(dst_mx_trim == 1);
+        if (src_mx_trim < (srcCrd.getNumResults()-1)) {
+            // assert(dst_mx_trim == 1);
+            assert(src_mx_trim == srcCrd.getNumResults()-2);
             genFunc1V1R(devectorizeName, prevRes);
         }
 
@@ -367,66 +540,103 @@ public:
                 prevType = prevOp.getType(0);
                 prevRes = prevOp.getResult(0);
             }
-            auto dstM = toMatrix(dstCrd);
-            auto srcM = toMatrix(srcCrd);
+            
+            AffineMap flatSrcCrd, flatDstCrd;
+            std::vector<GeneralConversionOp> removeSrcTiling, removeDstTiling;
+            std::tie(flatSrcCrd, removeSrcTiling) = rewriteTileAndStashOp(srcCrd, 0);
+            std::tie(flatDstCrd, removeDstTiling) = rewriteTileAndStashOp(dstCrd, 1);
+            for (const auto& ele: removeSrcTiling) {
+                genFuncFromOp(ele);
+            }
+            auto dstM = toMatrix(flatDstCrd);
+            auto srcM = toMatrix(flatSrcCrd);
+
+            flatSrcCrd.dump();
+            flatDstCrd.dump();
+            // std::cerr << dstM << ' ' << srcM << std::endl;
 
             // trivial Gaussian Elimination with functiion generation
             // Calculate M: (range(dstM)->range(srcM))
             auto inverse_dstM = dstM.inverse();
             auto crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
-    auto genOpFromMap = [&](Matrix2i& M) {
-        for (int i = 0; i < 2; ++i) {
-            if (M(i,i) == 0) {
-                int st;
-                for (st = i+1; st < 2; ++st) {
-                    if (M(st,i) == 1) break;
-                }
-                if (st == 2) {
-                    for (st = i+1; st < 2; ++st) {
-                        if (M(st,i) == -1) break;
+            auto genOpFromAffineMap = [&](Matrix2i& M) {
+                for (int i = 0; i < 2; ++i) {
+                    if (M(i,i) == 0) {
+                        int st;
+                        for (st = i+1; st < 2; ++st) {
+                            if (M(st,i) == 1) break;
+                        }
+                        if (st == 2) {
+                            for (st = i+1; st < 2; ++st) {
+                                if (M(st,i) == -1) break;
+                            }
+                        }
+                        genFunc3V1R(swapName, prevRes, Const[i], Const[st]);
+                        for (int j = i; j < 2; ++j) {
+                            std::swap(M(st,j), M(i,j));
+                        }
+                    }
+                    // assert(M(i,i) == 1);
+                    for (int row = i+1; row < 2; ++row) {
+                        if (M(row, i) == -M(i,i)) {
+                            genFunc3V1R(addName, prevRes, Const[row], Const[i]);
+                            for (int j = i; j < 2; ++j) {
+                                M(row, j) += M(i,j);
+                            }
+                        } else if (M(row,i) == M(i,i)) {
+                            genFunc3V1R(subName, prevRes, Const[row], Const[i]);
+                            for (int j = i; j < 2; ++j) {
+                                M(row, j) -= M(i,j);
+                            }
+                        }
                     }
                 }
-                genFunc3V1R(swapName, prevRes, Const[i], Const[st]);
-                for (int j = i; j < 2; ++j) {
-                    std::swap(M(st,j), M(i,j));
-                }
-            }
-            // assert(M(i,i) == 1);
-            for (int row = i+1; row < 2; ++row) {
-                if (M(row, i) == -M(i,i)) {
-                    genFunc3V1R(addName, prevRes, Const[row], Const[i]);
-                    for (int j = i; j < 2; ++j) {
-                        M(row, j) += M(i,j);
+                for (int i = 1; i >= 0; --i) {
+                    if (M(i,i) != 1) {
+                        assert(M(i,i) == -1);
+                        genFunc2V1R(negName, prevRes, Const[i]);
+                        for (int j = i; j < 2; ++j) {
+                            M(i,j) = -M(i,j);
+                        }
                     }
-                } else if (M(row,i) == M(i,i)) {
-                    genFunc3V1R(subName, prevRes, Const[row], Const[i]);
-                    for (int j = i; j < 2; ++j) {
-                        M(row, j) -= M(i,j);
+                    for (int row = i-1; row >= 0; --row) {
+                        if (M(row, i) == -1) {
+                            genFunc3V1R(addName, prevRes, Const[row], Const[i]);
+                        } else if (M(row, i) == 1) {
+                            genFunc3V1R(subName, prevRes, Const[row], Const[i]);
+                        }
+                        M(row, i) = 0;
                     }
                 }
-            }
-        }
-        for (int i = 1; i >= 0; --i) {
-            if (M(i,i) != 1) {
-                assert(M(i,i) == -1);
-                genFunc2V1R(negName, prevRes, Const[i]);
-                for (int j = i; j < 2; ++j) {
-                    M(i,j) = -M(i,j);
-                }
-            }
-            for (int row = i-1; row >= 0; --row) {
-                if (M(row, i) == -1) {
-                    genFunc3V1R(addName, prevRes, Const[row], Const[i]);
-                } else if (M(row, i) == 1) {
-                    genFunc3V1R(subName, prevRes, Const[row], Const[i]);
-                }
-                M(row, i) = 0;
-            }
-        }
-    };
+            };
 
-            genOpFromMap(crdRemapMap);
+            std::cerr << "crdRemapMap = " << std::endl << crdRemapMap << std::endl;
+
+            genOpFromAffineMap(crdRemapMap);
+
+            //FIXME: calculate the right level, assume that all the merge operation is sorted by level.
+            int pt = removeDstTiling.size()-1;
+            while (pt >= 0 && removeDstTiling[pt].type == TileMerge) pt--;
+            pt++;
+            for (int i = removeDstTiling.size()-1; i >= 0; --i) {
+                auto& ele = removeDstTiling[i];
+                assert(ele.type <= 3);
+                assert(ele.type != TileSplit);
+                if (ele.type == TileMerge) {
+                    ele.type = TileSplit;
+                    assert(ele.args.size() == 2);
+                    ele.args[0] = ele.args[0] - (i-pt);
+                    genFuncFromOp(ele);
+                } else if (ele.type == Move) {
+                    assert(ele.args.size() == 2);
+                    std::swap(ele.args[0], ele.args[1]);
+                    genFuncFromOp(ele);
+                } else {
+                    assert(0);
+                }
+            }
+
         }
 
         for (auto ele: dstFuse) {
@@ -437,8 +647,7 @@ public:
             if (!fuse_vis[ele]) {
                 params.clear();
                 params.push_back(prevRes);
-                auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
-                params.push_back(tmp_const.getResult());
+                params.push_back(Const[ele]);
                 auto prevOp = rewriter.create<CallOp>(loc, prevType,
                     getFunc(op, fuseName, prevType, params, /*emitCInterface=*/true),
                     params
@@ -454,8 +663,7 @@ public:
                 fuse_vis[ele] = 0;
                 params.clear();
                 params.push_back(prevRes);
-                auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
-                params.push_back(tmp_const.getResult());
+                params.push_back(Const[ele]);
                 auto prevOp = rewriter.create<CallOp>(loc, prevType,
                     getFunc(op, separateName, prevType, params, /*emitCInterface=*/true),
                     params
@@ -465,11 +673,14 @@ public:
             }
         }
 
+        assert(src_mn_trim == 0);
+
+        std::cerr << "dst_mn_trim = " << dst_mn_trim << std::endl;
+
         if (dst_mn_trim < src_mn_trim) {
             params.clear();
             params.push_back(prevRes);
-            auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim));
-            params.push_back(tmp_const.getResult());
+            params.push_back(Const[dst_mn_trim]);
             auto prevOp = rewriter.create<CallOp>(loc, prevType,
                 getFunc(op, trimName, prevType, params, /*emitCInterface=*/true),
                 params
@@ -479,9 +690,8 @@ public:
         } else if (dst_mn_trim > src_mn_trim) {
             params.clear();
             params.push_back(prevRes);
-            dst_mn_trim = std::min((unsigned int)(dst_mn_trim), srcCrd.getNumDims()-1);
-            auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(dst_mn_trim-1));
-            params.push_back(tmp_const.getResult());
+            dst_mn_trim = std::min((unsigned int)(dst_mn_trim), dstCrd.getNumResults()-1);
+            params.push_back(Const[dst_mn_trim-1]);
             auto prevOp = rewriter.create<CallOp>(loc, prevType,
                 getFunc(op, growName, prevType, params, /*emitCInterface=*/true),
                 params
@@ -490,13 +700,14 @@ public:
             prevRes = prevOp.getResult(0);
         }
 
-        if (src_mx_trim > dst_mx_trim) {
-            assert(src_mx_trim == 1);
+        if (dst_mx_trim < dstCrd.getNumResults()-1) {
+            // assert(src_mx_trim == 1);
+            assert(dst_mx_trim == dstCrd.getNumResults()-2);
             genFunc2V1R(vectorizeName, prevRes, Const[1]);
         }
         rewriter.replaceOp(op, prevRes);
         return success();
-        }
+    }
 };
 
 class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageOp> {
