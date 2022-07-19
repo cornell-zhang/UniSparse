@@ -546,7 +546,16 @@ public:
             std::tie(flatSrcCrd, removeSrcTiling) = rewriteTileAndStashOp(srcCrd, 0);
             std::tie(flatDstCrd, removeDstTiling) = rewriteTileAndStashOp(dstCrd, 1);
             for (const auto& ele: removeSrcTiling) {
-                genFuncFromOp(ele);
+                if (ele.type != TileMerge) {
+                    genFuncFromOp(ele);
+                }
+            }
+            {
+                int st = 0;
+                while (st < removeSrcTiling.size() && removeSrcTiling[st].type != TileMerge) st++;
+                for (int i = removeSrcTiling.size()-1; i >= st; --i) {
+                    genFuncFromOp(removeSrcTiling[i]);
+                }
             }
             auto dstM = toMatrix(flatDstCrd);
             auto srcM = toMatrix(flatSrcCrd);
@@ -673,7 +682,7 @@ public:
             }
         }
 
-        assert(src_mn_trim == 0);
+        // assert(src_mn_trim == 0);
 
         std::cerr << "dst_mn_trim = " << dst_mn_trim << std::endl;
 
@@ -727,6 +736,70 @@ class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageO
         rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, printParams, /*emitCInterface=*/true),
             printParams);
+        return success();
+    }
+};
+
+class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
+    using OpConversionPattern<sparlay::copyOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::copyOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Value candValue = adaptor.getOperands()[0];
+        CallOp copyOp;
+        StringRef funcName = "sptCopy";
+        SmallVector<Value, 1> params;
+        params.push_back(candValue);
+        rewriter.replaceOpWithNewOp<CallOp>(op, candValue.getType(), 
+            getFunc(op, funcName, candValue.getType(), params, /*emitCInterface=*/true),
+            params);
+        return success();
+    }
+};
+
+class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
+    using OpConversionPattern<sparlay::checkOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::checkOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Value candValue1 = adaptor.getOperands()[0];
+        Value candValue2 = adaptor.getOperands()[1];
+        CallOp checkOp;
+        StringRef funcName = "sptCheck";
+        SmallVector<Value, 2> params = {candValue1, candValue2};
+        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+            getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
+            params);
+        return success();
+    }
+};
+
+class ticOpLowering : public OpConversionPattern<sparlay::ticOp> {
+    using OpConversionPattern<sparlay::ticOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::ticOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        CallOp ticOp;
+        StringRef funcName = "sptTic";
+        SmallVector<Value> params = {};
+        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+            getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
+            params);
+        return success();
+    }
+};
+
+class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
+    using OpConversionPattern<sparlay::tocOp>::OpConversionPattern;
+        LogicalResult 
+        matchAndRewrite(sparlay::tocOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        CallOp tocOp;
+        StringRef funcName = "sptToc";
+        SmallVector<Value> params = {};
+        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+            getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
+            params);
         return success();
     }
 };
@@ -1242,7 +1315,8 @@ void LowerFormatConversionPass::runOnFunction() {
     RewritePatternSet patterns(&getContext());
     patterns.add<NewOpLowering, PackOpLowering,
                  CompressOpLowering, MultiplyOpLowering, 
-                 fromFileOpLowering, ConvertOpLowering, printStorageOpLowering>(&getContext());
+                 fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
+                 checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering>(&getContext());
     // patterns.add<PackOpLowering>(&getContext());
     // patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");

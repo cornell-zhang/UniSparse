@@ -76,6 +76,46 @@ def Sparlay_printStorageOp: Sparlay_Op<"printStorage", [NoSideEffect]> {
     }];
 }
 
+def Sparlay_copyOp: Sparlay_Op<"copy", [NoSideEffect]> {
+    let summary = "Copy the Storage of a tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_CSR_1 = sparlay.copy (%A_CSR)
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    let results = (outs AnyTensor:$output);
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input)  `to` type($output)
+    }];
+}
+
+def Sparlay_checkOp: Sparlay_Op<"check", [NoSideEffect]> {
+    let summary = "Check the equivalence of two Storage of a tensor.";
+    let description = [{..}];
+    let arguments = (ins AnyType:$inputL, AnyType:$inputR);
+    let assemblyFormat = [{
+        `(` $inputL `,` $inputR `)` attr-dict `:` type($inputL) `,` type($inputR)
+    }];
+}
+
+def Sparlay_ticOp: Sparlay_Op<"tic", [NoSideEffect]> {
+    let summary = "..";
+    let description = [{..}];
+    let assemblyFormat = [{
+        `(` `)` attr-dict
+    }];
+}
+
+def Sparlay_tocOp: Sparlay_Op<"toc", [NoSideEffect]> {
+    let summary = "..";
+    let description = [{..}];
+    let assemblyFormat = [{
+        `(` `)` attr-dict
+    }];
+}
+
 //===----------------------------------------------------------------------===//
 // sparlay::ConvertOp
 //===----------------------------------------------------------------------===//
