@@ -1,18 +1,15 @@
-// sparlay-opt convert-perf.mlir -lower-format-conversion -lower-struct -dce | \
+// sparlay-opt 3.mlir -lower-format-conversion -lower-struct -dce | \
 //     mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
 //     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
 //     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-casts | \
 //     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 | tee 1.asm
 
-
 // as 1.asm -o 1.o
 
 // clang++ 1.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
-//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec
+//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec_all
 
-// ./exec
-
-
+// ./exec_all
 
 !Filename = type !llvm.ptr<i8>
 
@@ -57,30 +54,28 @@ module {
   func @main() {
     %i0 = constant 0: index
     %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)
+    %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
+    %A_ori = sparlay.copy (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
     sparlay.tic()
-    %A_COO = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
+    %A_2 = sparlay.convert (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
+    sparlay.toc()
+    %A_3 = sparlay.convert (%A_2) : tensor<?x?xf32, #CSR> to tensor<?x?xf32, #COO>
+    sparlay.tic()
+    %A_4 = sparlay.convert (%A_3): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DIA>
+    sparlay.toc()
+    %A_5 = sparlay.convert (%A_4): tensor<?x?xf32, #DIA> to tensor<?x?xf32, #CSR>
+    sparlay.tic()
+    %A_6 = sparlay.convert (%A_5): tensor<?x?xf32, #CSR> to tensor<?x?xf32, #DIA>
+    sparlay.toc()
+    %A_7 = sparlay.convert (%A_6): tensor<?x?xf32, #DIA> to tensor<?x?xf32, #CSR>
+    sparlay.tic()
+    %A_8 = sparlay.convert (%A_7): tensor<?x?xf32, #CSR> to tensor<?x?xf32, #CSC>
     sparlay.toc()
     sparlay.tic()
-    %A_SV = sparlay.copy (%A_COO): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
+    %A_9 = sparlay.convert (%A_8): tensor<?x?xf32, #CSC> to tensor<?x?xf32, #DIA>
     sparlay.toc()
-    sparlay.tic()
-    %A_CSR = sparlay.convert (%A_COO): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
-    sparlay.toc()
-    sparlay.tic()
-    %A_DCSR = sparlay.convert (%A_DCSR) : tensor<?x?xf32, #CSR> to tensor<?x?xf32, #DCSR>
-    sparlay.toc()
-    sparlay.tic()
-    %A_CSC = sparlay.convert (%A_DCSR): tensor<?x?xf32, #DCSR> to tensor<?x?xf32, #CSC>
-    sparlay.toc()
-    sparlay.tic()
-    %A_DCSC = sparlay.convert (%A_DCSC): tensor<?x?xf32, #CSC> to tensor<?x?xf32, #DCSC>
-    sparlay.toc()
-    sparlay.tic()
-    %A_COO_1 = sparlay.convert (%A_DCSC): tensor<?x?xf32, #DCSC> to tensor<?x?xf32, #COO>
-    sparlay.toc()
-    sparlay.check (%A_COO_1, %A_SV): tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>
-    sparlay.toc()
+    %A_10 = sparlay.convert (%A_9): tensor<?x?xf32, #DIA> to tensor<?x?xf32, #COO>
+    sparlay.check (%A_10, %A_ori): tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>
     return
   }
-
 }

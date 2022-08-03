@@ -29,6 +29,7 @@
 #include <sstream>
 #include <memory>
 #include <iomanip>
+#include <chrono>
 #include "Eigen/Dense"
 
 template <typename indexTp, typename valueTp>
@@ -106,6 +107,8 @@ static char *toLower(char *token) {
 //     valueTp *output;
 // }
 
+#define TI (double)clock()/CLOCKS_PER_SEC
+
 static void readMTXHeader(FILE* file, char* fileName, uint64_t* metaData, char* field, char* symmetry) {
     char line[1025];
     char header[64];
@@ -153,12 +156,13 @@ typedef Eigen::Matrix<int, 2, 1> Vector2i;
 
 typedef long long u64;
 
-#define TI (double)clock()/CLOCKS_PER_SEC
-
 namespace Perf {
-  static double _tic;
-  void tic() { _tic = TI; }
-  void toc() { std::cerr << "Time = " << TI-_tic << "(s)" << std::endl; }
+  static std::chrono::steady_clock::time_point _tic;
+  void tic() { _tic = std::chrono::steady_clock::now(); }
+  void toc() {
+    std::chrono::nanoseconds diff = std::chrono::steady_clock::now()-_tic;
+    std::cerr << "Time = " << (double)diff.count()/1000000 << "(ms)" << std::endl; 
+  }
 }
 
 class LevelStorage {
@@ -463,7 +467,6 @@ SparlayStorage* readFromFile(std::istream& fin) {
 }
 
 bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
-  auto tic = TI;
   assert(dstLv <= srcLv);
   assert(dstLv >= 1);
   for (int curLv = dstLv; curLv <= srcLv; ++curLv) {
@@ -525,7 +528,6 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
     new_crd[i-dstLv].resize(vLevel[dstLv]->crd.size(),0);
     new_same_path[i-dstLv].resize(vLevel[dstLv]->crd.size(),0);
   }
-
   int stLv = dstLv;
   if (stLv == 1) {
     new_crd[0][0] = vLevel[1]->crd[perm[0]];
@@ -541,7 +543,6 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
     int curLv = i-dstLv;
     new_crd[curLv][0] = std::move(vLevel[i]->crd[perm[0]]);
   }
-  
   for (int i = stLv; i < vLevel.size(); ++i) {
     int curLv = i-dstLv;
     for (int j = 1; j < vLevel[dstLv]->crd.size(); ++j) {  
@@ -551,7 +552,6 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
     vLevel[i]->crd = std::move(new_crd[curLv]);
     vLevel[i]->same_path = std::move(new_same_path[curLv]);
   }
-
   this->applyPerm(perm);
   return 1;
 }
@@ -805,9 +805,12 @@ bool SparlayStorage::fuse(const int lv) {
     for (size_t i = 0; i < crd_deleted.size(); ++i) {
       crd_reserve_size += (!crd_deleted[i]);
     }
+    vLevel[lv]->ptr.resize(crd_reserve_size+1, 0);
+    int cnt = 1;
+    int prev_pushed = 0;
     for (auto cur_lv = upper_lv; cur_lv <= lv; ++cur_lv) {
       assert(vLevel[cur_lv]->crd.size() == vLevel[lv]->crd.size());
-      assert(vLevel[cur_lv]->ptr.size() == 0);
+      if (cur_lv != lv) assert(vLevel[cur_lv]->ptr.size() == 0);
       assert(vLevel[cur_lv]->crd.size() == vLevel[cur_lv]->same_path.size());
       static std::vector<int> new_crd;
       static std::vector<bool> new_same_path;
@@ -822,29 +825,20 @@ bool SparlayStorage::fuse(const int lv) {
         if (!crd_deleted[i]) {
           new_crd[pt] = vLevel[cur_lv]->crd[i];
           new_same_path[pt] = is_same_path;
+          if (cur_lv == lv && i != 0) {
+            prev_pushed += cnt;
+            vLevel[lv]->ptr[pt] = prev_pushed;
+            cnt = 1;
+          }
           pt++;
           is_same_path = 1;
         }
+        else if (cur_lv == lv && i != 0) cnt++;
       }
       vLevel[cur_lv]->crd = std::move(new_crd);
       vLevel[cur_lv]->same_path = std::move(new_same_path);
     }
-    vLevel[lv]->ptr.resize(vLevel[lv]->crd.size()+1, 0);
-    vLevel[lv]->ptr[0] = 0;
-    int cnt = 1;
-    int prev_pushed = 0;
-    int pt = 1;
-    for (size_t i = 1; i < crd_deleted.size(); ++i) {
-      if (!crd_deleted[i]) {
-        prev_pushed += cnt;
-        vLevel[lv]->ptr[pt++] = prev_pushed;
-        cnt = 1;
-      } else {
-        cnt++;
-      }
-    }
-    vLevel[lv]->ptr[pt] = (prev_pushed + cnt);
-    // assert(vLevel[lv]->ptr.size() == vLevel[lv]->crd.size()+1);
+    vLevel[lv]->ptr[crd_reserve_size] = (prev_pushed + cnt);
     vLevel[lv]->type ^= LVFUSE;
   } else {
     vLevel[lv]->type ^= LVFUSE;
@@ -902,10 +896,11 @@ bool SparlayStorage::swap(const int LU, const int LD) {
     assert(!(vLevel[i]->type & LVFUSE));
     assert(vLevel[i]->type&LVTRIM);
   }
-  this->moveLv(LD, LU);
-  for (int i = LU+1; i < LD; ++i) {
-    this->moveLv(i+1, i);
-  }
+  this->swapStorage(LD, LU);
+  // this->moveLv(LD, LU);
+  // for (int i = LU+1; i < LD; ++i) {
+  //   this->moveLv(i+1, i);
+  // }
   return 1;
 }
 
@@ -919,12 +914,12 @@ bool SparlayStorage::add(const int Ltarget, const int Lsrc) {
   }
   (*exprs[Ltarget]) += (*exprs[Lsrc]);
   getSize(Ltarget);
-  if (Ltarget < Lsrc) {
-    this->moveLv(Lsrc, Ltarget);
-    for (int i = Ltarget; i < Lsrc; ++i) {
-      this->moveLv(i+1, i);
-    }
-  }
+  // if (Ltarget < Lsrc) {
+  //   this->moveLv(Lsrc, Ltarget);
+  //   for (int i = Ltarget; i < Lsrc; ++i) {
+  //     this->moveLv(i+1, i);
+  //   }
+  // }
   return 1;
 }
 
@@ -941,19 +936,19 @@ bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
   }
   (*exprs[Ltarget]) -= (*exprs[Lsrc]);
   getSize(Ltarget);
-  if (Ltarget < Lsrc) {
-    this->moveLv(Lsrc, Ltarget);
-    for (int i = Ltarget; i < Lsrc; ++i) {
-      this->moveLv(i+1, i);
-    }
-  }
+  // if (Ltarget < Lsrc) {
+  //   this->moveLv(Lsrc, Ltarget);
+  //   for (int i = Ltarget; i < Lsrc; ++i) {
+  //     this->moveLv(i+1, i);
+  //   }
+  // }
   return 1;
 }
 
 bool SparlayStorage::vectorize(const int lv) {
   assert(lv == 2);
   assert(lv == vLevel.size()-1);
-  bool mark = !(vLevel[lv-1]->type&LVFUSE);
+  bool mark = !(vLevel[lv]->type&LVFUSE);
   fuse(lv-1);
   auto& father_ptr = vLevel[lv-1]->ptr;
   auto& father_crd = vLevel[lv-1]->crd;
@@ -980,7 +975,7 @@ bool SparlayStorage::vectorize(const int lv) {
     valueArray.clear();
     vLevel.pop_back();
   } else {
-    std::cerr << "Should not happen" << std::endl;
+    std::cerr << "should not happen" << std::endl;
     assert(0);
   }
   if (mark) separate(lv-1);
@@ -1036,7 +1031,7 @@ bool SparlayStorage::neg(int lv) {
   for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
     vLevel[lv]->crd[i] = -vLevel[lv]->crd[i];
   }
-  this->moveLv(lv, lv);
+  // this->moveLv(lv, lv);
   return 1;
 }
 
@@ -1240,7 +1235,7 @@ extern "C" {
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->moveLv(srcLv+1, dstLv+1);
       // sparT->Print(std::cerr, 1);
-      // std::cerr << std::endl << "Move done, time = " << TI-tic << "(s)" << std::endl;
+      // std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
       return (void*)sparT;
     }
 
@@ -1248,7 +1243,7 @@ extern "C" {
       // auto tic = TI;
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->vectorize(lv+1);
-      // std::cerr << std::endl << "Vectorize done, time = " << TI-tic << "(s)" << std::endl;
+      // std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
       return (void*)sparT;
     }
 

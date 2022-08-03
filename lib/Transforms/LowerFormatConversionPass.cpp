@@ -507,6 +507,9 @@ public:
             genFunc1V1R(devectorizeName, prevRes);
         }
 
+        bool need_move[10] = {0};
+        memset(need_move, 0, sizeof(need_move));
+
         if (srcCrd != dstCrd) {
             assert(srcCrd.getNumDims() == 2);
             assert(src_mn_trim != 1000);
@@ -567,6 +570,7 @@ public:
             // trivial Gaussian Elimination with functiion generation
             // Calculate M: (range(dstM)->range(srcM))
             auto inverse_dstM = dstM.inverse();
+            std::cerr << inverse_dstM << std::endl;
             auto crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
             auto genOpFromAffineMap = [&](Matrix2i& M) {
@@ -582,6 +586,7 @@ public:
                             }
                         }
                         genFunc3V1R(swapName, prevRes, Const[i], Const[st]);
+                        need_move[i] = 1;
                         for (int j = i; j < 2; ++j) {
                             std::swap(M(st,j), M(i,j));
                         }
@@ -605,14 +610,21 @@ public:
                     if (M(i,i) != 1) {
                         assert(M(i,i) == -1);
                         genFunc2V1R(negName, prevRes, Const[i]);
+                        need_move[i] = 1;
                         for (int j = i; j < 2; ++j) {
                             M(i,j) = -M(i,j);
                         }
                     }
                     for (int row = i-1; row >= 0; --row) {
                         if (M(row, i) == -1) {
+                            for (int j = row; j <= i; ++j) {
+                                need_move[j] = 1;
+                            }
                             genFunc3V1R(addName, prevRes, Const[row], Const[i]);
                         } else if (M(row, i) == 1) {
+                            for (int j = row; j <= i; ++j) {
+                                need_move[j] = 1;
+                            }
                             genFunc3V1R(subName, prevRes, Const[row], Const[i]);
                         }
                         M(row, i) = 0;
@@ -646,6 +658,27 @@ public:
                 }
             }
 
+        }
+
+
+        if (dst_mx_trim < dstCrd.getNumResults()-1) {
+            need_move[dstCrd.getNumResults()-1] = 0;
+        }
+        for (auto ele: dstFuse) {
+            if (ele >= 10) {
+                std::cerr << "Too many dims." << std::endl;
+                assert(0);
+            }
+            if (!fuse_vis[ele]) {
+                for (int i = 0; i < 10; ++i) {
+                    if (need_move[i]) {
+                        //TODO: FIXME: change the function call of move so that we don't need to move almost all the levels
+                        genFunc3V1R(moveName, prevRes, Const[i], Const[i]);
+                        need_move[i] = 0;
+                    }
+                }
+                break;
+            }
         }
 
         for (auto ele: dstFuse) {
@@ -708,12 +741,31 @@ public:
             prevType = prevOp.getType(0);
             prevRes = prevOp.getResult(0);
         }
-
+        if (dst_mx_trim < dstCrd.getNumResults()-1) {
+            assert(dst_mx_trim == dstCrd.getNumResults()-2);
+            for (int i = 0; i < dstCrd.getNumResults()-1; ++i) {
+                if (need_move[i]) {
+                    genFunc3V1R(moveName, prevRes, Const[i], Const[i]);
+                    need_move[i] = 0;
+                }
+            }
+        }
         if (dst_mx_trim < dstCrd.getNumResults()-1) {
             // assert(src_mx_trim == 1);
             assert(dst_mx_trim == dstCrd.getNumResults()-2);
-            genFunc2V1R(vectorizeName, prevRes, Const[1]);
+            genFunc2V1R(vectorizeName, prevRes, Const[dstCrd.getNumResults()-1]);
         }
+        for (int i = 0; i < dstCrd.getNumResults(); ++i) {
+            if (need_move[i]) {
+                genFunc3V1R(moveName, prevRes, Const[i], Const[i]);
+                need_move[i] = 0;
+            }
+        }
+        for (int i = 0; i < 10; ++i) {
+            std::cerr << need_move[i] << ' ';
+            assert(need_move[i] == 0);
+        }
+        std::cerr << std::endl;
         rewriter.replaceOp(op, prevRes);
         return success();
     }
