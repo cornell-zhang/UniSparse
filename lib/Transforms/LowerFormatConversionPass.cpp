@@ -178,12 +178,13 @@ SparlayEncodingAttr getSparlayEncoding(Type type) {
 }
 
 
-typedef Eigen::Matrix<float, 2, 2> Matrix2f;
+typedef Eigen::Matrix<double, 2, 2> Matrix2f;
 typedef Eigen::Matrix<int, 2, 2> Matrix2i;
 
 Matrix2f toMatrix(const AffineMap& crdMap) {
     assert(crdMap.getNumDims() == 2);
     Matrix2f ret;
+    ret(0,0)=ret(0,1)=ret(1,0)=ret(1,1) = 0;
     auto proj1 = getProjectedMap(crdMap, {1});
     int curDim = 0;
     for (AffineExpr expr : proj1.getResults()) {
@@ -209,21 +210,8 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     return ret;
 }
 
-// bool isIdentity(const Matrix2f& M) {
-//     return (M(0,0) == 1) && (M(0,1) == 0) && (M(1,0) == 0) && (M(1,1) == 1);
-// }
-
-// bool isSwap(const Matrix2f& M) {
-//     return (M(0,0) == 0) && (M(0,1) == 1) && (M(1,0) == 1) && (M(1,1) == 0);
-// }
-
-// bool isDIA(const Matrix2f& M) {
-//     return (M(0,0) == -1) && (M(0,1) == 1) && (M(1,0) == 1) && (M(1,1) == 0);
-// }
-
 Matrix2i toIntMatrix(const Matrix2f& M) {
     Matrix2i ret;
-    std::cerr << "M = " << std::endl << M << std::endl;
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
             int curVal = (int)floor(M(i,j)+1e-4);
@@ -289,7 +277,6 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                 assert(RHS.isSymbolicOrConstant());
                 LHS.dump(), RHS.dump();
                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
-                bool found = 0;
                 for (int j = i+1; j < exprs.size(); ++j) {
                     if (vis[j]) continue;
                     if (exprs[j].getKind() == targetKind) {
@@ -298,7 +285,6 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                         auto _RHS = _binExpr.getRHS();
                         assert(_RHS.isSymbolicOrConstant());
                         if (LHS == _LHS && RHS == _RHS) {
-                            found = 1;
                             if (targetKind == AffineExprKind::Mod) {
                                 Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j-1}) : std::vector<int>({j, i+1}))));
                                 hasChanged = 1;
@@ -335,10 +321,6 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                 for (int j = 0; j < exprs.size(); ++j) {
                     exprs[j].dump();
                 }
-                for (int j = 0; j < vis.size(); ++j) {
-                    std::cerr << vis[j] << ' ';
-                }
-                std::cerr << std::endl;
             }
         }
     } while (hasChanged);
@@ -357,11 +339,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
             newExprs.push_back(exprs[i]);
         }
     }
-    for (int i = 0; i < Ops.size(); ++i) {
-        Ops[i].Print(std::cerr);
-    }
     auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
-    newCrdMap.dump();
     std::cerr << "Leave Rewrite" << std::endl;
     return std::make_tuple(newCrdMap, Ops);
 }
@@ -382,6 +360,14 @@ public:
         //handle swap only (quick round-about)
         auto srcCrd = encSrc.getCrdMap();
         auto dstCrd = encDst.getCrdMap();
+
+        if (srcCrd.getNumResults() > 5) {
+            std::cerr << "Too many source format dimensions!" << std::endl;
+            assert(0);
+        } else if (dstCrd.getNumResults() > 5) {
+            std::cerr << "Too many target format dimensions!" << std::endl;
+            assert(0);
+        }
 
         auto srcSecond = encSrc.getCompressMap();
         auto dstSecond = encDst.getCompressMap();
@@ -408,10 +394,9 @@ public:
 
         Type prevType = srcType;
         Value prevRes = src;
-        SmallVector<Value, 2> params;
 
-        auto genFunc1V1R = [&](const StringRef& name, const Value& v1) {
-            params = {v1};
+        //generate function that has only one return value
+        auto genFunc1R = [&](const StringRef& name, std::vector<Value> params) {
             auto prevOp = rewriter.create<CallOp>(loc, prevType,
                 getFunc(op, name, prevType, params, true),
                 params
@@ -420,30 +405,8 @@ public:
             prevRes = prevOp.getResult(0);
         };
 
-        auto genFunc2V1R = [&](const StringRef& name, const Value& v1, const Value& v2) {
-            params = {v1, v2};
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, name, prevType, params, true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
-        };
-
-        auto genFunc3V1R = [&](
-            const StringRef& name, const Value& v1, const Value& v2, const Value& v3
-        ) {
-            params = {v1, v2, v3};
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, name, prevType, params, true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
-        };
-
-        mlir::ConstantOp Const[5];
-        for (int i = 0; i < 5; ++i) {
+        mlir::ConstantOp Const[6];
+        for (int i = 0; i < 6; ++i) {
             Const[i] = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(i));
         }
 
@@ -453,26 +416,26 @@ public:
             switch (gco.type) {
                 case TileMerge: //tiling: merge
                     assert(gco.args.size() == 2);
-                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
-                    genFunc3V1R(tileMergeName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                    assert(gco.args[0] < 6 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    genFunc1R(tileMergeName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                 break;
                 case TileSplit: //tiling: split
                     assert(gco.args.size() == 2);
-                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
-                    genFunc3V1R(tileSplitName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                    assert(gco.args[0] < 6 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    genFunc1R(tileSplitName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                 break;
                 case Move: //move
                     assert(gco.args.size() == 2);
-                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
+                    assert(gco.args[0] < 6 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
                     if (gco.args[0] < gco.args[1]) {
                         for (int i = gco.args[0] + 1; i <= gco.args[1]; ++i) {
-                            genFunc3V1R(moveName, prevRes, Const[i], Const[i-1]);
+                            genFunc1R(moveName, {prevRes, Const[i], Const[i-1]});
                         }
                     } else {
-                        genFunc3V1R(moveName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                        genFunc1R(moveName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                     }
                 break;
                 default:
@@ -483,10 +446,6 @@ public:
 
         bool fuse_vis[10] = {0};
         for (auto ele: srcFuse) {
-            if (ele >= 10) {
-                std::cerr << "Too many dims." << std::endl;
-                assert(0);
-            }
             fuse_vis[ele] = 1;
         }
         
@@ -500,48 +459,29 @@ public:
             dst_mn_trim = std::min(dst_mn_trim, ele);
             dst_mx_trim = std::max(dst_mx_trim, ele);
         }
-
+        
+        //devectorize first, could be optimized.
         if (src_mx_trim < (srcCrd.getNumResults()-1)) {
-            // assert(dst_mx_trim == 1);
-            assert(src_mx_trim == srcCrd.getNumResults()-2);
-            genFunc1V1R(devectorizeName, prevRes);
+            int delta = srcCrd.getNumResults()-1-src_mx_trim;
+            assert(delta <= 2);
+            //TODO: FIXME: change devectorize to support matrix devectorization
+            genFunc1R(devectorizeName, {prevRes});
         }
 
         bool need_move[10] = {0};
         memset(need_move, 0, sizeof(need_move));
 
+        //handle coordinate remapping
         if (srcCrd != dstCrd) {
-            assert(srcCrd.getNumDims() == 2);
             assert(src_mn_trim != 1000);
             if (src_mn_trim != 0) {
                 src_mn_trim = 0;
-                params.clear();
-                params.push_back(prevRes);
-                params.push_back(Const[0].getResult());
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, trimName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(trimName, {prevRes, Const[0]});
             }
             for (auto ele: srcFuse) {
                 if (!fuse_vis[ele]) continue;
                 fuse_vis[ele] = 0;
-                params.clear();
-                params.push_back(prevRes);
-                if (ele < 2) {
-                    params.push_back((ele == 1 ? Const[1].getResult() : Const[0].getResult()));
-                } else {
-                    auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
-                    params.push_back(tmp_const.getResult());
-                }
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, separateName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(separateName, {prevRes, Const[ele]});
             }
             
             AffineMap flatSrcCrd, flatDstCrd;
@@ -560,20 +500,22 @@ public:
                     genFuncFromOp(removeSrcTiling[i]);
                 }
             }
-            auto dstM = toMatrix(flatDstCrd);
-            auto srcM = toMatrix(flatSrcCrd);
+            Matrix2f dstM = toMatrix(flatDstCrd);
+            Matrix2f srcM = toMatrix(flatSrcCrd);
 
             flatSrcCrd.dump();
             flatDstCrd.dump();
-            // std::cerr << dstM << ' ' << srcM << std::endl;
 
             // trivial Gaussian Elimination with functiion generation
             // Calculate M: (range(dstM)->range(srcM))
-            auto inverse_dstM = dstM.inverse();
+            Matrix2f inverse_dstM = dstM.inverse();
+            std::cerr << "inverse destination coordinate map = " << std::endl;
             std::cerr << inverse_dstM << std::endl;
-            auto crdRemapMap = toIntMatrix(srcM * inverse_dstM);
+            std::cerr << srcM * inverse_dstM << std::endl;
+            Matrix2i crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
             auto genOpFromAffineMap = [&](Matrix2i& M) {
+                std::cerr << M << std::endl;
                 for (int i = 0; i < 2; ++i) {
                     if (M(i,i) == 0) {
                         int st;
@@ -585,7 +527,7 @@ public:
                                 if (M(st,i) == -1) break;
                             }
                         }
-                        genFunc3V1R(swapName, prevRes, Const[i], Const[st]);
+                        genFunc1R(swapName, {prevRes, Const[i], Const[st]});
                         need_move[i] = 1;
                         for (int j = i; j < 2; ++j) {
                             std::swap(M(st,j), M(i,j));
@@ -594,22 +536,24 @@ public:
                     // assert(M(i,i) == 1);
                     for (int row = i+1; row < 2; ++row) {
                         if (M(row, i) == -M(i,i)) {
-                            genFunc3V1R(addName, prevRes, Const[row], Const[i]);
+                            genFunc1R(addName, {prevRes, Const[row], Const[i]});
                             for (int j = i; j < 2; ++j) {
                                 M(row, j) += M(i,j);
                             }
                         } else if (M(row,i) == M(i,i)) {
-                            genFunc3V1R(subName, prevRes, Const[row], Const[i]);
+                            genFunc1R(subName, {prevRes, Const[row], Const[i]});
                             for (int j = i; j < 2; ++j) {
                                 M(row, j) -= M(i,j);
                             }
                         }
                     }
                 }
+                std::cerr << M << std::endl;
                 for (int i = 1; i >= 0; --i) {
                     if (M(i,i) != 1) {
+                        std::cerr << M(i,i) << std::endl;
                         assert(M(i,i) == -1);
-                        genFunc2V1R(negName, prevRes, Const[i]);
+                        genFunc1R(negName, {prevRes, Const[i]});
                         need_move[i] = 1;
                         for (int j = i; j < 2; ++j) {
                             M(i,j) = -M(i,j);
@@ -620,12 +564,12 @@ public:
                             for (int j = row; j <= i; ++j) {
                                 need_move[j] = 1;
                             }
-                            genFunc3V1R(addName, prevRes, Const[row], Const[i]);
+                            genFunc1R(addName, {prevRes, Const[row], Const[i]});
                         } else if (M(row, i) == 1) {
                             for (int j = row; j <= i; ++j) {
                                 need_move[j] = 1;
                             }
-                            genFunc3V1R(subName, prevRes, Const[row], Const[i]);
+                            genFunc1R(subName, {prevRes, Const[row], Const[i]});
                         }
                         M(row, i) = 0;
                     }
@@ -636,7 +580,6 @@ public:
 
             genOpFromAffineMap(crdRemapMap);
 
-            //FIXME: calculate the right level, assume that all the merge operation is sorted by level.
             int pt = removeDstTiling.size()-1;
             while (pt >= 0 && removeDstTiling[pt].type == TileMerge) pt--;
             pt++;
@@ -648,32 +591,32 @@ public:
                     ele.type = TileSplit;
                     assert(ele.args.size() == 2);
                     ele.args[0] = ele.args[0] - (i-pt);
+                    for (int j = 0; j < ele.args[0]; ++j) {
+                        if (need_move[j]) {
+                            need_move[j] = 0;
+                            genFunc1R(moveName, {prevRes, Const[j], Const[j]});
+                        }
+                    }
                     genFuncFromOp(ele);
                 } else if (ele.type == Move) {
                     assert(ele.args.size() == 2);
                     std::swap(ele.args[0], ele.args[1]);
                     genFuncFromOp(ele);
                 } else {
+                    std::cerr << "Should not happen!" << std::endl;
                     assert(0);
                 }
             }
-
         }
-
-
         if (dst_mx_trim < dstCrd.getNumResults()-1) {
             need_move[dstCrd.getNumResults()-1] = 0;
         }
         for (auto ele: dstFuse) {
-            if (ele >= 10) {
-                std::cerr << "Too many dims." << std::endl;
-                assert(0);
-            }
             if (!fuse_vis[ele]) {
                 for (int i = 0; i < 10; ++i) {
                     if (need_move[i]) {
                         //TODO: FIXME: change the function call of move so that we don't need to move almost all the levels
-                        genFunc3V1R(moveName, prevRes, Const[i], Const[i]);
+                        genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                         need_move[i] = 0;
                     }
                 }
@@ -682,20 +625,8 @@ public:
         }
 
         for (auto ele: dstFuse) {
-            if (ele >= 10) {
-                std::cerr << "Too many dims." << std::endl;
-                assert(0);
-            }
             if (!fuse_vis[ele]) {
-                params.clear();
-                params.push_back(prevRes);
-                params.push_back(Const[ele]);
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, fuseName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(fuseName, {prevRes, Const[ele]});
             } else {
                 fuse_vis[ele] = 0;
             }
@@ -703,69 +634,37 @@ public:
         for (auto ele: srcFuse) {
             if (fuse_vis[ele]) {
                 fuse_vis[ele] = 0;
-                params.clear();
-                params.push_back(prevRes);
-                params.push_back(Const[ele]);
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, separateName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(separateName, {prevRes, Const[ele]});
             }
         }
 
-        // assert(src_mn_trim == 0);
-
-        std::cerr << "dst_mn_trim = " << dst_mn_trim << std::endl;
-
         if (dst_mn_trim < src_mn_trim) {
-            params.clear();
-            params.push_back(prevRes);
-            params.push_back(Const[dst_mn_trim]);
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, trimName, prevType, params, /*emitCInterface=*/true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
+            genFunc1R(trimName, {prevRes, Const[dst_mn_trim]});
         } else if (dst_mn_trim > src_mn_trim) {
-            params.clear();
-            params.push_back(prevRes);
-            dst_mn_trim = std::min((unsigned int)(dst_mn_trim), dstCrd.getNumResults()-1);
-            params.push_back(Const[dst_mn_trim-1]);
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, growName, prevType, params, /*emitCInterface=*/true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
+            genFunc1R(growName, {prevRes, Const[dst_mn_trim-1]});
         }
         if (dst_mx_trim < dstCrd.getNumResults()-1) {
             assert(dst_mx_trim == dstCrd.getNumResults()-2);
             for (int i = 0; i < dstCrd.getNumResults()-1; ++i) {
                 if (need_move[i]) {
-                    genFunc3V1R(moveName, prevRes, Const[i], Const[i]);
+                    genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                     need_move[i] = 0;
                 }
             }
         }
         if (dst_mx_trim < dstCrd.getNumResults()-1) {
-            // assert(src_mx_trim == 1);
             assert(dst_mx_trim == dstCrd.getNumResults()-2);
-            genFunc2V1R(vectorizeName, prevRes, Const[dstCrd.getNumResults()-1]);
+            genFunc1R(vectorizeName, {prevRes, Const[dstCrd.getNumResults()-1]});
         }
         for (int i = 0; i < dstCrd.getNumResults(); ++i) {
             if (need_move[i]) {
-                genFunc3V1R(moveName, prevRes, Const[i], Const[i]);
+                genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                 need_move[i] = 0;
             }
         }
         for (int i = 0; i < 10; ++i) {
-            std::cerr << need_move[i] << ' ';
             assert(need_move[i] == 0);
         }
-        std::cerr << std::endl;
         rewriter.replaceOp(op, prevRes);
         return success();
     }

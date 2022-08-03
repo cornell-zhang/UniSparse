@@ -1,4 +1,4 @@
-// sparlay-opt 3.mlir -lower-format-conversion -lower-struct -dce | \
+// sparlay-opt convert-perf-all.mlir -lower-format-conversion -lower-struct -dce | \
 //     mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
 //     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
 //     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-casts | \

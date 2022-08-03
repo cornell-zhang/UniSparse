@@ -610,7 +610,7 @@ bool SparlayStorage::tile_merge(int lv, int factor) {
 void SparlayStorage::dfsLowerPtr(int cur_lv, int id, int pos, int target_lv, std::vector<int>& ret) {
   if (cur_lv == target_lv) {
     assert(ret.size() > pos);
-    assert(ret[pos+1] == -1);
+    assert(ret[pos+1] <= id);
     if (vLevel[cur_lv]->ptr.size()) {
       assert(id < vLevel[cur_lv]->ptr.size());
       ret[pos+1] = vLevel[cur_lv]->ptr[id+1];
@@ -623,6 +623,7 @@ void SparlayStorage::dfsLowerPtr(int cur_lv, int id, int pos, int target_lv, std
   if (vLevel[cur_lv]->ptr.size()) {
     int idL = vLevel[cur_lv]->ptr[id], idR = vLevel[cur_lv]->ptr[id+1];
     assert(vLevel[cur_lv+1]->crd.size() >= idR);
+    //TODO: optimizable when current level is not fused
     for (int to = idL; to < idR; ++to) {
       int to_pos = pos * nxtLevelSize + vLevel[cur_lv+1]->crd[to];
       dfsLowerPtr(cur_lv+1, to, to_pos, target_lv, ret);
@@ -646,7 +647,7 @@ std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
   assert(!(vLevel[st_lv]->type&1));
   assert(vLevel[st_lv]->size);
   ret.resize(ed_level_size+1, -1);
-  for (size_t i = 0; i < vLevel[st_lv]->ptr.size(); ++i) {
+  for (size_t i = 0; i < vLevel[st_lv]->ptr.size()-1; ++i) {
     if (vLevel[st_lv]->ptr[i] < vLevel[st_lv]->ptr[i+1])
       dfsLowerPtr(st_lv, i, i, ed_lv, ret);
   }
@@ -859,8 +860,6 @@ bool SparlayStorage::separate(const int lv) {
         vLevel[cur_lv]->ptr[i+1] = vLevel[lv]->ptr[idR+1];
       }
     }
-    // assert(vLevel[lv]->ptr.size() == vLevel[lv]->crd.size()+1);
-    //TODO: precompute crd size and reserve vectors to speed up
     for (int cur_lv = upper_lv; cur_lv <= lv; ++cur_lv) {
       static std::vector<int> new_crd;
       static std::vector<bool> new_same_path;
@@ -897,10 +896,6 @@ bool SparlayStorage::swap(const int LU, const int LD) {
     assert(vLevel[i]->type&LVTRIM);
   }
   this->swapStorage(LD, LU);
-  // this->moveLv(LD, LU);
-  // for (int i = LU+1; i < LD; ++i) {
-  //   this->moveLv(i+1, i);
-  // }
   return 1;
 }
 
@@ -914,12 +909,6 @@ bool SparlayStorage::add(const int Ltarget, const int Lsrc) {
   }
   (*exprs[Ltarget]) += (*exprs[Lsrc]);
   getSize(Ltarget);
-  // if (Ltarget < Lsrc) {
-  //   this->moveLv(Lsrc, Ltarget);
-  //   for (int i = Ltarget; i < Lsrc; ++i) {
-  //     this->moveLv(i+1, i);
-  //   }
-  // }
   return 1;
 }
 
@@ -936,12 +925,6 @@ bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
   }
   (*exprs[Ltarget]) -= (*exprs[Lsrc]);
   getSize(Ltarget);
-  // if (Ltarget < Lsrc) {
-  //   this->moveLv(Lsrc, Ltarget);
-  //   for (int i = Ltarget; i < Lsrc; ++i) {
-  //     this->moveLv(i+1, i);
-  //   }
-  // }
   return 1;
 }
 
@@ -1031,7 +1014,6 @@ bool SparlayStorage::neg(int lv) {
   for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
     vLevel[lv]->crd[i] = -vLevel[lv]->crd[i];
   }
-  // this->moveLv(lv, lv);
   return 1;
 }
 
