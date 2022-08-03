@@ -1,3 +1,7 @@
+build/*
 /build*
 /scripts*
+scripts/*
 evaluation/CPU/build*
+storage-src/1
+/eigen

@@ -11,7 +11,7 @@
 
 include "SparlayDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-
+include "SparlayAttr.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 
@@ -23,51 +23,15 @@ class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
         Op<Sparlay_Dialect, mnemonic, traits>;
 
 //===----------------------------------------------------------------------===//
-// sparlay::FooOp
+// sparlay::NewOp
 //===----------------------------------------------------------------------===//
-
-def Sparlay_FooOp : Sparlay_Op<"foo", [NoSideEffect,
-                                             SameOperandsAndResultType]> {
-    let summary = "Illustrates how to define an operation.";
-    let description = [{
-        The `sparlay.foo` operation illustrates how to define a new
-        operation in a dialect. It uses an operation trait to declare that it
-        has no side effects.
-
-        This operation takes an integer argument and returns an integer.
-
-        Example:
-
-        ```mlir
-        %0 = constant 2 : i32
-        // Apply the foo operation to %0
-        %1 = sparlay.foo %0 : i32
-        ```
-    }];
-
-    let arguments = (ins I32:$input);
-    let results = (outs I32:$res);
-
-    let assemblyFormat = [{
-        $input attr-dict `:` type($input)
-    }];
-}
 
 def Sparlay_NewOp : Sparlay_Op<"new", [NoSideEffect]> {
     let summary = "Construct a sparlay tensor type from .";
     let description = [{
         Example:
         ```mlir
-        // %A_crd, %A_val = sparlay.pack %A 
-        //     { reduce_dim = 1, padding = "none", 
-        //     storage_order = affine_map<(i,j) -> (i,j)> } :
-        //     tensor<4x4xf32> to 
-        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
-        %A_COO = sparlay.pack (%A) 
-            { reduce_dim = 1, padding = "none", 
-            storage_order = affine_map<(i,j) -> (i,j)> } :
-            tensor<4x4xf32> to 
-            !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>>
+        %A_COO = sparlay.new 
         ```
     }];
     let arguments = (ins AnyType:$input);
@@ -82,6 +46,120 @@ def Sparlay_NewOp : Sparlay_Op<"new", [NoSideEffect]> {
        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
     }];
 }
+
+def Sparlay_fromFileOp: Sparlay_Op<"fromFile", [NoSideEffect]> {
+    let summary = "Construct a sparlay tensor from COO file.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_COO = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    let results = (outs AnyTensor:$output);
+    let assemblyFormat = [{
+       `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+    }];
+}
+
+def Sparlay_printStorageOp: Sparlay_Op<"printStorage", [NoSideEffect]> {
+    let summary = "Print the Storage of a tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        sparlay.printStorage %A_CSR : tensor<?x?xf32, #CSR>
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input)
+    }];
+}
+
+def Sparlay_copyOp: Sparlay_Op<"copy", [NoSideEffect]> {
+    let summary = "Copy the Storage of a tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_CSR_1 = sparlay.copy (%A_CSR)
+        ```
+    }];
+    let arguments = (ins AnyType:$input);
+    let results = (outs AnyTensor:$output);
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input)  `to` type($output)
+    }];
+}
+
+def Sparlay_checkOp: Sparlay_Op<"check", [NoSideEffect]> {
+    let summary = "Check the equivalence of two Storage of a tensor.";
+    let description = [{..}];
+    let arguments = (ins AnyType:$inputL, AnyType:$inputR);
+    let assemblyFormat = [{
+        `(` $inputL `,` $inputR `)` attr-dict `:` type($inputL) `,` type($inputR)
+    }];
+}
+
+def Sparlay_ticOp: Sparlay_Op<"tic", [NoSideEffect]> {
+    let summary = "..";
+    let description = [{..}];
+    let assemblyFormat = [{
+        `(` `)` attr-dict
+    }];
+}
+
+def Sparlay_tocOp: Sparlay_Op<"toc", [NoSideEffect]> {
+    let summary = "..";
+    let description = [{..}];
+    let assemblyFormat = [{
+        `(` `)` attr-dict
+    }];
+}
+
+//===----------------------------------------------------------------------===//
+// sparlay::ConvertOp
+//===----------------------------------------------------------------------===//
+
+def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect,SameOperandsAndResultType]> {
+    let summary = "Convert from the source format to the target format.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_CSR = sparlay.convert (%A_COO) :
+            tensor<4x4xf32, #COO> to tensor<4x4xf32, #CSR>
+        ```
+    }];
+    let arguments = (ins AnyTensor:$input);
+    let results = (outs AnyTensor:$output);
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+    }];
+}
+
+//===----------------------------------------------------------------------===//
+// sparlay::AccessOp
+//===----------------------------------------------------------------------===//
+
+def Sparlay_AccessOp : Sparlay_Op<"access", [NoSideEffect]> {
+    let summary = "Access the dimensional data structures in the tensor.";
+    let description = [{
+        Example:
+        ```mlir
+        %A_CSR = sparlay.access (%A_COO) :
+            tensor<4x4xf32, #COO> to tensor<4x4xf32, #CSR>
+        ```
+    }];
+    let arguments = (ins AnyTensor:$input,
+                         IndexAttr:$dim);
+    let results = (outs Sparlay_Type:$output);
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+    }];
+}
+
+//===----------------------------------------------------------------------===//
+// deprecated ops 
+//===----------------------------------------------------------------------===//
 
 def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
     let summary = "Remove zero elements selectively from the input tensor.";

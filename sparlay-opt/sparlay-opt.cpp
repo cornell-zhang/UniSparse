@@ -48,6 +48,8 @@ static cl::opt<bool> dce("dce",
                         cl::init(false),
                         cl::desc("dead code elimination"));
 
+static cl::opt<bool> sparlayCodegen("sparlay-codegen", cl::init(false), cl::desc("Enable Linagl generic op lowering"));
+
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Read the input mlir.
@@ -93,6 +95,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (dce) {
     // pm.addPass(mlir::createLowerFormatConversionPass());
     optPM.addPass(mlir::sparlay::createDeadCodeEliminationPass());
+  }
+
+  if(sparlayCodegen) {
+    optPM.addPass(mlir::sparlay::createSparlayCodegenPass());
   }
 
   if (mlir::failed(pm.run(*module)))

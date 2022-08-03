@@ -1,7 +1,7 @@
 // RUN: sparlay-opt %s -lower-format-conversion -lower-struct -dce | \
 // RUN: mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
 // RUN:     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
-// RUN:     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-cast | \
+// RUN:     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-casts | \
 // RUN: mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 | as - -o |
 // RUN: clang++ -L${YOUR_PROJECT_PATH}/sparlay/build/lib -lmlir_sparlay_runner_utils \
 // RUN:     -L${LLVM_PROJECT_PATH}/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec
@@ -50,7 +50,7 @@ module {
         //      !sparlay.struct<[4, 6], !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)>, 
         //                      memref<?xf32>> to
         //      !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)>
-        // %crd_0 = sparlay.struct_access %crd_old[0] : 
+        // %crd_0 = sparlay.struct_access %  [0] : 
         //      !sparlay.struct<memref<?xindex>, memref<?xindex>, "crd", (i,j)->(i,j)> to
         //      memref<?xindex>
         // %crd_1 = sparlay.struct_access %crd_old[1] : 
