@@ -3,7 +3,7 @@
   crdMap = affine_map<(i,j)->((i+j) mod 8,j floordiv 8)>
 }>
 
-func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()
+func.func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()
 
 // #2 = #sparlay.encoding<{
 //   primaryMap = affine_map<(a1,a2,a3)->(a1)>,

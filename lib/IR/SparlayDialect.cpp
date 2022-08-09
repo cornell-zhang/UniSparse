@@ -13,7 +13,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/OpImplementation.h"
-#include "mlir/Parser.h"
 
 #include "mlir/Transforms/InliningUtils.h"
 #include "llvm/Support/CommandLine.h"
@@ -21,8 +20,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "mlir/Support/LLVM.h"
 #include "llvm/ADT/TypeSwitch.h"
-#include "Parser/Parser.h"
-#include "Parser/Token.h"
 #include <iostream>
 
 using namespace mlir;
@@ -59,243 +56,7 @@ enum AffineHighPrecOp {
 
 static std::vector<std::string> mapDimtoID;
 
-// AffineExpr parseAffineLowPrecOpExpr(DialectAsmParser& parser,
-//                                     AffineExpr llhs,
-//                                     AffineLowPrecOp llhsOp);
-// AffineExpr parseAffineOperandExpr(DialectAsmParser& parser, AffineExpr lhs);
-// AffineExpr parseAffineExpr(DialectAsmParser& parser);
-
-// AffineLowPrecOp consumeIfLowPrecOp(DialectAsmParser& parser) {
-//   if (suc(parser.parseOptionalPlus()))
-//     return AffineLowPrecOp::Add;
-//   else if (suc(parser.parseOptionalKeyword("-"))) {
-//     return AffineLowPrecOp::Sub;
-//   }
-//   else {
-//     return AffineLowPrecOp::LNoOp;
-//   }
-// }
-
-// AffineHighPrecOp consumeIfHighPrecOp(DialectAsmParser& parser) {
-//   if (suc(parser.parseOptionalStar()))
-//     return AffineHighPrecOp::Mul;
-//   else if (suc(parser.parseOptionalKeyword("floordiv")))
-//     return AffineHighPrecOp::FloorDiv;
-//   else if (suc(parser.parseOptionalKeyword("ceildiv")))
-//     return AffineHighPrecOp::CeilDiv;
-//   else if (suc(parser.parseOptionalKeyword("mod")))
-//     return AffineHighPrecOp::Mod;
-//   else
-//     return AffineHighPrecOp::HNoOp;
-// }
-
-// AffineExprKind convertHighPrecOp(AffineHighPrecOp src) {
-//   switch(src) {
-//     case AffineHighPrecOp::Mul:
-//       return AffineExprKind::Mul;
-//     case AffineHighPrecOp::FloorDiv:
-//       return AffineExprKind::FloorDiv;
-//     case AffineHighPrecOp::CeilDiv:
-//       return AffineExprKind::CeilDiv;
-//     case AffineHighPrecOp::Mod:
-//       return AffineExprKind::Mod;
-//     default:
-//       assert(0);
-//       return AffineExprKind::LAST_AFFINE_BINARY_OP;
-//   }
-// }
-
-// AffineExpr parseAffineHighPrecOpExpr(DialectAsmParser& parser,
-//                                      AffineExpr llhs,
-//                                      AffineHighPrecOp llhsOp,
-//                                      SMLoc llhsOpLoc) {
-//   AffineExpr lhs = parseAffineOperandExpr(parser, llhs);
-//   if (!lhs)
-//     return nullptr;
-
-//   // Found an LHS. Parse the remaining expression.
-//   auto opLoc = parser.getCurrentLocation();
-//   if (AffineHighPrecOp op = consumeIfHighPrecOp(parser)) {
-//     if (llhs) {
-//       AffineExpr expr = getAffineBinaryOpExpr(convertHighPrecOp(llhsOp), llhs, lhs);
-//       if (!expr)
-//         return nullptr;
-//       return parseAffineHighPrecOpExpr(parser, expr, op, opLoc);
-//     }
-//     // No LLHS, get RHS
-//     return parseAffineHighPrecOpExpr(parser, lhs, op, opLoc);
-//   }
-
-//   // This is the last operand in this expression.
-//   if (llhs)
-//     return getAffineBinaryOpExpr(convertHighPrecOp(llhsOp), llhs, lhs);
-
-//   // No llhs, 'lhs' itself is the expression.
-//   return lhs;
-// }
-
-// AffineExpr parseParentheticalExpr(DialectAsmParser& parser) {
-//   if (suc(parser.parseOptionalRParen()))
-//     return parser.emitError(parser.getNameLoc(), "no expression inside parentheses"), nullptr;
-
-//   auto expr = parseAffineExpr(parser);
-//   if (!expr || failed(parser.parseOptionalRParen()))
-//     return nullptr;
-
-//   return expr;
-// }
-
-// AffineExpr parseBareIdExpr(DialectAsmParser& parser, const std::string& key) {
-//   for (size_t dim = 0; dim < mapDimtoID.size(); ++dim) {
-//     if (mapDimtoID[dim] == key) {
-//       return getAffineDimExpr(dim, parser.getContext());
-//     }
-//   }
-//   return parser.emitError(parser.getNameLoc(), "use of undeclared identifier"), nullptr;
-// }
-
-// AffineExpr parseNegateExpression(DialectAsmParser& parser, AffineExpr lhs) {
-//   // if (parseToken(Token::minus, "expected '-'"))
-//   //   return nullptr;
-//   AffineExpr operand = parseAffineOperandExpr(parser, lhs);
-//   // Since negation has the highest precedence of all ops (including high
-//   // precedence ops) but lower than parentheses, we are only going to use
-//   // parseAffineOperandExpr instead of parseAffineExpr here.
-//   if (!operand)
-//     // Extra error message although parseAffineOperandExpr would have
-//     // complained. Leads to a better diagnostic.
-//     return parser.emitError(parser.getNameLoc(), "missing operand of negation"), nullptr;
-//   return (-1) * operand;
-// }
-
-// AffineExpr parseIntegerExpr(DialectAsmParser& parser, int64_t val) {
-//   return getAffineConstantExpr(val, parser.getContext());
-// }
-
-// //TODO: FIXME:
-// /// Parses an expression that can be a valid operand of an affine expression.
-// /// lhs: if non-null, lhs is an affine expression that is the lhs of a binary
-// /// operator, the rhs of which is being parsed. This is used to determine
-// /// whether an error should be emitted for a missing right operand.
-// //  Eg: for an expression without parentheses (like i + j + k + l), each
-// //  of the four identifiers is an operand. For i + j*k + l, j*k is not an
-// //  operand expression, it's an op expression and will be parsed via
-// //  parseAffineHighPrecOpExpression(). However, for i + (j*k) + -l, (j*k) and
-// //  -l are valid operands that will be parsed by this function.
-// AffineExpr parseAffineOperandExpr(DialectAsmParser& parser, AffineExpr lhs) {
-//   StringRef key;
-//   if (suc(parser.parseOptionalKeyword(&key))) {
-//     return parseBareIdExpr(parser, key.str());
-//   }
-//   int64_t val;
-//   if (!parser.parseOptionalInteger<int64_t>(val).hasValue()) {
-//     return parseIntegerExpr(parser, val);
-//   }
-//   if (suc(parser.parseOptionalLParen())) {
-//     return parseParentheticalExpr(parser);
-//   }
-//   StringRef a = "-";
-//   if (suc(parser.parseOptionalKeyword(a))) {
-//     return parseNegateExpression(parser, lhs);
-//   }
-//   if (lhs) {
-//     parser.emitError(parser.getNameLoc(), "Missing right operand of binary operator");
-//   } else {
-//     parser.emitError(parser.getNameLoc(), "Expected affine expression");
-//   }
-//   return nullptr;
-// }
-
-// AffineExpr getAffineBinaryOpExprNeedConvert(AffineLowPrecOp llhsOp, AffineExpr llhs, AffineExpr lhs) {
-//   if (llhsOp == AffineLowPrecOp::Sub) {
-//     return getAffineBinaryOpExpr(AffineExprKind::Add, llhs, -lhs);
-//   } else if (llhsOp == AffineLowPrecOp::Add) {
-//     return getAffineBinaryOpExpr(AffineExprKind::Add, llhs, lhs);
-//   }
-//   assert(0);
-//   return nullptr;
-// }
-
-// AffineExpr parseAffineLowPrecOpExpr(DialectAsmParser& parser,
-//                                     AffineExpr llhs,
-//                                     AffineLowPrecOp llhsOp) {
-//   AffineExpr lhs;
-//   if (!(lhs = parseAffineOperandExpr(parser, llhs)))
-//     return nullptr;
-
-//   // Found an LHS. Deal with the ops.
-//   if (AffineLowPrecOp lOp = consumeIfLowPrecOp(parser)) {
-//     AffineExpr sum;
-//     llhs.dump();
-//     if (llhs) {
-//       if (llhsOp == AffineLowPrecOp::Sub) {
-//         sum = getAffineBinaryOpExpr(AffineExprKind::Add, llhs, -lhs);
-//       } else if (llhsOp == AffineLowPrecOp::Add) {
-//         sum = getAffineBinaryOpExpr(AffineExprKind::Add, llhs, lhs);
-//       } else {
-//         assert(0);
-//       }
-//       return parseAffineLowPrecOpExpr(parser, sum, lOp);
-//     }
-//     // No LLHS, get RHS and form the expression.
-//     return parseAffineLowPrecOpExpr(parser, lhs, lOp);
-//   }
-//   auto opLoc = parser.getCurrentLocation();
-//   if (AffineHighPrecOp hOp = consumeIfHighPrecOp(parser)) {
-//     // We have a higher precedence op here. Get the rhs operand for the llhs
-//     // through parseAffineHighPrecOpExpr.
-//     AffineExpr highRes = parseAffineHighPrecOpExpr(parser, lhs, hOp, opLoc);
-//     if (!highRes)
-//       return nullptr;
-
-//     // If llhs is null, the product forms the first operand of the yet to be
-//     // found expression. If non-null, the op to associate with llhs is llhsOp.
-//     AffineExpr expr =
-//         llhs ? getAffineBinaryOpExprNeedConvert(llhsOp, llhs, highRes) : highRes;
-
-//     // Recurse for subsequent low prec op's after the affine high prec op
-//     // expression.
-//     if (AffineLowPrecOp nextOp = consumeIfLowPrecOp(parser))
-//       return parseAffineLowPrecOpExpr(parser, expr, nextOp);
-//     return expr;
-//   }
-//   // Last operand in the expression list.
-//   if (llhs) {
-//     if (llhsOp == AffineLowPrecOp::Sub) {
-//       return getAffineBinaryOpExpr(AffineExprKind::Add, llhs, -lhs);
-//     } else if (llhsOp == AffineLowPrecOp::Add) {
-//       return getAffineBinaryOpExpr(AffineExprKind::Add, llhs, lhs);
-//     } else {
-//       assert(0);
-//     }
-//   }
-//   // No llhs, 'lhs' itself is the expression.
-//   return lhs;
-// }
-
-// AffineExpr parseAffineExpr(DialectAsmParser& parser) {
-//   return parseAffineLowPrecOpExpr(parser, nullptr, AffineLowPrecOp::LNoOp);
-// }
-
-// ParseResult parseAffineExprGetDim(
-//   DialectAsmParser& parser, AffineExpr& expr, const std::vector<std::string>& mapDimtoID
-// ) {
-//   StringRef key;
-//   auto ret = parser.parseKeyword(&key);
-//   if (succeeded(ret)) {
-//     bool mark = 0;
-//     for (size_t dim = 0; dim < mapDimtoID.size(); ++dim) {
-//       if (mapDimtoID[dim] == key.str()) {
-//         mark = 1;
-//         expr = getAffineDimExpr(dim, parser.getContext());
-//       }
-//     }
-//     if (!mark) ret = ParseResult(failure());
-//   }
-//   return ret;
-// }
-
-Attribute SparlayCompressAttr::parse(DialectAsmParser &parser, Type type) {
+Attribute SparlayCompressAttr::parse(AsmParser &parser, Type type) {
   auto fuseIndex = std::vector<int>{};
   auto trimIndex = std::vector<int>{};
   std::vector<int>* curIndex = nullptr;
@@ -360,7 +121,7 @@ Attribute SparlayCompressAttr::parse(DialectAsmParser &parser, Type type) {
   return ret;
 }
 
-Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
+Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
   if (failed(parser.parseLess()))
     return {};
   // Parse the data as a dictionary.
@@ -374,22 +135,22 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
   CompressMap compressMap = {};
   unsigned bitWidth = 8;
   for (const auto& attr: dict) {
-    if (attr.first == "crdMap") {
-      auto affineAttr = attr.second.dyn_cast<AffineMapAttr>();
+    if (attr.getName() == "crdMap") {
+      auto affineAttr = attr.getValue().dyn_cast<AffineMapAttr>();
       if (!affineAttr) {
         return {};
       }
       crdMap = affineAttr.getValue();
-    } else if (attr.first == "compressMap") {
-      auto sparlayCompressAttr = attr.second.dyn_cast<SparlayCompressAttr>();
+    } else if (attr.getName() == "compressMap") {
+      auto sparlayCompressAttr = attr.getValue().dyn_cast<SparlayCompressAttr>();
       if (!sparlayCompressAttr) {
         return {};
       }
       compressMap = sparlayCompressAttr.getValue();
       auto trimIndex = compressMap.getTrimIndex();
       auto fuseIndex = compressMap.getFuseIndex();
-    } else if (attr.first == "bitWidth") {
-      auto intAttr = attr.second.dyn_cast<IntegerAttr>();
+    } else if (attr.getName() == "bitWidth") {
+      auto intAttr = attr.getValue().dyn_cast<IntegerAttr>();
       if (!intAttr) return {};
       bitWidth = intAttr.getInt();
     } else {
@@ -399,7 +160,7 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
   return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), crdMap, compressMap, bitWidth);
 }
 
-void SparlayEncodingAttr::print(DialectAsmPrinter &printer) const {
+void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   const CompressMap& compressMap = getCompressMap();
   const AffineMap& crdMap = getCrdMap();
   printer << "crdMap: " << crdMap << ", ";
@@ -420,7 +181,7 @@ void SparlayEncodingAttr::print(DialectAsmPrinter &printer) const {
   printer << "bitWidth: " << getBitWidth();
 }
 
-void SparlayCompressAttr::print(DialectAsmPrinter &printer) const {
+void SparlayCompressAttr::print(AsmPrinter &printer) const {
   return;
 }
 
@@ -442,25 +203,6 @@ LogicalResult SparlayEncodingAttr::verifyEncoding(
 //     return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
 //   return nullptr;
 // }
-
-Attribute SparlayDialect::parseAttribute(DialectAsmParser &parser,
-                                              Type type) const {
-  StringRef attrTag;
-  if (failed(parser.parseKeyword(&attrTag)))
-    return Attribute();
-  Attribute attr;
-  auto parseResult = generatedAttributeParser(parser, attrTag, type, attr);
-  if (parseResult.hasValue())
-    return attr;
-  parser.emitError(parser.getNameLoc(), "unknown sparse tensor layout attribute");
-  return Attribute();
-}
-
-void SparlayDialect::printAttribute(Attribute attr,
-                                         DialectAsmPrinter &printer) const {
-  if (succeeded(generatedAttributePrinter(attr, printer)))
-    return;
-}
 
 //===----------------------------------------------------------------------===//
 // Sparlay dialect.

@@ -25,11 +25,8 @@ include(AddLLVM)
 include(AddMLIR)
 include(HandleLLVMOptions)
 
-set(MLIR_LIB_DIR "/work/shared/common/llvm-project-gpu/mlir/lib")
-
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
-include_directories(${MLIR_LIB_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_BINARY_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/eigen/eigen)

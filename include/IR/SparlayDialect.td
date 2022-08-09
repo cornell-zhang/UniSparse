@@ -31,6 +31,8 @@ def Sparlay_Dialect : Dialect {
     let extraClassDeclaration = [{
         void registerTypes();
     }];
+    let useDefaultAttributePrinterParser = 1;
+    let useDefaultTypePrinterParser = 1;
 }
 
 //===----------------------------------------------------------------------===//

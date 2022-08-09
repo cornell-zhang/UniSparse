@@ -12,5 +12,8 @@ add_mlir_dialect_library(MLIRSparlay
 
 	LINK_LIBS PUBLIC
 	MLIRIR
+        MLIRDialect
         MLIRParser
+        MLIRInferTypeOpInterface
+        MLIRSupport
 	)

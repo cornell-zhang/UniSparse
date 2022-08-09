@@ -11,7 +11,7 @@
 
 // ./exec
 
-!Filename = type !llvm.ptr<i8>
+!Filename = !llvm.ptr<i8>
 
 #COO = #sparlay.encoding<{
   crdMap = affine_map<(i,j)->(i,j)>,
@@ -50,9 +50,9 @@
 
 module {
   // CHECK-LABEL: func @convert()
-  func private @getTensorFilename(index) -> (!Filename)
-  func @main() {
-    %i0 = constant 0: index
+  func.func private @getTensorFilename(index) -> (!Filename)
+  func.func @main() {
+    %i0 = arith.constant 0: index
     %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)
     %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
     %A_ori = sparlay.copy (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
