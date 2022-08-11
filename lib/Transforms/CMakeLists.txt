@@ -1,6 +1,6 @@
 add_mlir_dialect_library(MLIRSparlayTransforms
   
-  #LowerFormatConversionPass.cpp
+  LowerFormatConversionPass.cpp
   #LowerStructPass.cpp
   DeadCodeEliminationPass.cpp
   #SparlayCodegen.cpp

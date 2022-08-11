@@ -1,10 +1,8 @@
-// sparlay-opt convert-perf-small.mlir -lower-format-conversion -lower-struct -dce | \
-//     mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
-//     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
-//     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-casts | \
-//     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 | tee 1.asm
-
-// as 1.asm -o 1.o
+// sparlay-opt test/Sparlay/convert-perf-small.mlir -lower-format-conversion -lower-struct -dce | \
+//     mlir-opt -convert-vector-to-scf --convert-scf-to-cf --tensor-bufferize \
+//     --scf-bufferize --func-bufferize --finalizing-bufferize --convert-vector-to-llvm \
+//     --convert-memref-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts | \
+//     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o 1.o
 
 // clang++ 1.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
 //         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec

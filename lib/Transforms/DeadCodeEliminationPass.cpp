@@ -19,10 +19,8 @@
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Analysis/Utils.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Transforms/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
@@ -40,6 +38,9 @@ using namespace sparlay;
 
 namespace {
 
+#define GEN_PASS_CLASSES
+#include "Transforms/Passes.h.inc"
+
 //===----------------------------------------------------------------------===//
 // DeadCodeEliminationPass
 //===----------------------------------------------------------------------===//
@@ -55,11 +56,11 @@ public:
 };
 
 struct DeadCodeEliminationPass : 
-public PassWrapper<DeadCodeEliminationPass, FunctionPass> {
+public DeadCodeEliminationBase<DeadCodeEliminationPass> {
 
-    void runOnFunction() override {
+    void runOnOperation() override {
         
-        FuncOp function = getFunction();
+        func::FuncOp function = getOperation();
         MLIRContext *ctx = function.getContext();
         RewritePatternSet patterns(ctx);
         patterns.add<DeadCodeElimination>(&getContext());

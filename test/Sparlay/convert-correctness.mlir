@@ -1,11 +1,8 @@
-// sparlay-opt convert-correctness.mlir -lower-format-conversion -lower-struct -dce | \
-//     mlir-opt -convert-vector-to-scf --convert-scf-to-std --tensor-constant-bufferize \
-//     --tensor-bufferize --std-bufferize --finalizing-bufferize --convert-vector-to-llvm \
-//     --convert-memref-to-llvm --convert-std-to-llvm --reconcile-unrealized-casts | \
-//     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 | tee 1.asm
-
-
-// as 1.asm -o 1.o
+// sparlay-opt test/Sparlay/convert-correctness.mlir -lower-format-conversion -lower-struct -dce | \
+//     mlir-opt -convert-vector-to-scf --convert-scf-to-cf --tensor-bufferize \
+//     --scf-bufferize --func-bufferize --finalizing-bufferize --convert-vector-to-llvm \
+//     --convert-memref-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts | \
+//     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o 1.o
 
 // clang++ 1.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
 //         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec
@@ -14,7 +11,7 @@
 
 
 
-!Filename = type !llvm.ptr<i8>
+!Filename = !llvm.ptr<i8>
 
 #COO = #sparlay.encoding<{
   crdMap = affine_map<(i,j)->(i,j)>,
@@ -48,9 +45,9 @@
 
 module {
   // CHECK-LABEL: func @convert()
-  func private @getTensorFilename(index) -> (!Filename)
-  func @main() {
-    %i0 = constant 0: index
+  func.func private @getTensorFilename(index) -> (!Filename)
+  func.func @main() {
+    %i0 = arith.constant 0: index
     %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)
     sparlay.tic ()
     %A_COO = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>

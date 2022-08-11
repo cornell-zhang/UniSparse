@@ -84,10 +84,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   applyPassManagerCLOptions(pm);
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
 
-  // if (lowerFormatConversion) {
-  //   // pm.addPass(mlir::createLowerFormatConversionPass());
-  //   optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
-  // }
+  if (lowerFormatConversion) {
+    // pm.addPass(mlir::createLowerFormatConversionPass());
+    optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
+  }
 
   // if (lowerStruct) {
   //   // pm.addPass(mlir::createLowerFormatConversionPass());
