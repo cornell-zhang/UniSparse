@@ -18,8 +18,14 @@
 
 namespace mlir {
 
+class AffineDialect;
+
 namespace arith {
 class ArithmeticDialect;
+}
+
+namespace func {
+  class FuncDialect;
 }
 
 namespace memref {
