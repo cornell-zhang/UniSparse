@@ -1,7 +1,7 @@
 add_mlir_dialect_library(MLIRSparlayTransforms
   
   LowerFormatConversionPass.cpp
-  LowerStructPass.cpp
+  #LowerStructPass.cpp
   DeadCodeEliminationPass.cpp
   SparlayCodegen.cpp
 
@@ -16,13 +16,9 @@ add_mlir_dialect_library(MLIRSparlayTransforms
 
   LINK_LIBS PUBLIC
   MLIRIR
-  MLIRMemRef
-  MLIRSCF
   MLIRPass
   MLIRSideEffectInterfaces
-  MLIRStandard
   MLIRTransformUtils
-  MLIRVector
   MLIRVectorToLLVM
   MLIRSparlay
   )

@@ -17,6 +17,37 @@
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {
+
+class AffineDialect;
+
+namespace arith {
+class ArithmeticDialect;
+}
+
+namespace func {
+  class FuncDialect;
+}
+
+namespace memref {
+class MemRefDialect;
+}
+
+namespace scf {
+class SCFDialect;
+}
+
+namespace vector {
+class VectorDialect;
+}
+
+namespace linalg {
+class LinalgDialect;
+}
+
+namespace LLVM {
+class LLVMDialect;
+}
+
 namespace sparlay {
 
 void populateSparlayCodegenPatterns(RewritePatternSet &patterns);

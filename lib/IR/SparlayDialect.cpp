@@ -13,7 +13,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/OpImplementation.h"
-#include "mlir/Parser.h"
 
 #include "mlir/Transforms/InliningUtils.h"
 #include "llvm/Support/CommandLine.h"
@@ -21,8 +20,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "mlir/Support/LLVM.h"
 #include "llvm/ADT/TypeSwitch.h"
-#include "Parser/Parser.h"
-#include "Parser/Token.h"
 #include <iostream>
 
 using namespace mlir;
@@ -54,10 +51,6 @@ enum AffineHighPrecOp {
   CeilDiv,
   Mod
 };
-
-#define suc(A) succeeded(A)
-
-static std::vector<std::string> mapDimtoID;
 
 // AffineExpr parseAffineLowPrecOpExpr(DialectAsmParser& parser,
 //                                     AffineExpr llhs,
@@ -295,7 +288,11 @@ static std::vector<std::string> mapDimtoID;
 //   return ret;
 // }
 
-Attribute SparlayCompressAttr::parse(DialectAsmParser &parser, Type type) {
+#define suc(A) succeeded(A)
+
+static std::vector<std::string> mapDimtoID;
+
+Attribute SparlayCompressAttr::parse(AsmParser &parser, Type type) {
   auto fuseIndex = std::vector<int>{};
   auto trimIndex = std::vector<int>{};
   std::vector<int>* curIndex = nullptr;
@@ -360,7 +357,7 @@ Attribute SparlayCompressAttr::parse(DialectAsmParser &parser, Type type) {
   return ret;
 }
 
-Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
+Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
   if (failed(parser.parseLess()))
     return {};
   // Parse the data as a dictionary.
@@ -374,22 +371,22 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
   CompressMap compressMap = {};
   unsigned bitWidth = 8;
   for (const auto& attr: dict) {
-    if (attr.first == "crdMap") {
-      auto affineAttr = attr.second.dyn_cast<AffineMapAttr>();
+    if (attr.getName() == "crdMap") {
+      auto affineAttr = attr.getValue().dyn_cast<AffineMapAttr>();
       if (!affineAttr) {
         return {};
       }
       crdMap = affineAttr.getValue();
-    } else if (attr.first == "compressMap") {
-      auto sparlayCompressAttr = attr.second.dyn_cast<SparlayCompressAttr>();
+    } else if (attr.getName() == "compressMap") {
+      auto sparlayCompressAttr = attr.getValue().dyn_cast<SparlayCompressAttr>();
       if (!sparlayCompressAttr) {
         return {};
       }
       compressMap = sparlayCompressAttr.getValue();
       auto trimIndex = compressMap.getTrimIndex();
       auto fuseIndex = compressMap.getFuseIndex();
-    } else if (attr.first == "bitWidth") {
-      auto intAttr = attr.second.dyn_cast<IntegerAttr>();
+    } else if (attr.getName() == "bitWidth") {
+      auto intAttr = attr.getValue().dyn_cast<IntegerAttr>();
       if (!intAttr) return {};
       bitWidth = intAttr.getInt();
     } else {
@@ -399,7 +396,7 @@ Attribute SparlayEncodingAttr::parse(DialectAsmParser &parser, Type type) {
   return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), crdMap, compressMap, bitWidth);
 }
 
-void SparlayEncodingAttr::print(DialectAsmPrinter &printer) const {
+void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   const CompressMap& compressMap = getCompressMap();
   const AffineMap& crdMap = getCrdMap();
   printer << "crdMap: " << crdMap << ", ";
@@ -420,7 +417,7 @@ void SparlayEncodingAttr::print(DialectAsmPrinter &printer) const {
   printer << "bitWidth: " << getBitWidth();
 }
 
-void SparlayCompressAttr::print(DialectAsmPrinter &printer) const {
+void SparlayCompressAttr::print(AsmPrinter &printer) const {
   return;
 }
 
@@ -442,25 +439,6 @@ LogicalResult SparlayEncodingAttr::verifyEncoding(
 //     return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
 //   return nullptr;
 // }
-
-Attribute SparlayDialect::parseAttribute(DialectAsmParser &parser,
-                                              Type type) const {
-  StringRef attrTag;
-  if (failed(parser.parseKeyword(&attrTag)))
-    return Attribute();
-  Attribute attr;
-  auto parseResult = generatedAttributeParser(parser, attrTag, type, attr);
-  if (parseResult.hasValue())
-    return attr;
-  parser.emitError(parser.getNameLoc(), "unknown sparse tensor layout attribute");
-  return Attribute();
-}
-
-void SparlayDialect::printAttribute(Attribute attr,
-                                         DialectAsmPrinter &printer) const {
-  if (succeeded(generatedAttributePrinter(attr, printer)))
-    return;
-}
 
 //===----------------------------------------------------------------------===//
 // Sparlay dialect.

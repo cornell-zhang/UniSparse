@@ -10,11 +10,13 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
-#include "mlir/Parser.h"
+#include "mlir/Parser/Parser.h"
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
+#include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
-#include "mlir/Support/MlirOptMain.h"
+#include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
@@ -51,7 +53,7 @@ static cl::opt<bool> dce("dce",
 static cl::opt<bool> sparlayCodegen("sparlay-codegen", cl::init(false), cl::desc("Enable Linagl generic op lowering"));
 
 
-int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
+int loadMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::ModuleOp> &module) {
   // Read the input mlir.
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
       llvm::MemoryBuffer::getFileOrSTDIN(inputFilename);
@@ -63,7 +65,7 @@ int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Parse the input mlir.
   llvm::SourceMgr sourceMgr;
   sourceMgr.AddNewSourceBuffer(std::move(*fileOrErr), llvm::SMLoc());
-  module = mlir::parseSourceFile(sourceMgr, &context);
+  module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
   if (!module) {
     llvm::errs() << "Error can't parse file " << inputFilename << "\n";
     return 2;
@@ -73,33 +75,33 @@ int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
 
 
 int loadAndProcessMLIR(mlir::MLIRContext &context,
-                       mlir::OwningModuleRef &module) {
+                       mlir::OwningOpRef<mlir::ModuleOp> &module) {
   if (int error = loadMLIR(context, module))
     return error;
   
   mlir::PassManager pm(&context);
   // Apply any generic pass manager command line options and run the pipeline.
   applyPassManagerCLOptions(pm);
-  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+  mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
 
   if (lowerFormatConversion) {
     // pm.addPass(mlir::createLowerFormatConversionPass());
     optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
   }
 
-  if (lowerStruct) {
-    // pm.addPass(mlir::createLowerFormatConversionPass());
-    optPM.addPass(mlir::sparlay::createLowerStructPass());
-  }
+  // if (lowerStruct) {
+  //   // pm.addPass(mlir::createLowerFormatConversionPass());
+  //   optPM.addPass(mlir::sparlay::createLowerStructPass());
+  // }
 
   if (dce) {
     // pm.addPass(mlir::createLowerFormatConversionPass());
     optPM.addPass(mlir::sparlay::createDeadCodeEliminationPass());
   }
 
-  if(sparlayCodegen) {
-    optPM.addPass(mlir::sparlay::createSparlayCodegenPass());
-  }
+  // if(sparlayCodegen) {
+  //   optPM.addPass(mlir::sparlay::createSparlayCodegenPass());
+  // }
 
   if (mlir::failed(pm.run(*module)))
     return 3;
@@ -136,7 +138,7 @@ int main(int argc, char **argv) {
   // registerAllDialects(registry);
   // --- original pass registry  --- //
 
-  mlir::OwningModuleRef module;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
   if (int error = loadAndProcessMLIR(context, module))
     return error;
   

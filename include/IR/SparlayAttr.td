@@ -10,6 +10,7 @@
 #define SPARLAY_ATTR
 
 include "SparlayDialect.td"
+include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/TensorEncoding.td"
 
 // All of the Tensor attributes will extend this class.
@@ -18,6 +19,7 @@ class Sparlay_Attr<string name, list<Trait> traits = []>
 
 def SparlayCompressAttr : Sparlay_Attr<"SparlayCompress", []> {
   let mnemonic = "compress";
+  let hasCustomAssemblyFormat = 1;
   let parameters = (ins "CompressMap":$value);
 }
 
@@ -25,6 +27,7 @@ def SparlayCompressAttr : Sparlay_Attr<"SparlayCompress", []> {
 def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding", 
               [DeclareAttrInterfaceMethods<VerifiableTensorEncoding>]> {
   let mnemonic = "encoding";
+  let hasCustomAssemblyFormat = 1;
 
   let description = [{
     Tree-base encoding for Sparse Tensor Layout

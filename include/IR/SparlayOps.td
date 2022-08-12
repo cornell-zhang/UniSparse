@@ -14,12 +14,13 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "SparlayAttr.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
 
 //===----------------------------------------------------------------------===//
 // Base sparlay operation definition.
 //===----------------------------------------------------------------------===//
 
-class Sparlay_Op<string mnemonic, list<OpTrait> traits = []> :
+class Sparlay_Op<string mnemonic, list<Trait> traits = []> :
         Op<Sparlay_Dialect, mnemonic, traits>;
 
 //===----------------------------------------------------------------------===//
@@ -120,7 +121,7 @@ def Sparlay_tocOp: Sparlay_Op<"toc", [NoSideEffect]> {
 // sparlay::ConvertOp
 //===----------------------------------------------------------------------===//
 
-def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect,SameOperandsAndResultType]> {
+def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect,SameOperandsAndResultElementType]> {
     let summary = "Convert from the source format to the target format.";
     let description = [{
         Example:
@@ -273,13 +274,13 @@ def Sparlay_StructConstructOp : Sparlay_Op<"struct_construct", [NoSideEffect]> {
     // let hasFolder = 1;
 }
 
-def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]> {
+def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]>, 
+                                         Arguments<(ins Sparlay_StructType:$input, I64Attr:$index)>,
+                                         Results<(outs Sparlay_Type:$output)> {
     let summary = "struct access";
     let description = [{
 
     }];
-    let arguments = (ins Sparlay_StructType:$input, I64Attr:$index);
-    let results = (outs Sparlay_Type:$output);
 
     let assemblyFormat = [{
         $input `[` $index `]` attr-dict `:` type($input) `to` type($output)
@@ -288,8 +289,9 @@ def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]> {
     let builders = [
         OpBuilder<(ins "Value":$input, "size_t":$index)>
     ];
-    let verifier = [{ return ::verify(*this); }];
+    // let verifier = [{ return ::verify(*this); }];
     let hasFolder = 1;
+    let hasVerifier = 1;
 }
 
 // def Sparlay_StructConstantOp : 
