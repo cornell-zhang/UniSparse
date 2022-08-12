@@ -271,7 +271,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
     bool hasChanged = 0;
     do {
         hasChanged = 0;
-        for (int i = 0; i < exprs.size(); ++i) {
+        for (int i = 0; i < (int)exprs.size(); ++i) {
             if (vis[i]) continue;
             if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
                 auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
@@ -281,7 +281,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                 assert(RHS.isSymbolicOrConstant());
                 LHS.dump(), RHS.dump();
                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
-                for (int j = i+1; j < exprs.size(); ++j) {
+                for (int j = i+1; j < (int)exprs.size(); ++j) {
                     if (vis[j]) continue;
                     if (exprs[j].getKind() == targetKind) {
                         auto _binExpr = exprs[j].dyn_cast<AffineBinaryOpExpr>();
@@ -322,16 +322,16 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                         }
                     }
                 }
-                for (int j = 0; j < exprs.size(); ++j) {
+                for (size_t j = 0; j < exprs.size(); ++j) {
                     exprs[j].dump();
                 }
             }
         }
     } while (hasChanged);
 
-    for (int i = 0; i < exprs.size(); ++i) {
+    for (int i = 0; i < (int)exprs.size(); ++i) {
         if (exprs[i].getKind() == AffineExprKind::FloorDiv) {
-            assert(i != exprs.size()-1);
+            assert(i != (int)exprs.size()-1);
             assert(exprs[i+1].getKind() == AffineExprKind::Mod);
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
@@ -465,7 +465,7 @@ public:
         }
         
         //devectorize first, could be optimized.
-        if (src_mx_trim < (srcCrd.getNumResults()-1)) {
+        if ((unsigned)src_mx_trim < (srcCrd.getNumResults()-1)) {
             int delta = srcCrd.getNumResults()-1-src_mx_trim;
             assert(delta <= 2);
             //TODO: FIXME: change devectorize to support matrix devectorization
@@ -499,7 +499,7 @@ public:
             }
             {
                 int st = 0;
-                while (st < removeSrcTiling.size() && removeSrcTiling[st].type != TileMerge) st++;
+                while ((size_t)st < removeSrcTiling.size() && removeSrcTiling[st].type != TileMerge) st++;
                 for (int i = removeSrcTiling.size()-1; i >= st; --i) {
                     genFuncFromOp(removeSrcTiling[i]);
                 }
@@ -612,7 +612,7 @@ public:
                 }
             }
         }
-        if (dst_mx_trim < dstCrd.getNumResults()-1) {
+        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
             need_move[dstCrd.getNumResults()-1] = 0;
         }
         for (auto ele: dstFuse) {
@@ -647,20 +647,20 @@ public:
         } else if (dst_mn_trim > src_mn_trim) {
             genFunc1R(growName, {prevRes, Const[dst_mn_trim-1]});
         }
-        if (dst_mx_trim < dstCrd.getNumResults()-1) {
-            assert(dst_mx_trim == dstCrd.getNumResults()-2);
-            for (int i = 0; i < dstCrd.getNumResults()-1; ++i) {
+        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
+            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
+            for (unsigned i = 0; i < dstCrd.getNumResults()-1; ++i) {
                 if (need_move[i]) {
                     genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                     need_move[i] = 0;
                 }
             }
         }
-        if (dst_mx_trim < dstCrd.getNumResults()-1) {
-            assert(dst_mx_trim == dstCrd.getNumResults()-2);
+        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
+            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
             genFunc1R(vectorizeName, {prevRes, Const[dstCrd.getNumResults()-1]});
         }
-        for (int i = 0; i < dstCrd.getNumResults(); ++i) {
+        for (unsigned i = 0; i < dstCrd.getNumResults(); ++i) {
             if (need_move[i]) {
                 genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                 need_move[i] = 0;
