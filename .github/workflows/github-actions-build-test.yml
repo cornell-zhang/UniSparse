@@ -2,6 +2,7 @@ name: GitHub Actions Build Test
 on: [push, pull_request]
 jobs:
   Build-Sparlay-Dialect:
+    name: Build and Test
     runs-on: ${{ matrix.config.os }}
     
     strategy:
@@ -10,47 +11,47 @@ jobs:
           - { name: "Ubuntu-clang", os: ubuntu-latest, cc: "clang", cxx: "clang++" }
 
     steps:
-    - uses: hmarr/debug-action@v2
-    - name: add dependencies
-      run: sudo apt-get install -y ninja-build
+      - uses: hmarr/debug-action@v2
+      - name: add dependencies
+        run: sudo apt-get install -y ninja-build
 
-    - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-    - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-    - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-    
-    - name: Check out repository code
-      uses: actions/checkout@v3
-    
-    - name: Get Date
-      id: get-date
-      run: echo "::set-output name=date::$(/bin/date -u "+%Y%m%d")"
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      
+      - name: Get Date
+        id: get-date
+        run: echo "::set-output name=date::$(/bin/date -u "+%Y%m%d")"
 
-    - name: Cache MLIR 
-      id: cache-mlir
-      uses: actions/cache@v3
-      with:
-        path: llvm-project/build
-        key: ${{ matrix.config.os }}-${{ steps.get-date.outputs.date }}-llvm-mlir
+      - name: Cache MLIR 
+        id: cache-mlir
+        uses: actions/cache@v3
+        with:
+          path: llvm-project/build
+          key: ${{ matrix.config.os }}-mlir-${{ steps.get-date.outputs.date }}
 
-    - name: Build MLIR
-      if: steps.cache-mlir.outputs.cache-hit != 'true'
-      run: |
-        if test -d llvm-project; then echo "LLVM exists"; \
-            else git clone https://github.com/llvm/llvm-project.git; fi
-        cd llvm-project
-        git checkout tags/llvmorg-15.0.0-rc1
-        mkdir -p build && cd build
-        if test -d bin; \
-          then echo "Build completed"; \
-        else cmake -GNinja ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
-            -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
-            -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
-            -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
-            -DLLVM_USE_LINKER=lld \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-          ninja -j $(nproc);
-        fi;
-        cd ../..
+      - name: Build MLIR
+        if: steps.cache-mlir.outputs.cache-hit != 'true'
+        run: |
+          if test -d llvm-project; then echo "LLVM exists"; \
+              else git clone https://github.com/llvm/llvm-project.git; fi
+          cd llvm-project
+          git checkout tags/llvmorg-15.0.0-rc1
+          mkdir -p build && cd build
+          if test -d bin; \
+            then echo "Build completed"; \
+          else cmake -GNinja ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
+              -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
+              -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+              -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
+              -DLLVM_USE_LINKER=lld \
+              -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            ninja -j $(nproc);
+          fi;
+          cd ../..
 
       - name: Build Sparlay
         run: |
