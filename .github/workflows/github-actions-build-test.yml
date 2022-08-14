@@ -34,24 +34,24 @@ jobs:
         key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-llvm-mlir
 
     - name: Build MLIR
-        if: steps.cache-mlir.outputs.cache-hit != 'true'
-        run: |
-          if test -d llvm-project; then echo "LLVM exists"; \
-              else git clone https://github.com/llvm/llvm-project.git; fi
-          cd llvm-project
-          git checkout tags/llvmorg-15.0.0-rc1
-          mkdir -p build && cd build
-          if test -d bin; \
-            then echo "Build completed"; \
-          else cmake -GNinja ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
-              -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
-              -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
-              -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
-              -DLLVM_USE_LINKER=lld \
-              -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            ninja -j $(nproc);
-          fi;
-          cd ../..
+      if: steps.cache-mlir.outputs.cache-hit != 'true'
+      run: |
+        if test -d llvm-project; then echo "LLVM exists"; \
+            else git clone https://github.com/llvm/llvm-project.git; fi
+        cd llvm-project
+        git checkout tags/llvmorg-15.0.0-rc1
+        mkdir -p build && cd build
+        if test -d bin; \
+          then echo "Build completed"; \
+        else cmake -GNinja ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
+            -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
+            -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+            -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
+            -DLLVM_USE_LINKER=lld \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+          ninja -j $(nproc);
+        fi;
+        cd ../..
 
       - name: Build Sparlay
         run: |
