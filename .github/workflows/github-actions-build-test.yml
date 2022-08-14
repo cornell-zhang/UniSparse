@@ -31,7 +31,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: llvm-project/build
-        key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-llvm-mlir
+        key: ${{ matrix.config.os }}-${{ steps.get-date.outputs.date }}-llvm-mlir
 
     - name: Build MLIR
       if: steps.cache-mlir.outputs.cache-hit != 'true'
