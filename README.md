@@ -1,4 +1,5 @@
 # Sparse Layout dialect
+[![Tests](https://github.com/cornell-zhang/Sparse_Layout_Dialect/actions/workflows/github-actions-build-test.yml/badge.svg)](https://github.com/cornell-zhang/Sparse_Layout_Dialect/actions)
 
 This is a standalone sparse layout dialect along with a standalone `opt`-like tool to operate on that dialect. 
 
