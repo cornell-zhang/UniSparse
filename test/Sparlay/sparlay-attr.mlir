@@ -1,6 +1,6 @@
 #1 = #sparlay.encoding<{
   compressMap = #sparlay.compress<fuse(0,1), trim(0)>,
-  crdMap = affine_map<(i,j)->((i+j) mod 8,j floordiv 8)>
+  crdMap = #sparlay.crd<(i,j,k)[s0,s1]->(indirect (i+j minus s0)*4 mod 7, (k + (minus i)) floordiv s1)>
 }>
 
 func.func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()

@@ -14,9 +14,13 @@ message(STATUS "Using LLVM_BUILD_LIBRARY_DIR = ${LLVM_BUILD_LIBRARY_DIR}")
 message(STATUS "LLVM include DIR = ${LLVM_INCLUDE_DIRS}")
 message(STATUS "MLIR include DIR = ${MLIR_INCLUDE_DIRS}")
 
+
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
 set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
+set(MLIR_LIB_DIR "/work/shared/common/llvm-project-15.0.0-gpu/mlir/lib")
+
+message(STATUS "MLIR lib DIR = ${MLIR_LIB_DIR}")
 
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
@@ -27,6 +31,7 @@ include(HandleLLVMOptions)
 
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
+include_directories(${MLIR_LIB_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_BINARY_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/eigen/eigen)

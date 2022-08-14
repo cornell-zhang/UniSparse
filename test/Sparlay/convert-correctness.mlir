@@ -14,32 +14,32 @@
 !Filename = !llvm.ptr<i8>
 
 #COO = #sparlay.encoding<{
-  crdMap = affine_map<(i,j)->(i,j)>,
+  crdMap = #sparlay.crd<(i,j)->(i,j)>,
   compressMap = #sparlay.compress<trim(0,1)>
 }>
 
 #CSR = #sparlay.encoding<{
-  crdMap = affine_map<(i,j)->(i,j)>,
+  crdMap = #sparlay.crd<(i,j)->(i,j)>,
   compressMap = #sparlay.compress<fuse(0), trim(1,1)>
 }>
 
 #DCSR = #sparlay.encoding<{
-  crdMap = affine_map<(i,j)->(i,j)>,
+  crdMap = #sparlay.crd<(i,j)->(i,j)>,
   compressMap = #sparlay.compress<fuse(0), trim(0,1)>
 }>
 
 #CSC = #sparlay.encoding<{
-  crdMap = affine_map<(i,j)->(j,i)>,
+  crdMap = #sparlay.crd<(i,j)->(j,i)>,
   compressMap = #sparlay.compress<fuse(0), trim(1,1)>
 }>
 
 #CSB = #sparlay.encoding<{
-  crdMap = affine_map<(i,j)->(i floordiv 2, j floordiv 3, i mod 2, j mod 3)>,
+  crdMap = #sparlay.crd<(i,j)->(i floordiv 2, j floordiv 3, i mod 2, j mod 3)>,
   compressMap = #sparlay.compress<fuse(1), trim(1,3)>
 }>
 
 #DIA = #sparlay.encoding<{
-  crdMap = affine_map<(i,j)->(j-i,i)>,
+  crdMap = #sparlay.crd<(i,j)->(j minus i,i)>,
   compressMap = #sparlay.compress<trim(0,0)>
 }>
 
