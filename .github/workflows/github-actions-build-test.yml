@@ -12,7 +12,8 @@ jobs:
 
     steps:
       - uses: hmarr/debug-action@v2
-      # - name: add dependencies
+      - name: add dependencies
+        run: sudo apt-get install libeigen3-dev
       #   run: sudo apt-get install -y ninja-build
       
       - name: Check out repository code
