@@ -12,13 +12,14 @@ jobs:
 
     steps:
       - uses: hmarr/debug-action@v2
+
       - name: add dependencies
         run: |
-          sudo apt-get install libeigen3-dev
-          export CPATH = /usr/include/eigen-3.3.7:$CPATH
-      - run: ls /usr/include/
-      - run: echo $CPATH
-      #   run: sudo apt-get install -y ninja-build
+          mkdir -p packages && cd packages
+          wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+          tar -xzf eigen-3.4.0.tar.gz && rm eigen-3.4.0.tar.gz
+          export CPATH=$PWD/eigen-3.4.0:$CPATH
+          echo $CPATH
       
       - name: Check out repository code
         uses: actions/checkout@v3
