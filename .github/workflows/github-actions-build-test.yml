@@ -15,7 +15,8 @@ jobs:
       - name: add dependencies
         run: |
           sudo apt-get install libeigen3-dev
-      - run: ls /usr/local/include/
+          export CPATH = /usr/include/eigen-3.3.7:$CPATH
+      - run: ls /usr/include/
       - run: echo $CPATH
       #   run: sudo apt-get install -y ninja-build
       
