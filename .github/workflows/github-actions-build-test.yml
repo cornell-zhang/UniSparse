@@ -56,8 +56,8 @@ jobs:
       - name: Build Sparlay
         run: |
           cmake -GNinja -B build \
-            -DMLIR_DIR=`pwd`/../llvm-project/build/lib/cmake/mlir \
-            -DLLVM_EXTERNAL_LIT=`pwd`/../llvm-project/build/bin/llvm-lit \
+            -DMLIR_DIR="$PWD/llvm-project/build/lib/cmake/mlir" \
+            -DLLVM_EXTERNAL_LIT="$PWD/llvm-project/build/bin/llvm-lit" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DLLVM_USE_LINKER=lld \
