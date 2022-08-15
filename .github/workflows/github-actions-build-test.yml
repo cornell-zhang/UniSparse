@@ -12,12 +12,8 @@ jobs:
 
     steps:
       - uses: hmarr/debug-action@v2
-      - name: add dependencies
-        run: sudo apt-get install -y ninja-build
-
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      # - name: add dependencies
+      #   run: sudo apt-get install -y ninja-build
       
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -36,34 +32,31 @@ jobs:
       - name: Build MLIR
         if: steps.cache-mlir.outputs.cache-hit != 'true'
         run: |
-          if test -d llvm-project; then echo "LLVM exists"; \
-              else git clone https://github.com/llvm/llvm-project.git; fi
+          git clone https://github.com/llvm/llvm-project.git;
           cd llvm-project
           git checkout tags/llvmorg-15.0.0-rc1
           mkdir -p build && cd build
-          if test -d bin; \
-            then echo "Build completed"; \
-          else cmake -GNinja ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
-              -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
-              -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
-              -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
-              -DLLVM_USE_LINKER=lld \
-              -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-            ninja -j $(nproc);
-          fi;
-          cd ../..
+          cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
+            -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
+            -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+            -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
+            -DLLVM_USE_LINKER=lld \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake --build . -j $(nproc);
 
       - name: Build Sparlay
         run: |
-          cmake -GNinja -B build \
-            -DMLIR_DIR="$PWD/llvm-project/build/lib/cmake/mlir" \
-            -DLLVM_EXTERNAL_LIT="$PWD/llvm-project/build/bin/llvm-lit" \
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DMLIR_DIR="$PWD/../llvm-project/build/lib/cmake/mlir" \
+            -DLLVM_EXTERNAL_LIT="$PWD/../llvm-project/build/bin/llvm-lit" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DLLVM_USE_LINKER=lld \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++
-          ninja -j $(nproc)
+          cmake --build . -j $(nproc)
       # - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       # - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       # - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
