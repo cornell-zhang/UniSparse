@@ -45,10 +45,10 @@ jobs:
           cd eigen-3.4.0 && ls
           echo "🔎 CPATH: "
           export CPATH=$PWD:$CPATH && echo $CPATH
-          echo "🔎 cd $PWD/Eigen/Dense && pwd && ls: "
-          cd $PWD/Eigen/Dense && pwd && ls
-          echo "🔎 cd ../../../ && ls: "
-          cd ../../../ && ls
+          echo "🔎 cd $PWD/Eigen && pwd && ls: "
+          cd $PWD/Eigen && pwd && ls
+          echo "🔎 cd ../../ && ls: "
+          cd ../../ && ls
           git clone https://github.com/llvm/llvm-project.git;
           cd llvm-project
           git checkout tags/llvmorg-15.0.0-rc1
