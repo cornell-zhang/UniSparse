@@ -50,8 +50,14 @@ jobs:
           echo "🔎 cd ../../ && ls: "
           cd ../../ && ls
           git clone https://github.com/llvm/llvm-project.git;
-          cd llvm-project
-          git checkout tags/llvmorg-15.0.0-rc1
+          mkdir -p build && cd build
+          echo "$PWD/../llvm-project/mlir/include: "
+          ls $PWD/../llvm-project/mlir/include
+          echo "$PWD/../llvm-project/llvm/include: "
+          ls $PWD/../llvm-project/llvm/include
+          echo "$PWD/../eigen-3.4.0: "
+          ls $PWD/../eigen-3.4.0
+          cd ../llvm-project && git checkout tags/llvmorg-15.0.0-rc1
           mkdir -p build && cd build
           cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
             -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
@@ -64,9 +70,8 @@ jobs:
 
       - name: Build Sparlay
         run: |
-          mkdir -p build
-          cd build
-          export CPATH=$PWD/../llvm-project/mlir/include:$CPATH
+          mkdir -p build && cd build
+          export CPATH=$PWD/../eigen-3.4.0:$PWD/../llvm-project/mlir/include:$CPATH
           echo "🔎 ATTENTION: " && echo $CPATH
           ls $PWD/../eigen-3.4.0
           cmake .. \
@@ -74,8 +79,8 @@ jobs:
             -DLLVM_DIR="$PWD/../llvm-project/build/lib/cmake/llvm" \
             -DLLVM_BUILD_LIBRARY_DIR="$PWD/../llvm-project/build" \
             -DLLVM_EXTERNAL_LIT="$PWD/../llvm-project/build/bin/llvm-lit" \
-            -DLLVM_INCLUDE_DIRS="$PWD/../llvm-project/llvm/include/llvm"
-            -DMLIR_INCLUDE_DIRS="$PWD/../llvm-project/mlir/include/mlir" \
+            -DLLVM_INCLUDE_DIRS="$PWD/../llvm-project/llvm/include"
+            -DMLIR_INCLUDE_DIRS="$PWD/../llvm-project/mlir/include" \
             -DEXTERNAL_INCLUDE_DIRS="$PWD/../eigen-3.4.0" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=RELEASE \
