@@ -34,7 +34,7 @@ include_directories(${MLIR_INCLUDE_DIRS})
 include_directories(${MLIR_LIB_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_BINARY_DIR}/include)
-include_directories(${PROJECT_SOURCE_DIR}/eigen/eigen)
+include_directories(${EXTERNAL_INCLUDE_DIRS})
 link_directories(${LLVM_BUILD_LIBRARY_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 

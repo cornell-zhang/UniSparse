@@ -44,6 +44,7 @@ jobs:
           mkdir -p build && cd build
           cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
             -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
+            -DLLVM_TARGETS_TO_BUILD="host" \
             -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
             -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
             -DLLVM_USE_LINKER=lld \
@@ -57,6 +58,8 @@ jobs:
           cmake .. \
             -DMLIR_DIR="$PWD/../llvm-project/build/lib/cmake/mlir" \
             -DLLVM_EXTERNAL_LIT="$PWD/../llvm-project/build/bin/llvm-lit" \
+            -DMLIR_INCLUDE_DIRS="$PWD/../llvm-project/mlir/include" \
+            -DEXTERNAL_INCLUDE_DIRS="$PWD/../packages/eigen-3.4.0" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DLLVM_USE_LINKER=lld \
