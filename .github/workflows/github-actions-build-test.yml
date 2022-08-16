@@ -41,10 +41,14 @@ jobs:
         run: |
           wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
           tar -xzf eigen-3.4.0.tar.gz && rm eigen-3.4.0.tar.gz
-          cd eigen-3.4.0 && export CPATH=$PWD:$CPATH && echo $CPATH
-          echo "🔎 ATTENTION: "
-          cd Eigen/Dense && pwd && ls
-          cd ../../../
+          echo "🔎 cd eigen-3.4.0 && ls: "
+          cd eigen-3.4.0 && ls
+          echo "🔎 CPATH: "
+          export CPATH=$PWD:$CPATH && echo $CPATH
+          echo "🔎 cd $PWD/Eigen/Dense && pwd && ls: "
+          cd $PWD/Eigen/Dense && pwd && ls
+          echo "🔎 cd ../../../ && ls: "
+          cd ../../../ && ls
           git clone https://github.com/llvm/llvm-project.git;
           cd llvm-project
           git checkout tags/llvmorg-15.0.0-rc1
