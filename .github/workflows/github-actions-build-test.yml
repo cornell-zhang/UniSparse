@@ -50,14 +50,7 @@ jobs:
           echo "🔎 cd ../../ && ls: "
           cd ../../ && ls
           git clone https://github.com/llvm/llvm-project.git;
-          mkdir -p build && cd build
-          echo "$PWD/../llvm-project/mlir/include: "
-          ls $PWD/../llvm-project/mlir/include
-          echo "$PWD/../llvm-project/llvm/include: "
-          ls $PWD/../llvm-project/llvm/include
-          echo "$PWD/../eigen-3.4.0: "
-          ls $PWD/../eigen-3.4.0
-          cd ../llvm-project && git checkout tags/llvmorg-15.0.0-rc1
+          cd llvm-project && git checkout tags/llvmorg-15.0.0-rc1
           mkdir -p build && cd build
           cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
             -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
@@ -72,7 +65,12 @@ jobs:
         run: |
           mkdir -p build && cd build
           export CPATH=$PWD/../eigen-3.4.0:$PWD/../llvm-project/mlir/include:$CPATH
-          echo "🔎 ATTENTION: " && echo $CPATH
+          echo "🔎 CPATH: " && echo $CPATH
+          echo "🔎 $PWD/../llvm-project/mlir/include: "
+          ls $PWD/../llvm-project/mlir/include
+          echo "🔎 $PWD/../llvm-project/llvm/include: "
+          ls $PWD/../llvm-project/llvm/include
+          echo "🔎 $PWD/../eigen-3.4.0: "
           ls $PWD/../eigen-3.4.0
           cmake .. \
             -DMLIR_DIR="$PWD/../llvm-project/build/lib/cmake/mlir" \
