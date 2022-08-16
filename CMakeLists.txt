@@ -18,7 +18,6 @@ message(STATUS "MLIR include DIR = ${MLIR_INCLUDE_DIRS}")
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
 set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
-set(MLIR_LIB_DIR "/work/shared/common/llvm-project-15.0.0-gpu/mlir/lib")
 
 message(STATUS "MLIR lib DIR = ${MLIR_LIB_DIR}")
 
