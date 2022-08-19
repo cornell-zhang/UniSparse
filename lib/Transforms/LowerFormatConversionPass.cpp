@@ -778,111 +778,26 @@ public:
     }
 };
 
-// std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(const AffineMap& crdMap, bool isSplit) {
-//     std::cerr << "Enter Rewrite" << std::endl;
-//     std::vector<GeneralConversionOp> Ops;
-//     std::vector<AffineExpr> newExprs;
-//     std::vector<int> pendingMerge;
-//     std::vector<AffineExpr> exprs = crdMap.getResults();
-//     std::vector<bool> vis;
-//     std::vector<bool> needPush;
-//     vis.resize(exprs.size(), 0);
-//     needPush.resize(exprs.size(), 0);
-//     bool hasChanged = 0;
-//     do {
-//         hasChanged = 0;
-//         for (int i = 0; i < (int)exprs.size(); ++i) {
-//             if (vis[i]) continue;
-//             if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
-//                 auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
-//                 assert(binExpr);
-//                 auto LHS = binExpr.getLHS();
-//                 auto RHS = binExpr.getRHS();
-//                 assert(RHS.isSymbolicOrConstant());
-//                 LHS.dump(), RHS.dump();
-//                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
-//                 for (int j = i+1; j < (int)exprs.size(); ++j) {
-//                     if (vis[j]) continue;
-//                     if (exprs[j].getKind() == targetKind) {
-//                         auto _binExpr = exprs[j].dyn_cast<AffineBinaryOpExpr>();
-//                         auto _LHS = _binExpr.getLHS();
-//                         auto _RHS = _binExpr.getRHS();
-//                         assert(_RHS.isSymbolicOrConstant());
-//                         if (LHS == _LHS && RHS == _RHS) {
-//                             if (targetKind == AffineExprKind::Mod) {
-//                                 Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j-1}) : std::vector<int>({j, i+1}))));
-//                                 hasChanged = 1;
-//                                 if (isSplit) {
-//                                     auto svExpr = exprs[i];
-//                                     for (int k = i+1; k <= j-1; ++k) exprs[k-1] = exprs[k], vis[k-1] = vis[k];
-//                                     exprs[j-1] = svExpr;
-//                                     vis[j] = vis[j-1] = 1;
-//                                 } else {
-//                                     auto svExpr = exprs[j];
-//                                     for (int k = j-1; k >= i+1; --k) exprs[k+1] = exprs[k], vis[k+1] = vis[k];
-//                                     exprs[i+1] = svExpr;
-//                                     vis[i] = vis[i+1] = 1;
-//                                 }
-//                             } else {
-//                                 hasChanged = 1;
-//                                 Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j}) : std::vector<int>({j, i}))));
-//                                 if (isSplit) {
-//                                     auto svExpr = exprs[i];
-//                                     for (int k = i+1; k <= j; ++k) exprs[k-1] = exprs[k], vis[k-1] = vis[k];
-//                                     exprs[j] = svExpr;
-//                                     vis[j-1] = vis[j] = 1;
-//                                 } else {
-//                                     auto svExpr = exprs[j];
-//                                     for (int k = j-1; k >= i; --k) exprs[k+1] = exprs[k], vis[k+1] = vis[k];
-//                                     exprs[i] = svExpr;
-//                                     vis[i] = vis[i+1] = 1;
-//                                 }
-//                             }
-//                             break;
-//                         }
-//                     }
-//                 }
-//                 for (size_t j = 0; j < exprs.size(); ++j) {
-//                     exprs[j].dump();
-//                 }
-//             }
-//         }
-//     } while (hasChanged);
-
-//     for (int i = 0; i < (int)exprs.size(); ++i) {
-//         if (exprs[i].getKind() == AffineExprKind::FloorDiv) {
-//             assert(i != (int)exprs.size()-1);
-//             assert(exprs[i+1].getKind() == AffineExprKind::Mod);
-//             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
-//             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
-//             auto divNum = exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS().dyn_cast<AffineConstantExpr>().getValue();
-//             assert(divNum < 5LL);
-//             Ops.push_back(GeneralConversionOp(TileMerge, "", {i, (int)divNum}));
-//             newExprs.push_back(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS());
-//         } else if (exprs[i].getKind() != AffineExprKind::Mod) {
-//             newExprs.push_back(exprs[i]);
-//         }
-//     }
-//     auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
-//     std::cerr << "Leave Rewrite" << std::endl;
-//     return std::make_tuple(newCrdMap, Ops);
-// }
-
 AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const sparlay::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
     std::vector<AffineExpr> exprs = crdMap.getResults();
-    assert(exprs.size() == (size_t)2);
+    assert(exprs.size() <= (size_t)2);
     std::vector<AffineExpr> new_exprs = {};
-    for (int i = 0; i < 2; ++i) {
+    for (size_t i = 0; i < exprs.size(); ++i) {
         if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
             auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
             assert(binExpr);
             auto LHS = binExpr.getLHS();
             auto RHS = binExpr.getRHS();
             assert(RHS.isSymbolicOrConstant());
-            assert(LHS == getAffineDimExpr((unsigned)i, crdMap.getContext()));
+            size_t curLv = i;
+            if (LHS != getAffineDimExpr((unsigned)i, crdMap.getContext())) {
+                assert(exprs.size() == (size_t)1);
+                assert(LHS == getAffineDimExpr((unsigned)1, crdMap.getContext()));
+                curLv = 1;
+            }
             new_exprs.push_back(LHS);
             uint64_t _type = (exprs[i].getKind() == AffineExprKind::Mod);
-            auto index = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(i));
+            auto index = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(curLv));
             auto type = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(_type));
             auto val = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(RHS.dyn_cast<AffineConstantExpr>().getValue()));
             std::vector<Value> params = {prevRes, index, type, val};
@@ -919,6 +834,22 @@ public:
         rmap = rewriteTileGenWindow(rmap, loc, op, rewriter, prevRes, prevType);
         auto M = toIntMatrix(toMatrix(rmap));
         std::cerr << M << std::endl;
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                if (M(i,j)) {
+                    auto val = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(M(i,j)));
+                    auto index_i = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(i));
+                    auto index_j = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(j));
+                    params = {prevRes, index_i, index_j, val};
+                    auto prevOp = rewriter.create<func::CallOp>(loc, prevType,
+                        getFunc(op, "spwAssign", prevType, params, true),
+                        params
+                    );
+                    prevType = prevOp.getType(0);
+                    prevRes = prevOp.getResult(0);
+                }
+            }
+        }
     };
     assembleWindow();
     params = {inputThres, inputTensor, prevRes};
@@ -930,7 +861,6 @@ public:
     rewriter.replaceOp(op, prevRes);
     return success();
   }
-
 };
 
 //===----------------------------------------------------------------------===//
