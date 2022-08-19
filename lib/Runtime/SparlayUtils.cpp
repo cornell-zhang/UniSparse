@@ -14,6 +14,7 @@
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 // #ifdef MLIR_CRUNNERUTILS_DEFINE_FUNCTIONS
+// #define DEBUG
 
 #include <algorithm>
 #include <cassert>
@@ -89,6 +90,23 @@ static char *toLower(char *token) {
     *c = tolower(*c);
   return token;
 }
+
+class SparlayStruct {
+public:
+  std::vector<void*> vec;
+  SparlayStruct() { vec.clear(); }
+  SparlayStruct(std::vector<void*>& _vec) { vec = _vec; }
+  void* get(size_t index) { return vec[index]; }
+};
+
+class SparlayWindow {
+public:
+  int M[2][2];
+  int T[2][2];
+  SparlayWindow() { memset(M, 0, sizeof(M)); memset(T, 0, sizeof(T)); }
+  void assign(int i, int j, int v) { M[i][j] = v; }
+  void tile(int i, bool type, int size) { T[i][type] = size; }
+};
 
 // template<typename valueTp>
 // class SparseComputeOutput {
@@ -297,11 +315,16 @@ public:
     SparlayStorage ret;
     for (size_t i = 0; i < vLevel.size(); ++i) {
       ret.vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage(*vLevel[i])));
+      ret.exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(*exprs[i])));
     }
     if (valueArray.size()) {
       for (size_t i = 0; i < valueArray.size(); ++i) {
         ret.valueArray.push_back(valueArray[i]);
       }
+    }
+    ret.oriSize = oriSize;
+    if (vectorArray.size()) { 
+      assert(0);
     }
     return ret;
   }
@@ -1093,7 +1116,9 @@ extern "C" {
         std::ifstream fin(fileName);
         void* ret = readFromFile(fin);
         fin.close();
-        // std::cerr << std::endl << "Read from file done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Read from file done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         return ret;
     }
 
@@ -1124,121 +1149,227 @@ extern "C" {
     }
 
     void* _mlir_ciface_sptFuse(void* ptr, int lv) {
-        // auto tic = TI;
+      #ifdef DEBUG
+        auto tic = TI;
+      #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->fuse(lv+1);
         // sparT->Print(std::cerr, 1);
-        // std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptGrow(void* ptr, int lv) {
-        // auto tic = TI;
+      #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->grow(lv+1);
-        // std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptTrim(void* ptr, int lv) {
-        // auto tic = TI;
+      #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->trim(lv+1);
-        // std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         // sparT->Print(std::cerr);
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptSeparate(void* ptr, int lv) {
-        // auto tic = TI;
+      #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->separate(lv+1);
-        // std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         // sparT->Print(std::cerr);
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptSwap(void* ptr, int LU, int LD) {
-        // auto tic = TI;
+      #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->swap(LU+1, LD+1);
-        // std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         // sparT->Print(std::cerr);
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptSub(void* ptr, int Ltarget, int Lsrc) {
-        // auto tic = TI;
+        #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->sub(Ltarget+1, Lsrc+1);
-        // std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         // sparT->Print(std::cerr, 1);
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptAdd(void* ptr, int Ltarget, int Lsrc) {
-        // auto tic = TI;
+        #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->add(Ltarget+1, Lsrc+1);
-        // std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         // sparT->Print(std::cerr, 1);
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptNeg(void* ptr, int lv) {
-        // auto tic = TI;
+      #ifdef DEBUG
+        auto tic = TI;
+        #endif
         SparlayStorage* sparT = (SparlayStorage*)(ptr);
         sparT->neg(lv+1);
-        // std::cerr << std::endl << "Neg done, time = " << TI-tic << "(s)" << std::endl;
+        #ifdef DEBUG
+        std::cerr << std::endl << "Neg done, time = " << TI-tic << "(s)" << std::endl;
+        #endif
         // sparT->Print(std::cerr);
         return (void*)sparT;
     }
 
     void* _mlir_ciface_sptTileSplit(void* ptr, int lv, int factor) {
-      // auto tic = TI;
+      #ifdef DEBUG
+      auto tic = TI;
+      #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->tile_split(lv+1, factor);
       // sparT->Print(std::cerr, 1);
-      // std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
+      #ifdef DEBUG
+      std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
       return (void*)sparT;
     }
 
     void* _mlir_ciface_sptTileMerge(void* ptr, int lv, int factor) {
-      // auto tic = TI;
+      #ifdef DEBUG
+      auto tic = TI;
+      #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->tile_merge(lv+1, factor);
-      // std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
+      #ifdef DEBUG
+      std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
       return (void*)sparT;
     }
 
     void* _mlir_ciface_sptMove(void* ptr, int srcLv, int dstLv) {
-      // auto tic = TI;
+      #ifdef DEBUG
+      auto tic = TI;
+      #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->moveLv(srcLv+1, dstLv+1);
       // sparT->Print(std::cerr, 1);
-      // std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+      #ifdef DEBUG
+      std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+      #endif
       return (void*)sparT;
     }
 
     void* _mlir_ciface_sptVectorize(void* ptr, int lv) {
-      // auto tic = TI;
+      #ifdef DEBUG
+      auto tic = TI;
+      #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->vectorize(lv+1);
-      // std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+      #ifdef DEBUG
+      std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+      #endif
       return (void*)sparT;
     }
 
     void* _mlir_ciface_sptDevectorize(void* ptr) {
-      // auto tic = TI;
+      #ifdef DEBUG
+      auto tic = TI;
+      #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->devectorize();
-      // std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
+      #ifdef DEBUG
+      std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
       return (void*)sparT;
     }
 
     void _mlir_ciface_sptPrint(void* ptr) {
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->Print(std::cerr, 1);
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      sparT->Print(std::cerr, 1);
+    }
+
+    void* _mlir_ciface_structAccess(void* ptr, uint64_t index) {
+      SparlayStruct* SS = (SparlayStruct*)(ptr);
+      return SS->get(index);
+    }
+
+    void* _mlir_ciface_spwNew() {
+      SparlayWindow* ret = new SparlayWindow;
+      return (void*)ret;
+    }
+
+    void* _mlir_ciface_spwAssign(void* ptr, uint64_t i, uint64_t j, int v) {
+      SparlayWindow* ret = (SparlayWindow*)(ptr);
+      ret->assign(i,j,v);
+      return (void*)ret;
+    }
+
+    void* _mlir_ciface_spwTile(void* ptr, uint64_t i, uint64_t type, int size) {
+      SparlayWindow* ret = (SparlayWindow*)(ptr);
+      ret->tile(i,type,size);
+      return (void*)ret;
+    }
+
+    void* _mlir_ciface_sptSplit(StridedMemRefType<float, 1>* thres, void* ptr, void* win) {
+      SparlayStruct* ret = new SparlayStruct;
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      assert(thres->offset == 0);
+      int64_t size = thres->sizes[0];
+      std::cerr << size << std::endl;
+      for (int64_t i = 0; i < size + 1; ++i) {
+        SparlayStorage* new_T = new SparlayStorage;
+        (*new_T) = sparT->copy();
+        ret->vec.push_back((void*)new_T);
+      }
+      SparlayWindow* swin = (SparlayWindow*)(win);
+      std::cerr << "==============" << std::endl;
+      std::cerr << "window: " << std::endl;
+      std::cerr << "affine: " << std::endl;
+      for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+          std::cerr << swin->M[i][j] << ' ';
+        }
+        std::cerr << std::endl;
+      }
+      std::cerr << "tile: " << std::endl;
+      for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+          std::cerr << swin->T[i][j] << ' ';
+        }
+        std::cerr << std::endl;
+      }
+      std::cerr << "===============" << std::endl;
+      return (void*)ret;
     }
 
 // #define GETINDICES(TYPE)

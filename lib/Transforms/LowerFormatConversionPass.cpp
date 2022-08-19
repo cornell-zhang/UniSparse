@@ -175,7 +175,6 @@ SparlayEncodingAttr getSparlayEncoding(Type type) {
   return nullptr;
 }
 
-
 typedef Eigen::Matrix<double, 2, 2> Matrix2f;
 typedef Eigen::Matrix<int, 2, 2> Matrix2i;
 
@@ -759,6 +758,181 @@ class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
     }
 };
 
+class StructAccessOpLowering: public OpConversionPattern<sparlay::StructAccessOp> {
+public:
+    using OpConversionPattern<sparlay::StructAccessOp>::OpConversionPattern;
+    LogicalResult matchAndRewrite(sparlay::StructAccessOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        Value inputPtr = adaptor.getOperands()[0];
+        uint64_t index = op.index();
+        std::vector<Value> params;
+        params.push_back(inputPtr);
+        params.push_back(rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(index)));
+        auto ret = rewriter.create<func::CallOp>(loc, inputPtr.getType(),
+            getFunc(op, "structAccess", inputPtr.getType(), params, true),
+            params
+        );
+        rewriter.replaceOp(op, ret.getResult(0));
+        return success();
+    }
+};
+
+// std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(const AffineMap& crdMap, bool isSplit) {
+//     std::cerr << "Enter Rewrite" << std::endl;
+//     std::vector<GeneralConversionOp> Ops;
+//     std::vector<AffineExpr> newExprs;
+//     std::vector<int> pendingMerge;
+//     std::vector<AffineExpr> exprs = crdMap.getResults();
+//     std::vector<bool> vis;
+//     std::vector<bool> needPush;
+//     vis.resize(exprs.size(), 0);
+//     needPush.resize(exprs.size(), 0);
+//     bool hasChanged = 0;
+//     do {
+//         hasChanged = 0;
+//         for (int i = 0; i < (int)exprs.size(); ++i) {
+//             if (vis[i]) continue;
+//             if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
+//                 auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
+//                 assert(binExpr);
+//                 auto LHS = binExpr.getLHS();
+//                 auto RHS = binExpr.getRHS();
+//                 assert(RHS.isSymbolicOrConstant());
+//                 LHS.dump(), RHS.dump();
+//                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
+//                 for (int j = i+1; j < (int)exprs.size(); ++j) {
+//                     if (vis[j]) continue;
+//                     if (exprs[j].getKind() == targetKind) {
+//                         auto _binExpr = exprs[j].dyn_cast<AffineBinaryOpExpr>();
+//                         auto _LHS = _binExpr.getLHS();
+//                         auto _RHS = _binExpr.getRHS();
+//                         assert(_RHS.isSymbolicOrConstant());
+//                         if (LHS == _LHS && RHS == _RHS) {
+//                             if (targetKind == AffineExprKind::Mod) {
+//                                 Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j-1}) : std::vector<int>({j, i+1}))));
+//                                 hasChanged = 1;
+//                                 if (isSplit) {
+//                                     auto svExpr = exprs[i];
+//                                     for (int k = i+1; k <= j-1; ++k) exprs[k-1] = exprs[k], vis[k-1] = vis[k];
+//                                     exprs[j-1] = svExpr;
+//                                     vis[j] = vis[j-1] = 1;
+//                                 } else {
+//                                     auto svExpr = exprs[j];
+//                                     for (int k = j-1; k >= i+1; --k) exprs[k+1] = exprs[k], vis[k+1] = vis[k];
+//                                     exprs[i+1] = svExpr;
+//                                     vis[i] = vis[i+1] = 1;
+//                                 }
+//                             } else {
+//                                 hasChanged = 1;
+//                                 Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j}) : std::vector<int>({j, i}))));
+//                                 if (isSplit) {
+//                                     auto svExpr = exprs[i];
+//                                     for (int k = i+1; k <= j; ++k) exprs[k-1] = exprs[k], vis[k-1] = vis[k];
+//                                     exprs[j] = svExpr;
+//                                     vis[j-1] = vis[j] = 1;
+//                                 } else {
+//                                     auto svExpr = exprs[j];
+//                                     for (int k = j-1; k >= i; --k) exprs[k+1] = exprs[k], vis[k+1] = vis[k];
+//                                     exprs[i] = svExpr;
+//                                     vis[i] = vis[i+1] = 1;
+//                                 }
+//                             }
+//                             break;
+//                         }
+//                     }
+//                 }
+//                 for (size_t j = 0; j < exprs.size(); ++j) {
+//                     exprs[j].dump();
+//                 }
+//             }
+//         }
+//     } while (hasChanged);
+
+//     for (int i = 0; i < (int)exprs.size(); ++i) {
+//         if (exprs[i].getKind() == AffineExprKind::FloorDiv) {
+//             assert(i != (int)exprs.size()-1);
+//             assert(exprs[i+1].getKind() == AffineExprKind::Mod);
+//             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
+//             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
+//             auto divNum = exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS().dyn_cast<AffineConstantExpr>().getValue();
+//             assert(divNum < 5LL);
+//             Ops.push_back(GeneralConversionOp(TileMerge, "", {i, (int)divNum}));
+//             newExprs.push_back(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS());
+//         } else if (exprs[i].getKind() != AffineExprKind::Mod) {
+//             newExprs.push_back(exprs[i]);
+//         }
+//     }
+//     auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
+//     std::cerr << "Leave Rewrite" << std::endl;
+//     return std::make_tuple(newCrdMap, Ops);
+// }
+
+AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const sparlay::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
+    std::vector<AffineExpr> exprs = crdMap.getResults();
+    assert(exprs.size() == (size_t)2);
+    std::vector<AffineExpr> new_exprs = {};
+    for (int i = 0; i < 2; ++i) {
+        if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
+            auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
+            assert(binExpr);
+            auto LHS = binExpr.getLHS();
+            auto RHS = binExpr.getRHS();
+            assert(RHS.isSymbolicOrConstant());
+            assert(LHS == getAffineDimExpr((unsigned)i, crdMap.getContext()));
+            new_exprs.push_back(LHS);
+            uint64_t _type = (exprs[i].getKind() == AffineExprKind::Mod);
+            auto index = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(i));
+            auto type = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(_type));
+            auto val = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(RHS.dyn_cast<AffineConstantExpr>().getValue()));
+            std::vector<Value> params = {prevRes, index, type, val};
+            auto prevOp = rewriter.create<func::CallOp>(loc, prevType,
+                getFunc(op, "spwTile", prevType, params, true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        }
+    }
+    return AffineMap::get(crdMap.getNumDims(), 0, new_exprs, crdMap.getContext());
+}
+
+class DecompseOpLowering : public OpConversionPattern<sparlay::DecomposeOp> {
+public:
+  using OpConversionPattern<sparlay::DecomposeOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::DecomposeOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value inputThres = op->getOperand(1);
+    AffineMap rmap = adaptor.rmap();
+
+    std::vector<Value> params = {};
+    auto prevOp = rewriter.create<func::CallOp>(loc, inputTensor.getType(),
+        getFunc(op, "spwNew", inputTensor.getType(), params, true),
+        params
+    );
+    auto prevType = prevOp.getType(0);
+    auto prevRes = prevOp.getResult(0);
+    auto assembleWindow = [&]() {
+        rmap = rewriteTileGenWindow(rmap, loc, op, rewriter, prevRes, prevType);
+        auto M = toIntMatrix(toMatrix(rmap));
+        std::cerr << M << std::endl;
+    };
+    assembleWindow();
+    params = {inputThres, inputTensor, prevRes};
+    prevOp = rewriter.create<func::CallOp>(loc, inputTensor.getType(),
+        getFunc(op, "sptSplit", inputTensor.getType(), params, true),
+        params
+    );
+    prevRes = prevOp.getResult(0);
+    rewriter.replaceOp(op, prevRes);
+    return success();
+  }
+
+};
+
 //===----------------------------------------------------------------------===//
 // RewritePatterns: Pack operations
 //===----------------------------------------------------------------------===//
@@ -1262,7 +1436,6 @@ void LowerFormatConversionPass::runOnOperation() {
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
     target.addIllegalDialect<sparlay::SparlayDialect>();
-    target.addLegalOp<sparlay::StructAccessOp>();
     target.addLegalOp<sparlay::StructConstructOp>();
     target.addLegalOp<linalg::FillOp>();
 
@@ -1272,7 +1445,8 @@ void LowerFormatConversionPass::runOnOperation() {
     patterns.add<NewOpLowering, PackOpLowering,
                  CompressOpLowering, MultiplyOpLowering, 
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
-                 checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering>(&getContext());
+                 checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
+                 StructAccessOpLowering, DecompseOpLowering>(&getContext());
     // patterns.add<PackOpLowering>(&getContext());
     // patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");

@@ -10,12 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Transforms/Passes.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayTypes.h"
-
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/Pass.h"
@@ -27,6 +21,12 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "Transforms/Passes.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayOps.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayTypes.h"
 
 #include <cstdio>
 #include <cstring>
@@ -65,7 +65,10 @@ public DeadCodeEliminationBase<DeadCodeEliminationPass> {
         RewritePatternSet patterns(ctx);
         patterns.add<DeadCodeElimination>(&getContext());
         ConversionTarget target(getContext());
-        (void)applyPatternsAndFoldGreedily(function, std::move(patterns));
+        target.addIllegalOp<sparlay::StructConstructOp>();
+        if (failed(
+            applyPartialConversion(getOperation(), target, std::move(patterns))))
+        signalPassFailure();
     };
 
 };

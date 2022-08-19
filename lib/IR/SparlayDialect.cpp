@@ -190,10 +190,12 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
 }
 
 void SparlayCompressAttr::print(AsmPrinter &printer) const {
+  printer << "HII";
   return;
 }
 
 void SparlayCrdAttr::print(AsmPrinter &printer) const {
+  printer << "HII";
   return;
 }
 

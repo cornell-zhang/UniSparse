@@ -47,7 +47,7 @@ def Sparlay_fromFileOp: Sparlay_Op<"fromFile", [NoSideEffect]> {
         ```
     }];
     let arguments = (ins AnyType:$input);
-    let results = (outs AnyTensor:$output);
+    let results = (outs AnyType:$output);
     let assemblyFormat = [{
        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
     }];
@@ -153,6 +153,18 @@ def Sparlay_SplitOp : Sparlay_Op<"split", [NoSideEffect]> {
     let assemblyFormat = "`(` $input `,` $density `,` $threshold `)`"
         "attr-dict `:`  type($input) `,` type($density) `,` "
         "type($threshold) `to` type($output)";
+}
+
+def Sparlay_DecomposeOp: Sparlay_Op<"decompose", [NoSideEffect]> {
+    let summary = "Split a tensor into sub-tensors according to reduce dimensions";
+    let arguments = (
+        ins AnyTensor: $input,
+            AnyType: $threshold,
+            AffineMapAttr: $rmap
+    );
+    let results = (outs Sparlay_StructType: $output);
+    let assemblyFormat = "`(` $input `,` $threshold `)`"
+        "attr-dict `:`  type($input) `,` type($threshold) `to` type($output)";
 }
 
 def Sparlay_StructConvertOp : Sparlay_Op<"struct_convert", [NoSideEffect]> {

@@ -8,11 +8,11 @@
 //         !sparlay.struct<!sparlay.struct<memref<?xindex>, memref<?xindex>, memref<?xindex>>, memref<?xf32>>
 // }
 
-func @main() {
-    %A_ptr = constant dense<[0, 2, 5, 5, 7]> : tensor<5xindex>
-    %A_crd_i = constant dense<[0, 1, 0, 1, 3, 1, 3]> : tensor<7xindex>
-    %A_crd_j = constant dense<[0, 0, 1, 3, 3, 4, 4]> : tensor<7xindex>
-    %A_val = constant dense<[1.0e+00, 5.0e+00, 7.0e+00, 3.0e+00, 4.0e+00, 2.0e+00, 6.0e+00]> : tensor<7xf32>
+func.func @main() {
+    %A_ptr = arith.constant dense<[0, 2, 5, 5, 7]> : tensor<5xindex>
+    %A_crd_i = arith.constant dense<[0, 1, 0, 1, 3, 1, 3]> : tensor<7xindex>
+    %A_crd_j = arith.constant dense<[0, 0, 1, 3, 3, 4, 4]> : tensor<7xindex>
+    %A_val = arith.constant dense<[1.0e+00, 5.0e+00, 7.0e+00, 3.0e+00, 4.0e+00, 2.0e+00, 6.0e+00]> : tensor<7xf32>
     %A_ptr_mem = memref.buffer_cast %A_ptr : memref<5xindex>
     %A_crd_i_mem= memref.buffer_cast %A_crd_i : memref<7xindex>
     %A_crd_j_mem = memref.buffer_cast %A_crd_j : memref<7xindex>
