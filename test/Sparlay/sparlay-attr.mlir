@@ -3,7 +3,15 @@
   crdMap = #sparlay.crd<(i,j,k)[s0,s1]->(indirect (i+j minus s0)*4 mod 7, (k + (minus i)) floordiv s1)>
 }>
 
+#2 = #sparlay.encoding<{
+  compressMap = #sparlay.compress<fuse(1,1), trim(1,2)>,
+  crdMap = #sparlay.crd<(i,j)->(j,i)>,
+  sched = "ASAP"
+}>
+
 func.func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()
+
+func.func private @G(%arg1: tensor<?x?x?xf64, #2>) -> ()
 
 // #2 = #sparlay.encoding<{
 //   primaryMap = affine_map<(a1,a2,a3)->(a1)>,

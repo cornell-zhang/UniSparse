@@ -134,6 +134,7 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
   CrdMap crdMap = {};
   CompressMap compressMap = {};
   unsigned bitWidth = 8;
+  std::string sched_name = "";
   for (const auto& attr: dict) {
     if (attr.getName() == "crdMap") {
       auto crdAttr = attr.getValue().dyn_cast<SparlayCrdAttr>();
@@ -151,11 +152,14 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
       auto intAttr = attr.getValue().dyn_cast<IntegerAttr>();
       if (!intAttr) return {};
       bitWidth = intAttr.getInt();
+    }  else if (attr.getName() == "sched") {
+      auto schedAttr = attr.getValue().dyn_cast<StringAttr>();
+      sched_name = schedAttr.getValue();
     } else {
       return {};
     }
   }
-  return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), crdMap, compressMap, bitWidth);
+  return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), crdMap, compressMap, bitWidth, sched_name);
 }
 
 void SparlayEncodingAttr::print(AsmPrinter &printer) const {
@@ -187,6 +191,7 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   }
   printer << "), ";
   printer << "bitWidth: " << getBitWidth();
+  printer << ", schedule: " << getSched();
 }
 
 void SparlayCompressAttr::print(AsmPrinter &printer) const {
@@ -201,7 +206,7 @@ void SparlayCrdAttr::print(AsmPrinter &printer) const {
 
 LogicalResult SparlayEncodingAttr::verify(
     function_ref<InFlightDiagnostic()> emitError,
-    CrdMap primaryMap, CompressMap secondaryMap, unsigned bitWidth
+    CrdMap primaryMap, CompressMap secondaryMap, unsigned bitWidth, std::string sched
 ) {
   return success();
 }

@@ -56,7 +56,8 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
     ins
     "CrdMap":$crdMap,
     "CompressMap":$compressMap,
-    "unsigned":$bitWidth
+    "unsigned":$bitWidth,
+    "std::string": $sched
   );
 
   let genVerifyDecl = 1;
