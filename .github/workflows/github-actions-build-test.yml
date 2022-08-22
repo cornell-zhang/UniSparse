@@ -59,22 +59,22 @@ jobs:
       - name: Build Sparlay
         run: |
           mkdir -p build && cd build
-          export CPATH=$PWD/../../eigen-3.4.0:~/llvm-project/mlir/lib:$CPATH
-          export CPATH=$PWD/../../llvm-project/mlir/include/mlir:$CPATH
+          export CPATH=$PWD/../../../eigen-3.4.0:$PWD/../../../llvm-project/mlir/lib:$CPATH
+          export CPATH=$PWD/../../../llvm-project/mlir/include/mlir:$CPATH
           echo "🔎 CPATH: " && echo $CPATH
-          echo "🔎 $PWD/../../llvm-project/mlir/include: "
-          ls $PWD/../../llvm-project/mlir/include
           echo "🔎 $PWD/../../../: "
           ls $PWD/../../../
-          echo "🔎 $PWD/../../eigen-3.4.0: "
-          ls $PWD/../../eigen-3.4.0
+          echo "🔎 $PWD/../../../llvm-project/mlir/include: "
+          ls $PWD/../../../llvm-project/mlir/include
+          echo "🔎 $PWD/../../../eigen-3.4.0: "
+          ls $PWD/../../../eigen-3.4.0
           cmake .. \
-            -DMLIR_DIR="$PWD/../../llvm-project/build/lib/cmake/mlir" \
-            -DLLVM_DIR="$PWD/../../llvm-project/build/lib/cmake/llvm" \
-            -DLLVM_BUILD_LIBRARY_DIR="$PWD/../../llvm-project/build" \
-            -DLLVM_EXTERNAL_LIT="$PWD/../../llvm-project/build/bin/llvm-lit" \
-            -DEXTERNAL_INCLUDE_DIRS="$PWD/../../eigen-3.4.0" \
-            -DMLIR_LIB_DIR="$PWD/../../llvm-project/mlir/lib" \
+            -DMLIR_DIR="$PWD/../../../llvm-project/build/lib/cmake/mlir" \
+            -DLLVM_DIR="$PWD/../../../llvm-project/build/lib/cmake/llvm" \
+            -DLLVM_BUILD_LIBRARY_DIR="$PWD/../../../llvm-project/build" \
+            -DLLVM_EXTERNAL_LIT="$PWD/../../../llvm-project/build/bin/llvm-lit" \
+            -DEXTERNAL_INCLUDE_DIRS="$PWD/../../../eigen-3.4.0" \
+            -DMLIR_LIB_DIR="$PWD/../../../llvm-project/mlir/lib" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DLLVM_USE_LINKER=lld \
