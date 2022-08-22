@@ -21,7 +21,7 @@ jobs:
         env:
           cache-name: cache-llvm-build
         with:
-          path: ~/llvm-project-cache
+          path: ~/llvm-project/build
           key: ${{ matrix.config.os }}-${{ env.cache-name }}-${{ hashFiles('~/llvm-project') }}
           restore-keys: |
             ${{ matrix.config.os }}-${{ env.cache-name }}-
