@@ -21,7 +21,7 @@ jobs:
         env:
           cache-name: cache-llvm-build
         with:
-          path: ~/llvm-project/build
+          path: ~/llvm-project-cache
           key: ${{ matrix.config.os }}-${{ env.cache-name }}-${{ hashFiles('~/llvm-project') }}
           restore-keys: |
             ${{ matrix.config.os }}-${{ env.cache-name }}-
@@ -64,6 +64,8 @@ jobs:
           echo "🔎 CPATH: " && echo $CPATH
           echo "🔎 $PWD/../../../: "
           ls $PWD/../../../
+          echo "🔎 ls ~ && find ~ -name llvm-project* : "
+          ls ~ && find ~ -name "llvm-project*"
           echo "🔎 $PWD/../../../llvm-project/mlir/include: "
           ls $PWD/../../../llvm-project/mlir/include
           echo "🔎 $PWD/../../../eigen-3.4.0: "
