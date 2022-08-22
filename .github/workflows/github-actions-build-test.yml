@@ -62,8 +62,10 @@ jobs:
           export CPATH=$PWD/../../../eigen-3.4.0:~/llvm-project/mlir/lib:$CPATH
           export CPATH=~/llvm-project/mlir/include/mlir:$CPATH
           echo "🔎 CPATH: " && echo $CPATH
-          echo "🔎 ls ~ && ls ~/llvm-project && ls ~/llvm-project/mlir && ls ~/llvm-project/build/lib/cmake: "
-          ls ~ && ls ~/llvm-project && ls ~/llvm-project/mlir && ls ~/llvm-project/build/lib/cmake
+          echo "🔎 ls ~ : "
+          ls ~  
+          echo "🔎 ls ~/llvm-project/build: "
+          ls ~/llvm-project/build 
           echo "🔎 find ~ -name eigen: "
           find ~ -name "eigen*"
           echo "🔎 $PWD/../../../eigen-3.4.0: "
