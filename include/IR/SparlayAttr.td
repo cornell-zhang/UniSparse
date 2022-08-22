@@ -10,6 +10,7 @@
 #define SPARLAY_ATTR
 
 include "SparlayDialect.td"
+include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/TensorEncoding.td"
 
 // All of the Tensor attributes will extend this class.
@@ -18,13 +19,21 @@ class Sparlay_Attr<string name, list<Trait> traits = []>
 
 def SparlayCompressAttr : Sparlay_Attr<"SparlayCompress", []> {
   let mnemonic = "compress";
+  let hasCustomAssemblyFormat = 1;
   let parameters = (ins "CompressMap":$value);
+}
+
+def SparlayCrdAttr : Sparlay_Attr<"SparlayCrd", []> {
+  let mnemonic = "crd";
+  let hasCustomAssemblyFormat = 1;
+  let parameters = (ins "CrdMap": $value);
 }
 
 // Sparse tensor encoding attribute.
 def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding", 
               [DeclareAttrInterfaceMethods<VerifiableTensorEncoding>]> {
   let mnemonic = "encoding";
+  let hasCustomAssemblyFormat = 1;
 
   let description = [{
     Tree-base encoding for Sparse Tensor Layout
@@ -34,7 +43,7 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
     ```mlir
     #1 = #sparlay.encoding<{
       compressMap = #sparlay.compress<trim(0,1), fuse(1)>,
-      crdMap = affine_map<(d0, d1, d2, d3) -> (d2, d3)>
+      crdMap = #sparlay.crd<(i,j,k)[s0,s1] -> ((i+j minus s0)*4 mod 7, (k + (minus i)) floordiv s1)>
       bitwidth = 8
     }>
 
@@ -45,7 +54,7 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
   // Data in sparse tensor encoding.
   let parameters = (
     ins
-    "AffineMap":$crdMap,
+    "CrdMap":$crdMap,
     "CompressMap":$compressMap,
     "unsigned":$bitWidth
   );

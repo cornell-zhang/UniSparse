@@ -1,6 +1,0 @@
-Usage (current):
-0) Compile: ./make.sh, two options: -DDEBUG and -DPRINT.
-   example: ./make.sh -DPRINT
-1) Read in a COO that must be row major.
-   example: ./1 /path/to/data/*.mtx
-2) Convert to CSR, report read file time and conert time.

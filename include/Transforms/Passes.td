@@ -15,24 +15,36 @@
 
 include "mlir/Pass/PassBase.td"
 
-def LowerFormatConversion : Pass<"lower-format-conversion"> {
+def LowerFormatConversion : Pass<"lower-format-conversion", "func::FuncOp"> {
     let summary = "Lower operations for format conversion";
     let constructor = "mlir::sparlay::createLowerFormatConversionPass()";
     let dependentDialects = [
+        "arith::ArithmeticDialect",
+        "func::FuncDialect",
         "memref::MemRefDialect",
         "scf::SCFDialect",
-        "StandardOpsDialect",
         "vector::VectorDialect",
-        "linalg::LinalgDialect"
+        "linalg::LinalgDialect",
+        "LLVM::LLVMDialect"
     ];
 }
 
-def LowerStruct : Pass<"lower-struct"> {
+def LowerStruct : Pass<"lower-struct", "func::FuncOp"> {
     let summary = "Lower struct conversion";
     let constructor = "mlir::sparlay::createLowerStructPass()";
 }
 
-def DeadCodeElimination : Pass<"dce"> {
+def LowerStructConvert: Pass<"lower-struct-convert", "func::FuncOp"> {
+    let summary = "Lower Struct Convert conversion";
+    let constructor = "mlir::sparlay::createLowerStructConvertPass()";
+    let dependentDialects = [
+        "arith::ArithmeticDialect",
+        "func::FuncDialect",
+        "SparlayDialect"
+    ];
+}
+
+def DeadCodeElimination : Pass<"dce", "func::FuncOp"> {
     let summary = "dead code elimination";
     let constructor = "mlir::sparlay::createDeadCodeEliminationPass()";
 }

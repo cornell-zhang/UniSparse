@@ -10,33 +10,28 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Transforms/Passes.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayTypes.h"
-#include "Eigen/Dense"
-#include "Parser/Parser.h"
-#include "Parser/Token.h"
-
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Dialect/Vector/VectorOps.h"
-#include "mlir/Analysis/Utils.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Transforms/Utils.h"
+#include "mlir/Pass/Pass.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "mlir/Parser.h"
+
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayOps.h"
+#include "IR/SparlayTypes.h"
+#include "Transforms/Passes.h"
+#include "Eigen/Dense"
 
 #include <cstdio>
 #include <cstring>
@@ -48,6 +43,9 @@ using namespace sparlay;
 #define DEBUG_TYPE "lower-format-conversion"
 
 namespace {
+#define GEN_PASS_CLASSES
+#include "Transforms/Passes.h.inc"
+
 //===----------------------------------------------------------------------===//
 // RewritePatterns: New operations
 //===----------------------------------------------------------------------===//
@@ -62,10 +60,10 @@ static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
   MLIRContext *context = op->getContext();
   auto module = op->getParentOfType<ModuleOp>();
   auto result = SymbolRefAttr::get(context, name);
-  auto func = module.lookupSymbol<FuncOp>(result.getAttr());
+  auto func = module.lookupSymbol<func::FuncOp>(result.getAttr());
   if (!func) {
     OpBuilder moduleBuilder(module.getBodyRegion());
-    func = moduleBuilder.create<FuncOp>(
+    func = moduleBuilder.create<func::FuncOp>(
         op->getLoc(), name,
         FunctionType::get(context, operands.getTypes(), resultType));
     func.setPrivate();
@@ -97,9 +95,9 @@ public:
         auto resDimSizes = resType.getDimSizes();
         uint64_t resSize = resDimSizes.size();
 
-        CallOp tensorOp;
-        CallOp indicesOp[resSize];
-        CallOp valueOp;
+        func::CallOp tensorOp;
+        func::CallOp indicesOp[resSize];
+        func::CallOp valueOp;
 
         auto indexTp = rewriter.getIndexType();
         Type idxResType = MemRefType::get({ShapedType::kDynamicSize}, indexTp);
@@ -111,7 +109,7 @@ public:
 
         SmallVector<Value, 1> readParams;
         readParams.push_back(fileName);
-        tensorOp = rewriter.create<CallOp>(loc, inputType, 
+        tensorOp = rewriter.create<func::CallOp>(loc, inputType, 
             getFunc(op, readTensorName, inputType, readParams, /*emitCInterface=*/false),
             readParams); //
         
@@ -119,14 +117,14 @@ public:
             SmallVector<Value, 3> idxParams;
             idxParams.push_back(tensorOp.getResult(0));
             idxParams.push_back(
-                rewriter.create<ConstantOp>(loc, rewriter.getI64IntegerAttr(i)));
-            indicesOp[i] = rewriter.create<CallOp>(loc, idxResType, 
+                rewriter.create<arith::ConstantOp>(loc, rewriter.getI64IntegerAttr(i)));
+            indicesOp[i] = rewriter.create<func::CallOp>(loc, idxResType, 
                 getFunc(op, idxFuncName, idxResType, idxParams, /*emitCInterface=*/true),
                 idxParams);
         }
         SmallVector<Value, 3> valParams;
         valParams.push_back(tensorOp.getResult(0));
-        valueOp = rewriter.create<CallOp>(loc, dataType, 
+        valueOp = rewriter.create<func::CallOp>(loc, dataType, 
             getFunc(op, valFuncName, dataType, valParams, /*emitCInterface=*/true),
             valParams);
             
@@ -156,13 +154,13 @@ public:
         Value fileName = op->getOperand(0);
         Type inputType = fileName.getType();
 
-        CallOp readOp;
+        func::CallOp readOp;
 
         StringRef funcName =  "sptFromFile";
 
         SmallVector<Value, 1> readParams;
         readParams.push_back(fileName);
-        readOp = rewriter.create<CallOp>(loc, inputType, 
+        readOp = rewriter.create<func::CallOp>(loc, inputType, 
             getFunc(op, funcName, inputType, readParams, /*emitCInterface=*/true),
             readParams);
 
@@ -177,27 +175,33 @@ SparlayEncodingAttr getSparlayEncoding(Type type) {
   return nullptr;
 }
 
-
-typedef Eigen::Matrix<float, 2, 2> Matrix2f;
+typedef Eigen::Matrix<double, 2, 2> Matrix2f;
 typedef Eigen::Matrix<int, 2, 2> Matrix2i;
 
 Matrix2f toMatrix(const AffineMap& crdMap) {
     assert(crdMap.getNumDims() == 2);
     Matrix2f ret;
-    auto proj1 = getProjectedMap(crdMap, {1});
+    ret(0,0)=ret(0,1)=ret(1,0)=ret(1,1) = 0;
+    llvm::SmallBitVector projectedDims(2, 0);
+    projectedDims[1] = 1;
+    std::cerr << projectedDims.size() << std::endl;
+    auto proj1 = getProjectedMap(crdMap, projectedDims);
+    std::cerr << "done1" << std::endl;
     int curDim = 0;
     for (AffineExpr expr : proj1.getResults()) {
-        // expr.dump();
+        expr.dump();
         if (expr != getAffineConstantExpr(0, proj1.getContext())) {
             if (expr == getAffineDimExpr(0, proj1.getContext())) ret(curDim, 0) = 1;
             else ret(curDim, 0) = -1;
         }
         curDim++;
     }
-    auto proj0 = getProjectedMap(crdMap, {0});
+    projectedDims = llvm::SmallBitVector(2, 0);
+    projectedDims[0] = 1;
+    auto proj0 = getProjectedMap(crdMap, projectedDims);
     curDim = 0;
     for (AffineExpr expr: proj0.getResults()) {
-        // expr.dump();
+        expr.dump();
         if (expr != getAffineConstantExpr(0, proj0.getContext())) {
             if (expr == getAffineDimExpr(0, proj0.getContext())) ret(curDim, 1) = 1;
             else ret(curDim, 1) = -1;
@@ -209,21 +213,8 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     return ret;
 }
 
-// bool isIdentity(const Matrix2f& M) {
-//     return (M(0,0) == 1) && (M(0,1) == 0) && (M(1,0) == 0) && (M(1,1) == 1);
-// }
-
-// bool isSwap(const Matrix2f& M) {
-//     return (M(0,0) == 0) && (M(0,1) == 1) && (M(1,0) == 1) && (M(1,1) == 0);
-// }
-
-// bool isDIA(const Matrix2f& M) {
-//     return (M(0,0) == -1) && (M(0,1) == 1) && (M(1,0) == 1) && (M(1,1) == 0);
-// }
-
 Matrix2i toIntMatrix(const Matrix2f& M) {
     Matrix2i ret;
-    std::cerr << "M = " << std::endl << M << std::endl;
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
             int curVal = (int)floor(M(i,j)+1e-4);
@@ -279,7 +270,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
     bool hasChanged = 0;
     do {
         hasChanged = 0;
-        for (int i = 0; i < exprs.size(); ++i) {
+        for (int i = 0; i < (int)exprs.size(); ++i) {
             if (vis[i]) continue;
             if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
                 auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
@@ -289,8 +280,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                 assert(RHS.isSymbolicOrConstant());
                 LHS.dump(), RHS.dump();
                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
-                bool found = 0;
-                for (int j = i+1; j < exprs.size(); ++j) {
+                for (int j = i+1; j < (int)exprs.size(); ++j) {
                     if (vis[j]) continue;
                     if (exprs[j].getKind() == targetKind) {
                         auto _binExpr = exprs[j].dyn_cast<AffineBinaryOpExpr>();
@@ -298,7 +288,6 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                         auto _RHS = _binExpr.getRHS();
                         assert(_RHS.isSymbolicOrConstant());
                         if (LHS == _LHS && RHS == _RHS) {
-                            found = 1;
                             if (targetKind == AffineExprKind::Mod) {
                                 Ops.push_back(GeneralConversionOp(Move, "", (isSplit ? std::vector<int>({i, j-1}) : std::vector<int>({j, i+1}))));
                                 hasChanged = 1;
@@ -332,20 +321,16 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                         }
                     }
                 }
-                for (int j = 0; j < exprs.size(); ++j) {
+                for (size_t j = 0; j < exprs.size(); ++j) {
                     exprs[j].dump();
                 }
-                for (int j = 0; j < vis.size(); ++j) {
-                    std::cerr << vis[j] << ' ';
-                }
-                std::cerr << std::endl;
             }
         }
     } while (hasChanged);
 
-    for (int i = 0; i < exprs.size(); ++i) {
+    for (int i = 0; i < (int)exprs.size(); ++i) {
         if (exprs[i].getKind() == AffineExprKind::FloorDiv) {
-            assert(i != exprs.size()-1);
+            assert(i != (int)exprs.size()-1);
             assert(exprs[i+1].getKind() == AffineExprKind::Mod);
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
@@ -357,11 +342,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
             newExprs.push_back(exprs[i]);
         }
     }
-    for (int i = 0; i < Ops.size(); ++i) {
-        Ops[i].Print(std::cerr);
-    }
     auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
-    newCrdMap.dump();
     std::cerr << "Leave Rewrite" << std::endl;
     return std::make_tuple(newCrdMap, Ops);
 }
@@ -382,6 +363,14 @@ public:
         //handle swap only (quick round-about)
         auto srcCrd = encSrc.getCrdMap();
         auto dstCrd = encDst.getCrdMap();
+
+        if (srcCrd.getNumResults() > 5) {
+            std::cerr << "Too many source format dimensions!" << std::endl;
+            assert(0);
+        } else if (dstCrd.getNumResults() > 5) {
+            std::cerr << "Too many target format dimensions!" << std::endl;
+            assert(0);
+        }
 
         auto srcSecond = encSrc.getCompressMap();
         auto dstSecond = encDst.getCompressMap();
@@ -408,11 +397,10 @@ public:
 
         Type prevType = srcType;
         Value prevRes = src;
-        SmallVector<Value, 2> params;
 
-        auto genFunc1V1R = [&](const StringRef& name, const Value& v1) {
-            params = {v1};
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
+        //generate function that has only one return value
+        auto genFunc1R = [&](const StringRef& name, std::vector<Value> params) {
+            auto prevOp = rewriter.create<func::CallOp>(loc, prevType,
                 getFunc(op, name, prevType, params, true),
                 params
             );
@@ -420,31 +408,9 @@ public:
             prevRes = prevOp.getResult(0);
         };
 
-        auto genFunc2V1R = [&](const StringRef& name, const Value& v1, const Value& v2) {
-            params = {v1, v2};
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, name, prevType, params, true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
-        };
-
-        auto genFunc3V1R = [&](
-            const StringRef& name, const Value& v1, const Value& v2, const Value& v3
-        ) {
-            params = {v1, v2, v3};
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, name, prevType, params, true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
-        };
-
-        mlir::ConstantOp Const[5];
-        for (int i = 0; i < 5; ++i) {
-            Const[i] = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(i));
+        mlir::arith::ConstantOp Const[6];
+        for (int i = 0; i < 6; ++i) {
+            Const[i] = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(i));
         }
 
         auto genFuncFromOp = [&](
@@ -453,26 +419,26 @@ public:
             switch (gco.type) {
                 case TileMerge: //tiling: merge
                     assert(gco.args.size() == 2);
-                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
-                    genFunc3V1R(tileMergeName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                    assert(gco.args[0] < 6 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    genFunc1R(tileMergeName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                 break;
                 case TileSplit: //tiling: split
                     assert(gco.args.size() == 2);
-                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
-                    genFunc3V1R(tileSplitName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                    assert(gco.args[0] < 6 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    genFunc1R(tileSplitName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                 break;
                 case Move: //move
                     assert(gco.args.size() == 2);
-                    assert(gco.args[0] < 5 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 5 && gco.args[1] >= 0);
+                    assert(gco.args[0] < 6 && gco.args[0] >= 0);
+                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
                     if (gco.args[0] < gco.args[1]) {
                         for (int i = gco.args[0] + 1; i <= gco.args[1]; ++i) {
-                            genFunc3V1R(moveName, prevRes, Const[i], Const[i-1]);
+                            genFunc1R(moveName, {prevRes, Const[i], Const[i-1]});
                         }
                     } else {
-                        genFunc3V1R(moveName, prevRes, Const[gco.args[0]], Const[gco.args[1]]);
+                        genFunc1R(moveName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                     }
                 break;
                 default:
@@ -483,10 +449,6 @@ public:
 
         bool fuse_vis[10] = {0};
         for (auto ele: srcFuse) {
-            if (ele >= 10) {
-                std::cerr << "Too many dims." << std::endl;
-                assert(0);
-            }
             fuse_vis[ele] = 1;
         }
         
@@ -500,45 +462,29 @@ public:
             dst_mn_trim = std::min(dst_mn_trim, ele);
             dst_mx_trim = std::max(dst_mx_trim, ele);
         }
-
-        if (src_mx_trim < (srcCrd.getNumResults()-1)) {
-            // assert(dst_mx_trim == 1);
-            assert(src_mx_trim == srcCrd.getNumResults()-2);
-            genFunc1V1R(devectorizeName, prevRes);
+        
+        //devectorize first, could be optimized.
+        if ((unsigned)src_mx_trim < (srcCrd.getNumResults()-1)) {
+            int delta = srcCrd.getNumResults()-1-src_mx_trim;
+            assert(delta <= 2);
+            //TODO: FIXME: change devectorize to support matrix devectorization
+            genFunc1R(devectorizeName, {prevRes});
         }
 
+        bool need_move[10] = {0};
+        memset(need_move, 0, sizeof(need_move));
+
+        //handle coordinate remapping
         if (srcCrd != dstCrd) {
-            assert(srcCrd.getNumDims() == 2);
             assert(src_mn_trim != 1000);
             if (src_mn_trim != 0) {
                 src_mn_trim = 0;
-                params.clear();
-                params.push_back(prevRes);
-                params.push_back(Const[0].getResult());
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, trimName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(trimName, {prevRes, Const[0]});
             }
             for (auto ele: srcFuse) {
                 if (!fuse_vis[ele]) continue;
                 fuse_vis[ele] = 0;
-                params.clear();
-                params.push_back(prevRes);
-                if (ele < 2) {
-                    params.push_back((ele == 1 ? Const[1].getResult() : Const[0].getResult()));
-                } else {
-                    auto tmp_const = rewriter.create<ConstantOp>(loc, rewriter.getI32IntegerAttr(ele));
-                    params.push_back(tmp_const.getResult());
-                }
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, separateName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(separateName, {prevRes, Const[ele]});
             }
             
             AffineMap flatSrcCrd, flatDstCrd;
@@ -552,24 +498,27 @@ public:
             }
             {
                 int st = 0;
-                while (st < removeSrcTiling.size() && removeSrcTiling[st].type != TileMerge) st++;
+                while ((size_t)st < removeSrcTiling.size() && removeSrcTiling[st].type != TileMerge) st++;
                 for (int i = removeSrcTiling.size()-1; i >= st; --i) {
                     genFuncFromOp(removeSrcTiling[i]);
                 }
             }
-            auto dstM = toMatrix(flatDstCrd);
-            auto srcM = toMatrix(flatSrcCrd);
+            Matrix2f dstM = toMatrix(flatDstCrd);
+            Matrix2f srcM = toMatrix(flatSrcCrd);
 
             flatSrcCrd.dump();
             flatDstCrd.dump();
-            // std::cerr << dstM << ' ' << srcM << std::endl;
 
             // trivial Gaussian Elimination with functiion generation
             // Calculate M: (range(dstM)->range(srcM))
-            auto inverse_dstM = dstM.inverse();
-            auto crdRemapMap = toIntMatrix(srcM * inverse_dstM);
+            Matrix2f inverse_dstM = dstM.inverse();
+            std::cerr << "inverse destination coordinate map = " << std::endl;
+            std::cerr << inverse_dstM << std::endl;
+            std::cerr << srcM * inverse_dstM << std::endl;
+            Matrix2i crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
             auto genOpFromAffineMap = [&](Matrix2i& M) {
+                std::cerr << M << std::endl;
                 for (int i = 0; i < 2; ++i) {
                     if (M(i,i) == 0) {
                         int st;
@@ -581,7 +530,8 @@ public:
                                 if (M(st,i) == -1) break;
                             }
                         }
-                        genFunc3V1R(swapName, prevRes, Const[i], Const[st]);
+                        genFunc1R(swapName, {prevRes, Const[i], Const[st]});
+                        need_move[i] = 1;
                         for (int j = i; j < 2; ++j) {
                             std::swap(M(st,j), M(i,j));
                         }
@@ -589,31 +539,40 @@ public:
                     // assert(M(i,i) == 1);
                     for (int row = i+1; row < 2; ++row) {
                         if (M(row, i) == -M(i,i)) {
-                            genFunc3V1R(addName, prevRes, Const[row], Const[i]);
+                            genFunc1R(addName, {prevRes, Const[row], Const[i]});
                             for (int j = i; j < 2; ++j) {
                                 M(row, j) += M(i,j);
                             }
                         } else if (M(row,i) == M(i,i)) {
-                            genFunc3V1R(subName, prevRes, Const[row], Const[i]);
+                            genFunc1R(subName, {prevRes, Const[row], Const[i]});
                             for (int j = i; j < 2; ++j) {
                                 M(row, j) -= M(i,j);
                             }
                         }
                     }
                 }
+                std::cerr << M << std::endl;
                 for (int i = 1; i >= 0; --i) {
                     if (M(i,i) != 1) {
+                        std::cerr << M(i,i) << std::endl;
                         assert(M(i,i) == -1);
-                        genFunc2V1R(negName, prevRes, Const[i]);
+                        genFunc1R(negName, {prevRes, Const[i]});
+                        need_move[i] = 1;
                         for (int j = i; j < 2; ++j) {
                             M(i,j) = -M(i,j);
                         }
                     }
                     for (int row = i-1; row >= 0; --row) {
                         if (M(row, i) == -1) {
-                            genFunc3V1R(addName, prevRes, Const[row], Const[i]);
+                            for (int j = row; j <= i; ++j) {
+                                need_move[j] = 1;
+                            }
+                            genFunc1R(addName, {prevRes, Const[row], Const[i]});
                         } else if (M(row, i) == 1) {
-                            genFunc3V1R(subName, prevRes, Const[row], Const[i]);
+                            for (int j = row; j <= i; ++j) {
+                                need_move[j] = 1;
+                            }
+                            genFunc1R(subName, {prevRes, Const[row], Const[i]});
                         }
                         M(row, i) = 0;
                     }
@@ -624,7 +583,6 @@ public:
 
             genOpFromAffineMap(crdRemapMap);
 
-            //FIXME: calculate the right level, assume that all the merge operation is sorted by level.
             int pt = removeDstTiling.size()-1;
             while (pt >= 0 && removeDstTiling[pt].type == TileMerge) pt--;
             pt++;
@@ -636,33 +594,42 @@ public:
                     ele.type = TileSplit;
                     assert(ele.args.size() == 2);
                     ele.args[0] = ele.args[0] - (i-pt);
+                    for (int j = 0; j < ele.args[0]; ++j) {
+                        if (need_move[j]) {
+                            need_move[j] = 0;
+                            genFunc1R(moveName, {prevRes, Const[j], Const[j]});
+                        }
+                    }
                     genFuncFromOp(ele);
                 } else if (ele.type == Move) {
                     assert(ele.args.size() == 2);
                     std::swap(ele.args[0], ele.args[1]);
                     genFuncFromOp(ele);
                 } else {
+                    std::cerr << "Should not happen!" << std::endl;
                     assert(0);
                 }
             }
-
+        }
+        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
+            need_move[dstCrd.getNumResults()-1] = 0;
+        }
+        for (auto ele: dstFuse) {
+            if (!fuse_vis[ele]) {
+                for (int i = 0; i < 10; ++i) {
+                    if (need_move[i]) {
+                        //TODO: FIXME: change the function call of move so that we don't need to move almost all the levels
+                        genFunc1R(moveName, {prevRes, Const[i], Const[i]});
+                        need_move[i] = 0;
+                    }
+                }
+                break;
+            }
         }
 
         for (auto ele: dstFuse) {
-            if (ele >= 10) {
-                std::cerr << "Too many dims." << std::endl;
-                assert(0);
-            }
             if (!fuse_vis[ele]) {
-                params.clear();
-                params.push_back(prevRes);
-                params.push_back(Const[ele]);
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, fuseName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(fuseName, {prevRes, Const[ele]});
             } else {
                 fuse_vis[ele] = 0;
             }
@@ -670,49 +637,36 @@ public:
         for (auto ele: srcFuse) {
             if (fuse_vis[ele]) {
                 fuse_vis[ele] = 0;
-                params.clear();
-                params.push_back(prevRes);
-                params.push_back(Const[ele]);
-                auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                    getFunc(op, separateName, prevType, params, /*emitCInterface=*/true),
-                    params
-                );
-                prevType = prevOp.getType(0);
-                prevRes = prevOp.getResult(0);
+                genFunc1R(separateName, {prevRes, Const[ele]});
             }
         }
 
-        // assert(src_mn_trim == 0);
-
-        std::cerr << "dst_mn_trim = " << dst_mn_trim << std::endl;
-
         if (dst_mn_trim < src_mn_trim) {
-            params.clear();
-            params.push_back(prevRes);
-            params.push_back(Const[dst_mn_trim]);
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, trimName, prevType, params, /*emitCInterface=*/true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
+            genFunc1R(trimName, {prevRes, Const[dst_mn_trim]});
         } else if (dst_mn_trim > src_mn_trim) {
-            params.clear();
-            params.push_back(prevRes);
-            dst_mn_trim = std::min((unsigned int)(dst_mn_trim), dstCrd.getNumResults()-1);
-            params.push_back(Const[dst_mn_trim-1]);
-            auto prevOp = rewriter.create<CallOp>(loc, prevType,
-                getFunc(op, growName, prevType, params, /*emitCInterface=*/true),
-                params
-            );
-            prevType = prevOp.getType(0);
-            prevRes = prevOp.getResult(0);
+            genFunc1R(growName, {prevRes, Const[dst_mn_trim-1]});
         }
-
-        if (dst_mx_trim < dstCrd.getNumResults()-1) {
-            // assert(src_mx_trim == 1);
-            assert(dst_mx_trim == dstCrd.getNumResults()-2);
-            genFunc2V1R(vectorizeName, prevRes, Const[1]);
+        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
+            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
+            for (unsigned i = 0; i < dstCrd.getNumResults()-1; ++i) {
+                if (need_move[i]) {
+                    genFunc1R(moveName, {prevRes, Const[i], Const[i]});
+                    need_move[i] = 0;
+                }
+            }
+        }
+        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
+            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
+            genFunc1R(vectorizeName, {prevRes, Const[dstCrd.getNumResults()-1]});
+        }
+        for (unsigned i = 0; i < dstCrd.getNumResults(); ++i) {
+            if (need_move[i]) {
+                genFunc1R(moveName, {prevRes, Const[i], Const[i]});
+                need_move[i] = 0;
+            }
+        }
+        for (int i = 0; i < 10; ++i) {
+            assert(need_move[i] == 0);
         }
         rewriter.replaceOp(op, prevRes);
         return success();
@@ -726,14 +680,14 @@ class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageO
                         ConversionPatternRewriter &rewriter) const final {
         
         Value candValue = adaptor.getOperands()[0];
-        CallOp printOp;
+        func::CallOp printOp;
 
         StringRef funcName = "sptPrint";
 
         SmallVector<Value, 1> printParams;
         printParams.push_back(candValue);
 
-        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, printParams, /*emitCInterface=*/true),
             printParams);
         return success();
@@ -746,11 +700,11 @@ class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
         matchAndRewrite(sparlay::copyOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue = adaptor.getOperands()[0];
-        CallOp copyOp;
+        func::CallOp copyOp;
         StringRef funcName = "sptCopy";
         SmallVector<Value, 1> params;
         params.push_back(candValue);
-        rewriter.replaceOpWithNewOp<CallOp>(op, candValue.getType(), 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, candValue.getType(), 
             getFunc(op, funcName, candValue.getType(), params, /*emitCInterface=*/true),
             params);
         return success();
@@ -764,10 +718,10 @@ class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue1 = adaptor.getOperands()[0];
         Value candValue2 = adaptor.getOperands()[1];
-        CallOp checkOp;
+        func::CallOp checkOp;
         StringRef funcName = "sptCheck";
         SmallVector<Value, 2> params = {candValue1, candValue2};
-        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
             params);
         return success();
@@ -779,10 +733,10 @@ class ticOpLowering : public OpConversionPattern<sparlay::ticOp> {
         LogicalResult 
         matchAndRewrite(sparlay::ticOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
-        CallOp ticOp;
+        func::CallOp ticOp;
         StringRef funcName = "sptTic";
         SmallVector<Value> params = {};
-        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
             params);
         return success();
@@ -794,14 +748,119 @@ class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
         LogicalResult 
         matchAndRewrite(sparlay::tocOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
-        CallOp tocOp;
+        func::CallOp tocOp;
         StringRef funcName = "sptToc";
         SmallVector<Value> params = {};
-        rewriter.replaceOpWithNewOp<CallOp>(op, llvm::None, 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
             params);
         return success();
     }
+};
+
+class StructAccessOpLowering: public OpConversionPattern<sparlay::StructAccessOp> {
+public:
+    using OpConversionPattern<sparlay::StructAccessOp>::OpConversionPattern;
+    LogicalResult matchAndRewrite(sparlay::StructAccessOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        Value inputPtr = adaptor.getOperands()[0];
+        uint64_t index = op.index();
+        std::vector<Value> params;
+        params.push_back(inputPtr);
+        params.push_back(rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(index)));
+        auto ret = rewriter.create<func::CallOp>(loc, inputPtr.getType(),
+            getFunc(op, "structAccess", inputPtr.getType(), params, true),
+            params
+        );
+        rewriter.replaceOp(op, ret.getResult(0));
+        return success();
+    }
+};
+
+AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const sparlay::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
+    std::vector<AffineExpr> exprs = crdMap.getResults();
+    assert(exprs.size() <= (size_t)2);
+    std::vector<AffineExpr> new_exprs = {};
+    for (size_t i = 0; i < exprs.size(); ++i) {
+        if (exprs[i].getKind() == AffineExprKind::Mod || exprs[i].getKind() == AffineExprKind::FloorDiv) {
+            auto binExpr = exprs[i].dyn_cast<AffineBinaryOpExpr>();
+            assert(binExpr);
+            auto LHS = binExpr.getLHS();
+            auto RHS = binExpr.getRHS();
+            assert(RHS.isSymbolicOrConstant());
+            size_t curLv = i;
+            if (LHS != getAffineDimExpr((unsigned)i, crdMap.getContext())) {
+                assert(exprs.size() == (size_t)1);
+                assert(LHS == getAffineDimExpr((unsigned)1, crdMap.getContext()));
+                curLv = 1;
+            }
+            new_exprs.push_back(LHS);
+            uint64_t _type = (exprs[i].getKind() == AffineExprKind::Mod);
+            auto index = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(curLv));
+            auto type = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(_type));
+            auto val = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(RHS.dyn_cast<AffineConstantExpr>().getValue()));
+            std::vector<Value> params = {prevRes, index, type, val};
+            auto prevOp = rewriter.create<func::CallOp>(loc, prevType,
+                getFunc(op, "spwTile", prevType, params, true),
+                params
+            );
+            prevType = prevOp.getType(0);
+            prevRes = prevOp.getResult(0);
+        }
+    }
+    return AffineMap::get(crdMap.getNumDims(), 0, new_exprs, crdMap.getContext());
+}
+
+class DecompseOpLowering : public OpConversionPattern<sparlay::DecomposeOp> {
+public:
+  using OpConversionPattern<sparlay::DecomposeOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::DecomposeOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value inputThres = op->getOperand(1);
+    AffineMap rmap = adaptor.rmap();
+
+    std::vector<Value> params = {};
+    auto prevOp = rewriter.create<func::CallOp>(loc, inputTensor.getType(),
+        getFunc(op, "spwNew", inputTensor.getType(), params, true),
+        params
+    );
+    auto prevType = prevOp.getType(0);
+    auto prevRes = prevOp.getResult(0);
+    auto assembleWindow = [&]() {
+        rmap = rewriteTileGenWindow(rmap, loc, op, rewriter, prevRes, prevType);
+        auto M = toIntMatrix(toMatrix(rmap));
+        std::cerr << M << std::endl;
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                if (M(i,j)) {
+                    auto val = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(M(i,j)));
+                    auto index_i = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(i));
+                    auto index_j = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(j));
+                    params = {prevRes, index_i, index_j, val};
+                    auto prevOp = rewriter.create<func::CallOp>(loc, prevType,
+                        getFunc(op, "spwAssign", prevType, params, true),
+                        params
+                    );
+                    prevType = prevOp.getType(0);
+                    prevRes = prevOp.getResult(0);
+                }
+            }
+        }
+    };
+    assembleWindow();
+    params = {inputThres, inputTensor, prevRes};
+    prevOp = rewriter.create<func::CallOp>(loc, inputTensor.getType(),
+        getFunc(op, "sptSplit", inputTensor.getType(), params, true),
+        params
+    );
+    prevRes = prevOp.getResult(0);
+    rewriter.replaceOp(op, prevRes);
+    return success();
+  }
 };
 
 //===----------------------------------------------------------------------===//
@@ -843,17 +902,17 @@ public:
         Value nnz_per_row = rewriter.create<memref::AllocaOp>(loc, nnzPerRowTp);
 
         Type inputElmTp = input.getType().cast<MemRefType>().getElementType();
-        Value zeroElm = rewriter.create<ConstantOp>(loc, inputElmTp, rewriter.getZeroAttr(inputElmTp));
+        Value zeroElm = rewriter.create<arith::ConstantOp>(loc, inputElmTp, rewriter.getZeroAttr(inputElmTp));
 
-        Value zero = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(0));
-        Value one = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(1));
+        Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(0));
+        Value one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
         // Value dim = rewriter.create<memref::DimOp>(loc, input, zero);
 
         SmallVector<Value> lb_outer, lb, lb_orig;
         SmallVector<Value> hb_outer, hb, hb_orig;
         SmallVector<Value> step_outer, step, step_orig;
         for (unsigned i = 0; i < shape.size(); i++) {
-            Value dimSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(shape[i]));
+            Value dimSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(shape[i]));
             if (i != reduceDimValue) {
                 lb_outer.push_back(zero);
                 hb_outer.push_back(dimSize);
@@ -867,7 +926,7 @@ public:
         hb.assign(hb_outer.begin(), hb_outer.end());
         step.assign(step_outer.begin(), step_outer.end());
         lb.push_back(zero);
-        Value reduceDimSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(shape[reduceDimValue]));
+        Value reduceDimSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(shape[reduceDimValue]));
         hb.push_back(reduceDimSize);
         step.push_back(one);  
 
@@ -901,11 +960,11 @@ public:
                 // LLVM_DEBUG(llvm::dbgs() << "inner_reduce_dim_ivs.size = " << inner_reduce_dim_ivs.size() << "\n");
                 
                 Value elm = builder.create<memref::LoadOp>(loc, input, ivs);
-                Value not_zero = builder.create<CmpFOp>(loc, CmpFPredicate::ONE, 
+                Value not_zero = builder.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ONE, 
                                     elm, zeroElm);
                 builder.create<scf::IfOp>(loc, not_zero, [&](OpBuilder &b, Location loc) {
                     Value old_nnz = b.create<memref::LoadOp>(loc, nnz_per_row, outer_ivs);
-                    Value new_nnz = b.create<AddIOp>(loc, old_nnz, one);
+                    Value new_nnz = b.create<arith::AddIOp>(loc, old_nnz, one);
                     b.create<memref::StoreOp>(loc, new_nnz, nnz_per_row, outer_ivs);
                     
                     // LLVM_DEBUG(llvm::dbgs() << "ivs_vec.size before = " << ivs_vec.size() << "\n");
@@ -935,10 +994,10 @@ public:
             [&](OpBuilder &builder, Location loc, ValueRange ivs) {
                 Value row_nnz = builder.create<memref::LoadOp>(loc, nnz_per_row, ivs);
                 Value tmp_count = builder.create<memref::LoadOp>(loc, nnz_count, zero);
-                Value sum = builder.create<AddIOp>(loc, row_nnz, tmp_count);
+                Value sum = builder.create<arith::AddIOp>(loc, row_nnz, tmp_count);
                 builder.create<memref::StoreOp>(loc, sum, nnz_count, zero);
                 Value tmp_max = builder.create<memref::LoadOp>(loc, max_nnz, zero);
-                Value is_row_nnz_greater = builder.create<CmpIOp>(loc, CmpIPredicate::ugt, row_nnz, tmp_max);
+                Value is_row_nnz_greater = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, row_nnz, tmp_max);
                 builder.create<scf::IfOp>(loc, is_row_nnz_greater, [&](OpBuilder &b, Location loc) {
                     b.create<memref::StoreOp>(loc, row_nnz, max_nnz, zero);
                     b.create<scf::YieldOp>(loc, ValueRange{});
@@ -987,7 +1046,7 @@ public:
                     " | permuted dim = " << storageOrder.getPermutedPosition(i) << "\n");
             if (reorderedDimPos != reduceDimValue) {
                 lb_ordered.push_back(zero);
-                Value reorderedDimSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(shape[reorderedDimPos]));
+                Value reorderedDimSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(shape[reorderedDimPos]));
                 hb_ordered.push_back(reorderedDimSize);
                 step_ordered.push_back(one);
             }
@@ -1008,7 +1067,7 @@ public:
 
                 Value reordered_idx = builder.create<memref::LoadOp>(loc, index_arr, llvm::makeArrayRef(index_load_dim));
                 if (padding == "none") {
-                    Value valid_idx = builder.create<CmpIOp>(loc, CmpIPredicate::ult, reordered_idx, reduceDimSize);
+                    Value valid_idx = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, reordered_idx, reduceDimSize);
                     builder.create<scf::IfOp>(loc, valid_idx, [&](OpBuilder &b, Location loc) {
                         Value len_count_val = b.create<memref::LoadOp>(loc, len_count, zero);
                         
@@ -1026,7 +1085,7 @@ public:
                         }
                         Value a_mem_val = b.create<memref::LoadOp>(loc, input, llvm::makeArrayRef(load_dim));
                         b.create<memref::StoreOp>(loc, a_mem_val, val_array, len_count_val);
-                        Value len_count_sum = b.create<AddIOp>(loc, len_count_val, one);
+                        Value len_count_sum = b.create<arith::AddIOp>(loc, len_count_val, one);
                         b.create<memref::StoreOp>(loc, len_count_sum, len_count, zero);
                         b.create<scf::YieldOp>(loc, ValueRange{});
                     });
@@ -1037,8 +1096,8 @@ public:
             
                 // builder.create<memref::StoreOp>(loc, sum, nnz_count, zero);
                 // Value tmp_max = builder.create<memref::LoadOp>(loc, max_nnz, zero);
-                // Value is_row_nnz_greater = builder.create<CmpIOp>(loc, CmpIPredicate::ugt, row_nnz, tmp_max);
-                // Value sum = builder.create<AddIOp>(loc, row_nnz, tmp_count);
+                // Value is_row_nnz_greater = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, row_nnz, tmp_max);
+                // Value sum = builder.create<arith::AddIOp>(loc, row_nnz, tmp_count);
                 return;
             });
 
@@ -1084,13 +1143,13 @@ public:
         Type idxMemRefType = MemRefType::get({ShapedType::kDynamicSize}, indexTp);
 
         // compose the new crd struct 
-        Value i0 = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(0));
-        Value i1 = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(1));
+        Value i0 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(0));
+        Value i1 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
         Value crd_old = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input, 0);
         Value val_old = rewriter.create<sparlay::StructAccessOp>(loc, inputDataType, input, 1);
         std::vector<Value> crdArray;
         for (uint64_t i = 0; i < inputSize; i++) {
-            // Value constI = rewriter.create<ConstantOp>(loc, rewriter.getI64IntegerAttr(i));
+            // Value constI = rewriter.create<arith::ConstantOp>(loc, rewriter.getI64IntegerAttr(i));
             crdArray.push_back(rewriter.create<sparlay::StructAccessOp>(loc, idxMemRefType, crd_old, i));
         }
         Value crd_new = rewriter.create<sparlay::StructConstructOp>(loc, outputCrdType, 
@@ -1103,7 +1162,7 @@ public:
             ptrSizeVal = ptrSizeVal * inputDimSizes[i];
         }
         ptrSizeVal += 1;
-        Value ptrSize = rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(ptrSizeVal));
+        Value ptrSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(ptrSizeVal));
         MemRefType dynamicPtrType = MemRefType::get(-1, indexTp);
         Value ptr = rewriter.create<memref::AllocOp>(loc, dynamicPtrType, ptrSize);
 
@@ -1129,31 +1188,31 @@ public:
                 auto whileOp = rewriter.create<scf::WhileOp>(loc, resTypes, initArgs);
 
                 // The before block of the while loop.
-                Block *before = rewriter.createBlock(&whileOp.before(), {}, resTypes); 
-                rewriter.setInsertionPointToStart(&whileOp.before().front());
+                Block *before = rewriter.createBlock(&whileOp.getBefore(), {}, resTypes); 
+                rewriter.setInsertionPointToStart(&whileOp.getBefore().front());
                 // %cond1 = cmpi ult, %arg1, %dim : index
-                Value cond1 = builder.create<CmpIOp>(whileOp.getLoc(), CmpIPredicate::ult, before->getArguments()[0], crd_dim);
+                Value cond1 = builder.create<arith::CmpIOp>(whileOp.getLoc(), arith::CmpIPredicate::ult, before->getArguments()[0], crd_dim);
                 // %crd_val = memref.load %crd_0[%arg1] : memref<7xindex>
                 Value crd_val = rewriter.create<memref::LoadOp>(whileOp.getLoc(), crdArray.front(), before->getArgument(0));
                 // %cond2 = cmpi ult, %crd_val, %arg0 : index
-                Value cond2 = builder.create<CmpIOp>(whileOp.getLoc(), CmpIPredicate::ult, crd_val, ivs[0]);
+                Value cond2 = builder.create<arith::CmpIOp>(whileOp.getLoc(), arith::CmpIPredicate::ult, crd_val, ivs[0]);
                 // %cond = and %cond1, %cond2 : i1
-                Value cond = builder.create<AndOp>(whileOp.getLoc(), cond1, cond2);
+                Value cond = builder.create<arith::AndIOp>(whileOp.getLoc(), cond1, cond2);
                 // scf.condition (%cond) %arg1 : index
                 rewriter.create<scf::ConditionOp>(whileOp.getLoc(), cond, before->getArguments());
 
                 // ----------------Please revise the logic for general purpose ---------
-                // Value i5 = rewriter.create<ConstantOp>(whileOp.getLoc(), rewriter.getIndexAttr(5));
-                // Value isLessThanFive = rewriter.create<CmpIOp>(whileOp.getLoc(), 
-                //     CmpIPredicate::ult, before->getArgument(0), i5);
+                // Value i5 = rewriter.create<arith::ConstantOp>(whileOp.getLoc(), rewriter.getIndexAttr(5));
+                // Value isLessThanFive = rewriter.create<arith::CmpIOp>(whileOp.getLoc(), 
+                //     arith::CmpIPredicate::ult, before->getArgument(0), i5);
                 // rewriter.create<scf::ConditionOp>(whileOp.getLoc(), isLessThanFive, before->getArguments());
                 
                 // The after block of the while loop.
-                Block *after = rewriter.createBlock(&whileOp.after(), {}, resTypes);
-                rewriter.setInsertionPointToStart(&whileOp.after().front());
+                Block *after = rewriter.createBlock(&whileOp.getAfter(), {}, resTypes);
+                rewriter.setInsertionPointToStart(&whileOp.getAfter().front());
 
                 // %sum = addi %arg2, %i1 : index
-                Value sum = builder.create<AddIOp>(whileOp.getLoc(), after->getArgument(0), i1);
+                Value sum = builder.create<arith::AddIOp>(whileOp.getLoc(), after->getArgument(0), i1);
                 // scf.yield %sum : index
                 rewriter.create<scf::YieldOp>(whileOp.getLoc(), ValueRange({sum}));
 
@@ -1219,7 +1278,7 @@ public:
         readParams.push_back(crd_memref);
         readParams.push_back(val);
         readParams.push_back(input_B);
-        rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, outputType, 
             getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
             readParams);
       } else {
@@ -1250,9 +1309,9 @@ public:
         readParams.push_back(val);
         readParams.push_back(input_B);
         for (unsigned i = 0; i < dimSizes.size(); i++) {
-            readParams.push_back(rewriter.create<ConstantOp>(loc, rewriter.getIndexAttr(dimSizes[i])));
+            readParams.push_back(rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(dimSizes[i])));
         }
-        rewriter.replaceOpWithNewOp<CallOp>(op, outputType, 
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, outputType, 
             getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
             readParams);
       }
@@ -1276,18 +1335,19 @@ public:
 
 
 namespace {
+
 struct LowerFormatConversionPass : 
-public PassWrapper<LowerFormatConversionPass, FunctionPass> {
-    void getDependentDialects(DialectRegistry &registry) const override {
-        registry.insert<scf::SCFDialect, memref::MemRefDialect, 
-                        vector::VectorDialect, linalg::LinalgDialect,
-                        StandardOpsDialect>();
-    }
-    void runOnFunction() final;
+public LowerFormatConversionBase<LowerFormatConversionPass> {
+    // void getDependentDialects(DialectRegistry &registry) const override {
+    //     registry.insert<scf::SCFDialect, memref::MemRefDialect, 
+    //                     vector::VectorDialect, linalg::LinalgDialect,
+    //                     arith::ArithmeticDialect, LLVM::LLVMDialect>();
+    // }
+    void runOnOperation() final;
 };
 }
 
-void LowerFormatConversionPass::runOnFunction() {
+void LowerFormatConversionPass::runOnOperation() {
     // auto function = getFunction();
 
     // The first thing to define is the conversion target. This will define the
@@ -1299,16 +1359,15 @@ void LowerFormatConversionPass::runOnFunction() {
     // `Affine`, `MemRef` and `Standard` dialects.
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
                            vector::VectorDialect, linalg::LinalgDialect,
-                           StandardOpsDialect>();
+                           arith::ArithmeticDialect, LLVM::LLVMDialect, func::FuncDialect>();
 
     // We also define the Sparlay dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
     target.addIllegalDialect<sparlay::SparlayDialect>();
-    target.addLegalOp<sparlay::StructAccessOp>();
     target.addLegalOp<sparlay::StructConstructOp>();
-    target.addLegalOp<linalg::FillOp>(); 
+    target.addLegalOp<linalg::FillOp>();
 
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
@@ -1316,7 +1375,8 @@ void LowerFormatConversionPass::runOnFunction() {
     patterns.add<NewOpLowering, PackOpLowering,
                  CompressOpLowering, MultiplyOpLowering, 
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
-                 checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering>(&getContext());
+                 checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
+                 StructAccessOpLowering, DecompseOpLowering>(&getContext());
     // patterns.add<PackOpLowering>(&getContext());
     // patterns.add<MultiplyOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
@@ -1324,8 +1384,9 @@ void LowerFormatConversionPass::runOnFunction() {
     // With the target and rewrite patterns defined, we can now attempt the
     // conversion. The conversion will signal failure if any of our `illegal`
     // operations were not converted successfully.
+    func::FuncOp curOp = getOperation();
     if (failed(
-            applyPartialConversion(getFunction(), target, std::move(patterns))))
+            applyPartialConversion(curOp, target, std::move(patterns))))
         signalPassFailure();
 }
 

@@ -31,6 +31,8 @@ def Sparlay_Dialect : Dialect {
     let extraClassDeclaration = [{
         void registerTypes();
     }];
+    let useDefaultAttributePrinterParser = 1;
+    let useDefaultTypePrinterParser = 1;
 }
 
 //===----------------------------------------------------------------------===//
@@ -41,6 +43,6 @@ def Sparlay_StructType :
     DialectType<Sparlay_Dialect, CPred<"$_self.isa<StructType>()">,
                 "Sparlay struct type">;
 
-def Sparlay_Type : AnyTypeOf<[AnyTensor, AnyMemRef, Sparlay_StructType]>;
+def Sparlay_Type : AnyTypeOf<[AnyType, AnyTensor, AnyMemRef, Sparlay_StructType]>;
 
 #endif // SPARLAY_DIALECT

@@ -9,13 +9,16 @@
 #include "IR/SparlayOps.h"
 #include "IR/SparlayDialect.h"
 #include "IR/SparlayTypes.h"
-#include "mlir/IR/OpImplementation.h"
 
+#include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/FunctionImplementation.h"
+#include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/AffineMap.h"
+#include "mlir/Transforms/InliningUtils.h"
 
 using namespace mlir;
 using namespace mlir::sparlay;
@@ -38,15 +41,15 @@ void StructAccessOp::build(mlir::OpBuilder &b, mlir::OperationState &state,
   build(b, state, resultType, input, b.getI64IntegerAttr(index));
 }
 
-static mlir::LogicalResult verify(StructAccessOp op) {
-  StructType structTy = op.input().getType().cast<StructType>();
-  size_t index = op.index();
+mlir::LogicalResult StructAccessOp::verify() {
+  StructType structTy = this->input().getType().cast<StructType>();
+  size_t index = this->index();
   if (index >= structTy.getNumElementTypes())
-    return op.emitOpError()
+    return emitOpError()
            << "index should be within the range of the input struct type";
-  mlir::Type resultType = op.getResult().getType();
+  mlir::Type resultType = getResult().getType();
   if (resultType != structTy.getElementTypes()[index])
-    return op.emitOpError() << "must have the same result type as the struct "
+    return emitOpError() << "must have the same result type as the struct "
                                "element referred to by the index";
   return mlir::success();
 }

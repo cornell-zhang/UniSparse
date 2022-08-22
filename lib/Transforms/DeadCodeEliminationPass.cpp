@@ -10,25 +10,23 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Transforms/Passes.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayTypes.h"
-
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Analysis/Utils.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Transforms/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "Transforms/Passes.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayOps.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayTypes.h"
 
 #include <cstdio>
 #include <cstring>
@@ -39,6 +37,9 @@ using namespace sparlay;
 #define DEBUG_TYPE "dce"
 
 namespace {
+
+#define GEN_PASS_CLASSES
+#include "Transforms/Passes.h.inc"
 
 //===----------------------------------------------------------------------===//
 // DeadCodeEliminationPass
@@ -55,16 +56,19 @@ public:
 };
 
 struct DeadCodeEliminationPass : 
-public PassWrapper<DeadCodeEliminationPass, FunctionPass> {
+public DeadCodeEliminationBase<DeadCodeEliminationPass> {
 
-    void runOnFunction() override {
+    void runOnOperation() override {
         
-        FuncOp function = getFunction();
+        func::FuncOp function = getOperation();
         MLIRContext *ctx = function.getContext();
         RewritePatternSet patterns(ctx);
         patterns.add<DeadCodeElimination>(&getContext());
         ConversionTarget target(getContext());
-        (void)applyPatternsAndFoldGreedily(function, std::move(patterns));
+        target.addIllegalOp<sparlay::StructConstructOp>();
+        if (failed(
+            applyPartialConversion(getOperation(), target, std::move(patterns))))
+        signalPassFailure();
     };
 
 };

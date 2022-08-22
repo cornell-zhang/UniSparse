@@ -10,25 +10,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Transforms/Passes.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayTypes.h"
-
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Analysis/Utils.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Transforms/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "Transforms/Passes.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayOps.h"
+#include "IR/SparlayDialect.h"
+#include "IR/SparlayTypes.h"
 
 #include <cstdio>
 #include <cstring>
@@ -39,6 +38,9 @@ using namespace sparlay;
 #define DEBUG_TYPE "lower-struct"
 
 namespace {
+
+#define GEN_PASS_CLASSES
+#include "Transforms/Passes.h.inc"
 
 //===----------------------------------------------------------------------===//
 // RewritePatterns: StructAccessOp 
@@ -75,16 +77,17 @@ namespace {
 
 
 struct LowerStructPass : 
-public PassWrapper<LowerStructPass, FunctionPass> {
+public LowerStructBase<LowerStructPass> {
 
-    void runOnFunction() override {
-        getFunction().walk([](Operation *op) {
+    void runOnOperation() override {
+        getOperation().walk([](Operation *op) {
             if (auto accessOp = dyn_cast<sparlay::StructAccessOp>(op)) {
                 Value input = accessOp->getOperand(0);
                 Value output = accessOp->getResult(0);
                 uint64_t index = accessOp.index();
                 Operation* defOp = input.getDefiningOp();
                 Value replaceInput;
+                if (!dyn_cast<sparlay::StructConstructOp>(defOp)) return;
                 replaceInput = defOp->getOperand(index);
                 // if (!replaceInput.getType().isa<mlir::MemRefType>()) {
                 //     Operation* defOp_1 = replaceInput.getDefiningOp();
