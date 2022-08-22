@@ -23,7 +23,7 @@
 
 namespace mlir {
 namespace sparlay {
-  // SparlayEncodingAttr getSparlayEncoding(Type type);
+   SparlayEncodingAttr getSparlayEncoding(Type type);
 }
 }
 
