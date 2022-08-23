@@ -1,23 +1,20 @@
-// RUN: sparlay-opt %s -lower-format-conversion | check %s
+// RUN: sparlay-opt %s -lower-struct -dce | FileCheck %s
 
-// func @COO_i_major(%A_mem: memref<4x4x4xf32>){
-//     %A_COO = sparlay.pack (%A_mem) 
-//         { reduce_dim = 1: index, padding = "none", 
-//         storage_order = affine_map<(i,j,k) -> (i,j,k)> } :
-//         memref<4x4x4xf32> to 
-//         !sparlay.struct<!sparlay.struct<memref<?xindex>, memref<?xindex>, memref<?xindex>>, memref<?xf32>>
-// }
-
+// CHECK-LABEL: func @main(
 func.func @main() {
     %A_ptr = arith.constant dense<[0, 2, 5, 5, 7]> : tensor<5xindex>
     %A_crd_i = arith.constant dense<[0, 1, 0, 1, 3, 1, 3]> : tensor<7xindex>
     %A_crd_j = arith.constant dense<[0, 0, 1, 3, 3, 4, 4]> : tensor<7xindex>
     %A_val = arith.constant dense<[1.0e+00, 5.0e+00, 7.0e+00, 3.0e+00, 4.0e+00, 2.0e+00, 6.0e+00]> : tensor<7xf32>
-    %A_ptr_mem = memref.buffer_cast %A_ptr : memref<5xindex>
-    %A_crd_i_mem= memref.buffer_cast %A_crd_i : memref<7xindex>
-    %A_crd_j_mem = memref.buffer_cast %A_crd_j : memref<7xindex>
-    %A_val_mem = memref.buffer_cast %A_val : memref<7xf32>
-
+    %A_ptr_mem = bufferization.to_memref %A_ptr : memref<5xindex>
+    %A_crd_i_mem= bufferization.to_memref %A_crd_i : memref<7xindex>
+    %A_crd_j_mem = bufferization.to_memref %A_crd_j : memref<7xindex>
+    %A_val_mem = bufferization.to_memref %A_val : memref<7xf32>
+    // CHECK: {{.*}} bufferization.to_memref {{.*}}
+    // CHECK-NEXT: {{.*}} bufferization.to_memref {{.*}}
+    // CHECK-NEXT: {{.*}} bufferization.to_memref {{.*}}
+    // CHECK-NEXT: {{.*}} bufferization.to_memref {{.*}}
+    // CHECK-NEXT: return
 
     // Inst 0:
     %A_COO_crd = sparlay.struct_construct (%A_crd_i_mem, %A_crd_j_mem) : memref<7xindex>, memref<7xindex> to    
@@ -72,12 +69,3 @@ func.func @main() {
     return
 }
 
-
-
-// func @ELL_i_major(%A_mem: memref<4x4x4xf32>) {
-//     %A_COO = sparlay.pack (%A_mem) 
-//         { reduce_dim = 1: index, padding = "zero", 
-//         storage_order = affine_map<(i,j,k) -> (k,i,j)> } :
-//         memref<4x4x4xf32> to 
-//         !sparlay.struct<!sparlay.struct<memref<?xindex>, memref<?xindex>, memref<?xindex>>, memref<?xf32>>
-// }
