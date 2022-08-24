@@ -1631,6 +1631,36 @@ extern "C" {
       return (void*)ret;
     }
 
+    void _mlir_ciface_getCrd(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      ref->basePtr = ref->data = sparT->vLevel[dim+1]->crd.data();
+      ref->offset = 0;
+      ref->sizes[0] = sparT->vLevel[dim+1]->crd.size();
+      ref->strides[0] = 1;
+    }
+
+    void _mlir_ciface_getPtr(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      ref->basePtr = ref->data = sparT->vLevel[dim+1]->ptr.data();
+      ref->offset = 0;
+      ref->sizes[0] = sparT->vLevel[dim+1]->ptr.size();
+      ref->strides[0] = 1;
+    }
+
+    void _mlir_ciface_getValue(StridedMemRefType<float, 1>* ref, void* ptr, uint64_t dim) {
+      assert(dim == (uint64_t)0);
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      ref->basePtr = ref->data = sparT->valueArray.data();
+      ref->offset = 0;
+      ref->sizes[0] = sparT->valueArray.size();
+      ref->strides[0] = 1;
+    }
+
+    uint64_t _mlir_ciface_getSize(void* ptr, uint64_t dim) {
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      return sparT->vLevel[dim+1]->crd.size();
+    }
+
 // #define GETINDICES(TYPE)
     void _mlir_ciface_getTensorIndices(StridedMemRefType<uint64_t, 1> *ref, void *ptr, uint64_t dim) {   
 

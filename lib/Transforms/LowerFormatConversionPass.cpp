@@ -863,6 +863,90 @@ public:
   }
 };
 
+class ToPtrOpLowering: public OpConversionPattern<sparlay::ToPtrOp> {
+public:
+  using OpConversionPattern<sparlay::ToPtrOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::ToPtrOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getPtr", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class ToCrdOpLowering: public OpConversionPattern<sparlay::ToCrdOp> {
+public:
+  using OpConversionPattern<sparlay::ToCrdOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::ToCrdOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getCrd", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class ToValueOpLowering: public OpConversionPattern<sparlay::ToValueOp> {
+public:
+  using OpConversionPattern<sparlay::ToValueOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::ToValueOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getValue", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class ToSizeOpLowering: public OpConversionPattern<sparlay::ToSizeOp> {
+public:
+  using OpConversionPattern<sparlay::ToSizeOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::ToSizeOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getSize", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
@@ -911,7 +995,8 @@ void LowerFormatConversionPass::runOnOperation() {
     patterns.add<NewOpLowering, 
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
-                 StructAccessOpLowering, DecompseOpLowering>(&getContext());
+                 StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
+                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
