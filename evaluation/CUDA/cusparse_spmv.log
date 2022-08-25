@@ -1,0 +1,63 @@
+mkdir -p ./build
+nvcc -std=c++11 -O3 -I/usr/local/cuda-11.2/include -I/work/shared/common/datasets/versatile_sparse_xcel/cnpy cusparse_spmv.cu -o ./build/cusparse_spmv \
+	 -L/usr/local/cuda-11.2/lib64 -L/work/shared/common/datasets/versatile_sparse_xcel/cnpy/build -lcnpy -lcusparse -lcudart
+./build/cusparse_spmv 2cubes_sphere_csr_float32.npz
+average_time = 0.0401722 ms
+nnz is 1647264
+THROUGHPUT = 82.0102 GOPS
+./build/cusparse_spmv CollegeMsg_csr_float32.npz
+average_time = 0.00962189 ms
+nnz is 20296
+THROUGHPUT = 4.21871 GOPS
+./build/cusparse_spmv amazon0312_csr_float32.npz
+average_time = 0.0784342 ms
+nnz is 3200440
+THROUGHPUT = 81.6083 GOPS
+./build/cusparse_spmv ca-CondMat_csr_float32.npz
+average_time = 0.0150577 ms
+nnz is 186936
+THROUGHPUT = 24.8293 GOPS
+./build/cusparse_spmv cage12_csr_float32.npz
+average_time = 0.046657 ms
+nnz is 2032536
+THROUGHPUT = 87.1267 GOPS
+./build/cusparse_spmv email-Eu-core_csr_float32.npz
+average_time = 0.00883392 ms
+nnz is 25571
+THROUGHPUT = 5.78928 GOPS
+./build/cusparse_spmv filter3D_csr_float32.npz
+average_time = 0.059198 ms
+nnz is 2707179
+THROUGHPUT = 91.4618 GOPS
+./build/cusparse_spmv m133-b3_csr_float32.npz
+average_time = 0.0279826 ms
+nnz is 800800
+THROUGHPUT = 57.2356 GOPS
+./build/cusparse_spmv mario002_csr_float32.npz
+average_time = 0.0550975 ms
+nnz is 2101242
+THROUGHPUT = 76.2736 GOPS
+./build/cusparse_spmv offshore_csr_float32.npz
+average_time = 0.0869121 ms
+nnz is 4242673
+THROUGHPUT = 97.6313 GOPS
+./build/cusparse_spmv p2p-Gnutella31_csr_float32.npz
+average_time = 0.0149136 ms
+nnz is 147892
+THROUGHPUT = 19.8332 GOPS
+./build/cusparse_spmv poisson3Da_csr_float32.npz
+average_time = 0.016911 ms
+nnz is 352762
+THROUGHPUT = 41.7199 GOPS
+./build/cusparse_spmv scircuit_csr_float32.npz
+average_time = 0.0304531 ms
+nnz is 958936
+THROUGHPUT = 62.978 GOPS
+./build/cusparse_spmv web-Google_csr_float32.npz
+average_time = 0.176018 ms
+nnz is 5105039
+THROUGHPUT = 58.0057 GOPS
+./build/cusparse_spmv wiki-Vote_csr_float32.npz
+average_time = 0.0102337 ms
+nnz is 103689
+THROUGHPUT = 20.2642 GOPS

@@ -1,0 +1,14 @@
+feat_len is: 32
+average time of 10 runs: 4.13194 ms
+
+feat_len is: 64
+average time of 10 runs: 8.12237 ms
+
+feat_len is: 128
+average time of 10 runs: 16.2447 ms
+
+feat_len is: 256
+average time of 10 runs: 32.1485 ms
+
+feat_len is: 512
+average time of 10 runs: 64.2274 ms

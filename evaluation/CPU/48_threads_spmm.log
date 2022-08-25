@@ -1,0 +1,84 @@
+mkdir -p ./build
+g++ -std=c++11 -O3 -I/opt/intel/oneapi/mkl/2022.0.2/include \
+	-Wl,--no-as-needed \
+	mkl_spmm.cpp -o ./build/mkl_spmm \
+	-Wl,--start-group /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_intel_lp64.a \
+	/opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_core.a /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group \
+	-fopenmp -lpthread -lm -ldl
+-bash: export: `=': not a valid identifier
+-bash: export: `48': not a valid identifier
+./build/mkl_spmm 2cubes_sphere_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+average_time = 90.1772 ms
+THROUGHPUT = 19.3924 GOPS
+./build/mkl_spmm cage12_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+average_time = 116.551 ms
+THROUGHPUT = 34.878 GOPS
+./build/mkl_spmm email-Eu-core_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+average_time = 3.3898 ms
+THROUGHPUT = 15.087 GOPS
+./build/mkl_spmm mario002_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+average_time = 129.453 ms
+THROUGHPUT = 18.0402 GOPS
+./build/mkl_spmm poisson3Da_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+average_time = 30.1477 ms
+THROUGHPUT = 23.4022 GOPS
+./build/mkl_spmm ca-CondMat_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+average_time = 15.7139 ms
+THROUGHPUT = 11.8999 GOPS
+./build/mkl_spmm CollegeMsg_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+average_time = 3.1313 ms
+THROUGHPUT = 12.9633 GOPS
+./build/mkl_spmm filter3D_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+average_time = 111.223 ms
+THROUGHPUT = 25.297 GOPS
+./build/mkl_spmm offshore_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+average_time = 208.217 ms
+THROUGHPUT = 21.6239 GOPS
+./build/mkl_spmm scircuit_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+average_time = 86.23 ms
+THROUGHPUT = 22.2414 GOPS
+./build/mkl_spmm wiki-Vote_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+average_time = 13.9003 ms
+THROUGHPUT = 14.919 GOPS
+./build/mkl_spmm amazon0312_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+average_time = 340.944 ms
+THROUGHPUT = 18.774 GOPS
+./build/mkl_spmm web-Google_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+average_time = 788.016 ms
+THROUGHPUT = 12.9567 GOPS
+./build/mkl_spmm p2p-Gnutella31_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+average_time = 27.1894 ms
+THROUGHPUT = 10.8787 GOPS
+./build/mkl_spmm m133-b3_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+average_time = 66.1682 ms
+THROUGHPUT = 24.205 GOPS

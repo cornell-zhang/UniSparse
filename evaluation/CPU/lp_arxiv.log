@@ -1,0 +1,55 @@
+mkdir -p ./build
+g++ -std=c++11 -O3 -I/opt/intel/oneapi/mkl/2022.0.2/include \
+                -Wl,--no-as-needed \
+                mkl_spgemm_lp.cpp -o ./build/mkl_spgemm_lp \
+                -Wl,--start-group /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_intel_lp64.a \
+                /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_core.a /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group \
+                -fopenmp -lpthread -lm -ldl
+mkdir -p ./build
+g++ -std=c++11 -O3 -I/opt/intel/oneapi/mkl/2022.0.2/include \
+	-Wl,--no-as-needed \
+	mkl_spmm.cpp -o ./build/mkl_spmm \
+	-Wl,--start-group /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_intel_lp64.a \
+	/opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_core.a /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group \
+	-fopenmp -lpthread -lm -ldl
+./build/mkl_spgemm_lp arxiv_label_matrix_1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_1.mtx
+total time: 0.017289s
+average_time = 17.289 ms
+The tested ops is 2625968
+output nnz is 334785
+./build/mkl_spgemm_lp arxiv_label_matrix_2.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_2.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_2.mtx
+total time: 0.039237s
+average_time = 39.237 ms
+The tested ops is 19210244
+output nnz is 2003402
+./build/mkl_spgemm_lp arxiv_label_matrix_3.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_3.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_3.mtx
+total time: 0.113156s
+average_time = 113.156 ms
+The tested ops is 99887962
+output nnz is 4097777
+./build/mkl_spgemm_lp arxiv_label_matrix_4.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_4.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_label_matrix_4.mtx
+total time: 0.157644s
+average_time = 157.644 ms
+The tested ops is 155135824
+output nnz is 5569196
+./build/mkl_spmm arxiv_adj_matrix_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/lp/arxiv_adj_matrix_row_major.mtx
+average_time = 18.0219 ms
+THROUGHPUT = 10.279 GOPS

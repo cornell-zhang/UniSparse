@@ -1,0 +1,502 @@
+mkdir -p ./build
+g++ -std=c++11 -O3 -I/opt/intel/oneapi/mkl/2022.0.2/include \
+                -Wl,--no-as-needed \
+                mkl_spmspv.cpp -o ./build/mkl_spmspv \
+                -Wl,--start-group /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_intel_lp64.a \
+                /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_core.a /opt/intel/oneapi/mkl/2022.0.2/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group \
+                -fopenmp -lpthread -lm -ldl
+./build/mkl_spmspv 2cubes_sphere_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/2cubes_sphere_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/2cubes_sphere_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_col_major.mtx
+total time: 0.009003s
+average_time = 9.003 ms
+The tested ops is 32958
+output nnz is 15197
+./build/mkl_spmspv 2cubes_sphere_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/2cubes_sphere_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/2cubes_sphere_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_col_major.mtx
+total time: 0.017325s
+average_time = 17.325 ms
+The tested ops is 329280
+output nnz is 81971
+./build/mkl_spmspv 2cubes_sphere_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/2cubes_sphere_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/2cubes_sphere_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/2cubes_sphere_col_major.mtx
+total time: 0.023583s
+average_time = 23.583 ms
+The tested ops is 1645048
+output nnz is 101488
+./build/mkl_spmspv CollegeMsg_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/CollegeMsg_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/CollegeMsg_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_col_major.mtx
+total time: 0.007427s
+average_time = 7.427 ms
+The tested ops is 548
+output nnz is 220
+./build/mkl_spmspv CollegeMsg_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/CollegeMsg_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/CollegeMsg_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_col_major.mtx
+total time: 0.005357s
+average_time = 5.357 ms
+The tested ops is 4240
+output nnz is 701
+./build/mkl_spmspv CollegeMsg_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/CollegeMsg_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/CollegeMsg_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/CollegeMsg_col_major.mtx
+total time: 0.007389s
+average_time = 7.389 ms
+The tested ops is 20244
+output nnz is 1187
+./build/mkl_spmspv amazon0312_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/amazon0312_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/amazon0312_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_col_major.mtx
+total time: 0.011367s
+average_time = 11.367 ms
+The tested ops is 63970
+output nnz is 30588
+./build/mkl_spmspv amazon0312_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/amazon0312_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/amazon0312_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_col_major.mtx
+total time: 0.041687s
+average_time = 41.687 ms
+The tested ops is 632860
+output nnz is 216785
+./build/mkl_spmspv amazon0312_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/amazon0312_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/amazon0312_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/amazon0312_col_major.mtx
+total time: 0.045222s
+average_time = 45.222 ms
+The tested ops is 3205500
+output nnz is 375387
+./build/mkl_spmspv ca-CondMat_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/ca-CondMat_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/ca-CondMat_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_col_major.mtx
+total time: 0.008488s
+average_time = 8.488 ms
+The tested ops is 3694
+output nnz is 1675
+./build/mkl_spmspv ca-CondMat_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/ca-CondMat_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/ca-CondMat_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_col_major.mtx
+total time: 0.007029s
+average_time = 7.029 ms
+The tested ops is 37146
+output nnz is 10451
+./build/mkl_spmspv ca-CondMat_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/ca-CondMat_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/ca-CondMat_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/ca-CondMat_col_major.mtx
+total time: 0.008812s
+average_time = 8.812 ms
+The tested ops is 189434
+output nnz is 20492
+./build/mkl_spmspv cage12_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/cage12_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/cage12_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_col_major.mtx
+total time: 0.010723s
+average_time = 10.723 ms
+The tested ops is 40962
+output nnz is 18783
+./build/mkl_spmspv cage12_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/cage12_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/cage12_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_col_major.mtx
+total time: 0.017863s
+average_time = 17.863 ms
+The tested ops is 407296
+output nnz is 101803
+./build/mkl_spmspv cage12_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/cage12_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/cage12_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/cage12_col_major.mtx
+total time: 0.032285s
+average_time = 32.285 ms
+The tested ops is 2030312
+output nnz is 130131
+./build/mkl_spmspv email-Eu-core_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/email-Eu-core_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/email-Eu-core_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_col_major.mtx
+total time: 0.007598s
+average_time = 7.598 ms
+The tested ops is 382
+output nnz is 163
+./build/mkl_spmspv email-Eu-core_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/email-Eu-core_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/email-Eu-core_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_col_major.mtx
+total time: 0.006093s
+average_time = 6.093 ms
+The tested ops is 4480
+output nnz is 611
+./build/mkl_spmspv email-Eu-core_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/email-Eu-core_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/email-Eu-core_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/email-Eu-core_col_major.mtx
+total time: 0.005068s
+average_time = 5.068 ms
+The tested ops is 26066
+output nnz is 811
+./build/mkl_spmspv filter3D_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/filter3D_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/filter3D_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_col_major.mtx
+total time: 0.014859s
+average_time = 14.859 ms
+The tested ops is 54690
+output nnz is 23460
+./build/mkl_spmspv filter3D_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/filter3D_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/filter3D_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_col_major.mtx
+total time: 0.022225s
+average_time = 22.225 ms
+The tested ops is 538960
+output nnz is 94908
+./build/mkl_spmspv filter3D_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/filter3D_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/filter3D_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/filter3D_col_major.mtx
+total time: 0.039358s
+average_time = 39.358 ms
+The tested ops is 2714056
+output nnz is 106436
+./build/mkl_spmspv m133-b3_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/m133-b3_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/m133-b3_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_col_major.mtx
+total time: 0.009644s
+average_time = 9.644 ms
+The tested ops is 16016
+output nnz is 7907
+./build/mkl_spmspv m133-b3_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/m133-b3_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/m133-b3_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_col_major.mtx
+total time: 0.015053s
+average_time = 15.053 ms
+The tested ops is 160160
+output nnz is 68836
+./build/mkl_spmspv m133-b3_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/m133-b3_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/m133-b3_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/m133-b3_col_major.mtx
+total time: 0.034617s
+average_time = 34.617 ms
+The tested ops is 800800
+output nnz is 187675
+./build/mkl_spmspv mario002_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/mario002_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/mario002_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_col_major.mtx
+total time: 0.013647s
+average_time = 13.647 ms
+The tested ops is 41770
+output nnz is 20372
+./build/mkl_spmspv mario002_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/mario002_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/mario002_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_col_major.mtx
+total time: 0.026407s
+average_time = 26.407 ms
+The tested ops is 420018
+output nnz is 164256
+./build/mkl_spmspv mario002_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/mario002_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/mario002_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/mario002_col_major.mtx
+total time: 0.041694s
+average_time = 41.694 ms
+The tested ops is 2100056
+output nnz is 368310
+./build/mkl_spmspv offshore_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/offshore_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/offshore_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_col_major.mtx
+total time: 0.034652s
+average_time = 34.652 ms
+The tested ops is 85154
+output nnz is 39464
+./build/mkl_spmspv offshore_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/offshore_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/offshore_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_col_major.mtx
+total time: 0.034753s
+average_time = 34.753 ms
+The tested ops is 849156
+output nnz is 211725
+./build/mkl_spmspv offshore_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/offshore_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/offshore_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/offshore_col_major.mtx
+total time: 0.052890s
+average_time = 52.89 ms
+The tested ops is 4242288
+output nnz is 259768
+./build/mkl_spmspv p2p-Gnutella31_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/p2p-Gnutella31_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/p2p-Gnutella31_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_col_major.mtx
+total time: 0.008112s
+average_time = 8.112 ms
+The tested ops is 3136
+output nnz is 1506
+./build/mkl_spmspv p2p-Gnutella31_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/p2p-Gnutella31_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/p2p-Gnutella31_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_col_major.mtx
+total time: 0.007480s
+average_time = 7.48 ms
+The tested ops is 29976
+output nnz is 9740
+./build/mkl_spmspv p2p-Gnutella31_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/p2p-Gnutella31_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/p2p-Gnutella31_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/p2p-Gnutella31_col_major.mtx
+total time: 0.008577s
+average_time = 8.577 ms
+The tested ops is 147922
+output nnz is 15696
+./build/mkl_spmspv poisson3Da_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/poisson3Da_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/poisson3Da_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_col_major.mtx
+total time: 0.008064s
+average_time = 8.064 ms
+The tested ops is 6932
+output nnz is 3016
+./build/mkl_spmspv poisson3Da_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/poisson3Da_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/poisson3Da_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_col_major.mtx
+total time: 0.009106s
+average_time = 9.106 ms
+The tested ops is 70712
+output nnz is 12131
+./build/mkl_spmspv poisson3Da_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/poisson3Da_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/poisson3Da_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/poisson3Da_col_major.mtx
+total time: 0.010907s
+average_time = 10.907 ms
+The tested ops is 354538
+output nnz is 13513
+./build/mkl_spmspv scircuit_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/scircuit_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/scircuit_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_col_major.mtx
+total time: 0.010330s
+average_time = 10.33 ms
+The tested ops is 19402
+output nnz is 9356
+./build/mkl_spmspv scircuit_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/scircuit_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/scircuit_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_col_major.mtx
+total time: 0.015009s
+average_time = 15.009 ms
+The tested ops is 191374
+output nnz is 71488
+./build/mkl_spmspv scircuit_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/scircuit_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/scircuit_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/scircuit_col_major.mtx
+total time: 0.028974s
+average_time = 28.974 ms
+The tested ops is 956752
+output nnz is 162804
+./build/mkl_spmspv web-Google_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/web-Google_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/web-Google_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_col_major.mtx
+total time: 0.054017s
+average_time = 54.017 ms
+The tested ops is 97500
+output nnz is 45863
+./build/mkl_spmspv web-Google_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/web-Google_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/web-Google_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_col_major.mtx
+total time: 0.037514s
+average_time = 37.514 ms
+The tested ops is 1023208
+output nnz is 319514
+./build/mkl_spmspv web-Google_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/web-Google_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/web-Google_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/web-Google_col_major.mtx
+total time: 0.106415s
+average_time = 106.415 ms
+The tested ops is 5073122
+output nnz is 636984
+./build/mkl_spmspv wiki-Vote_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/wiki-Vote_0.01.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/wiki-Vote_0.01.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_col_major.mtx
+total time: 0.007437s
+average_time = 7.437 ms
+The tested ops is 2012
+output nnz is 669
+./build/mkl_spmspv wiki-Vote_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/wiki-Vote_0.1.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/wiki-Vote_0.1.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_col_major.mtx
+total time: 0.013172s
+average_time = 13.172 ms
+The tested ops is 22786
+output nnz is 2490
+./build/mkl_spmspv wiki-Vote_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_row_major.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/wiki-Vote_0.5.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/sparse_vec/wiki-Vote_0.5.mtx
+filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_col_major.mtx
+read MTX filename /work/shared/common/datasets/versatile_sparse_xcel/wiki-Vote_col_major.mtx
+total time: 0.011035s
+average_time = 11.035 ms
+The tested ops is 106246
+output nnz is 4780

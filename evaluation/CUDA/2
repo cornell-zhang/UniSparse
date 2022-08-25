@@ -1,0 +1,63 @@
+mkdir -p ./build
+nvcc -std=c++11 -O3 -I/usr/local/cuda-11.2/include -I/work/shared/common/datasets/versatile_sparse_xcel/cnpy cusparse_spmm.cu -o ./build/cusparse_spmm \
+	 -L/usr/local/cuda-11.2/lib64 -L/work/shared/common/datasets/versatile_sparse_xcel/cnpy/build -lcnpy -lcusparse -lcudart
+./build/cusparse_spmm 2cubes_sphere_csr_float32.npz
+average_time = 131.11 ms
+nnz is 1647264 and num_cols is 101492
+THROUGHPUT = 25.1279 GOPS
+./build/cusparse_spmm CollegeMsg_csr_float32.npz
+average_time = 1.02904 ms
+nnz is 20296 and num_cols is 1899
+THROUGHPUT = 39.4465 GOPS
+./build/cusparse_spmm amazon0312_csr_float32.npz
+average_time = 1069.8 ms
+nnz is 3200440 and num_cols is 400727
+THROUGHPUT = 5.98325 GOPS
+./build/cusparse_spmm ca-CondMat_csr_float32.npz
+average_time = 109.097 ms
+nnz is 186936 and num_cols is 23133
+THROUGHPUT = 3.42697 GOPS
+./build/cusparse_spmm cage12_csr_float32.npz
+average_time = 403.899 ms
+nnz is 2032536 and num_cols is 130228
+THROUGHPUT = 10.0646 GOPS
+./build/cusparse_spmm email-Eu-core_csr_float32.npz
+average_time = 2.12781 ms
+nnz is 25571 and num_cols is 1005
+THROUGHPUT = 24.035 GOPS
+./build/cusparse_spmm filter3D_csr_float32.npz
+average_time = 675.702 ms
+nnz is 2707179 and num_cols is 106437
+THROUGHPUT = 8.01294 GOPS
+./build/cusparse_spmm m133-b3_csr_float32.npz
+average_time = 96.6507 ms
+nnz is 800800 and num_cols is 200200
+THROUGHPUT = 16.571 GOPS
+./build/cusparse_spmm mario002_csr_float32.npz
+average_time = 327.406 ms
+nnz is 2101242 and num_cols is 389874
+THROUGHPUT = 12.8357 GOPS
+./build/cusparse_spmm offshore_csr_float32.npz
+average_time = 1161.15 ms
+nnz is 4242673 and num_cols is 259789
+THROUGHPUT = 7.30774 GOPS
+./build/cusparse_spmm p2p-Gnutella31_csr_float32.npz
+average_time = 81.8263 ms
+nnz is 147892 and num_cols is 62586
+THROUGHPUT = 3.61478 GOPS
+./build/cusparse_spmm poisson3Da_csr_float32.npz
+average_time = 105.062 ms
+nnz is 352762 and num_cols is 13514
+THROUGHPUT = 6.7153 GOPS
+./build/cusparse_spmm scircuit_csr_float32.npz
+average_time = 187.255 ms
+nnz is 958936 and num_cols is 170998
+THROUGHPUT = 10.242 GOPS
+./build/cusparse_spmm web-Google_csr_float32.npz
+average_time = 1711.97 ms
+nnz is 5105039 and num_cols is 916428
+THROUGHPUT = 5.96395 GOPS
+./build/cusparse_spmm wiki-Vote_csr_float32.npz
+average_time = 12.7112 ms
+nnz is 103689 and num_cols is 8297
+THROUGHPUT = 16.3146 GOPS

@@ -1,12 +1,18 @@
-make mkl_spmm
+make mkl_spgemm mkl_spmm mkl_spmv
 
 export OMP_NUM_THREADS=48
 
 DATASET_PATH=/work/shared/common/datasets/versatile_sparse_xcel
 
-DATASETS=(  "2cubes_sphere_row_major.mtx"
+# DATASETS=(  "ss1_col_major.mtx" 
+#             "stomach_col_major.mtx"
+#             "scircuit_col_major.mtx" 
+#             "Hamrle3_col_major.mtx"
+#             "Transport_col_major.mtx")
+
+DATASETS=(  "2cubes_sphere_row_major.mtx" 
             "cage12_row_major.mtx"
-            "email-Eu-core_row_major.mtx"
+            "email-Eu-core_row_major.mtx" 
             "mario002_row_major.mtx"
             "poisson3Da_row_major.mtx"
             "ca-CondMat_row_major.mtx"
@@ -24,6 +30,13 @@ BUILD_DIR=./build
 
 for dataset in "${DATASETS[@]}"
 do
+    echo ${BUILD_DIR}/mkl_spgemm $dataset
+    ${BUILD_DIR}/mkl_spgemm $DATASET_PATH/$dataset
+
     echo ${BUILD_DIR}/mkl_spmm $dataset
     ${BUILD_DIR}/mkl_spmm $DATASET_PATH/$dataset
+
+    echo ${BUILD_DIR}/mkl_spmv $dataset
+    ${BUILD_DIR}/mkl_spmv $DATASET_PATH/$dataset
+
 done

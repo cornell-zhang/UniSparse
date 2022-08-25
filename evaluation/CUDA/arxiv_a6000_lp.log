@@ -1,0 +1,34 @@
+mkdir -p ./build
+nvcc -std=c++11 -O3 -I/usr/local/cuda-11.2/include -I/work/shared/common/datasets/versatile_sparse_xcel/cnpy cusparse_spgemm_lp.cu -o ./build/cusparse_spgemm_lp \
+                -L/usr/local/cuda-11.2/lib64 -L/work/shared/common/datasets/versatile_sparse_xcel/cnpy/build -lcnpy -lcusparse -lcudart
+mkdir -p ./build
+nvcc -std=c++11 -O3 -I/usr/local/cuda-11.2/include -I/work/shared/common/datasets/versatile_sparse_xcel/cnpy cusparse_spmm.cu -o ./build/cusparse_spmm \
+	 -L/usr/local/cuda-11.2/lib64 -L/work/shared/common/datasets/versatile_sparse_xcel/cnpy/build -lcnpy -lcusparse -lcudart
+./build/cusparse_spgemm_lp arxiv_label_matrix_1_csr_float32.npz
+preprocessing_time = 0.4264 ms
+compute_time = 0.4808 ms
+copy_time = 0.224256 ms
+total time is 1.13146
+nnz of matC is 334785
+./build/cusparse_spgemm_lp arxiv_label_matrix_2_csr_float32.npz
+preprocessing_time = 0.577728 ms
+compute_time = 0.588736 ms
+copy_time = 0.355328 ms
+total time is 1.52179
+nnz of matC is 2003402
+./build/cusparse_spgemm_lp arxiv_label_matrix_3_csr_float32.npz
+preprocessing_time = 1.24182 ms
+compute_time = 2.64618 ms
+copy_time = 0.350208 ms
+total time is 4.23821
+nnz of matC is 4097777
+./build/cusparse_spgemm_lp arxiv_label_matrix_4_csr_float32.npz
+preprocessing_time = 1.7319 ms
+compute_time = 4.61466 ms
+copy_time = 0.413696 ms
+total time is 6.76026
+nnz of matC is 5569196
+./build/cusparse_spmm arxiv_adj_matrix_csr_float32.npz
+average_time = 2.83771 ms
+nnz is 2315598 and num_cols is 169343
+THROUGHPUT = 65.2808 GOPS
