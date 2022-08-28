@@ -9,6 +9,7 @@
 
 // ./exec
 
+// RUN: sparlay-opt %s -lower-struct-convert -lower-struct -dce -lower-format-conversion | FileCheck %s
 
 !Filename = !llvm.ptr<i8>
 
@@ -23,12 +24,22 @@
 }>
 
 module {
+  //CHECK-LABEL: func.func private @getSize(!llvm.ptr<i8>, index) -> index attributes {llvm.emit_c_interface}
+  //CHECK-LABEL: func.func private @getValue(!llvm.ptr<i8>, index) -> memref<9xf32> attributes {llvm.emit_c_interface}
+  //CHECK-LABEL: func.func private @getPtr(!llvm.ptr<i8>, index) -> memref<7xi32> attributes {llvm.emit_c_interface}
+  //CHECK-LABEL: func.func private @getCrd(!llvm.ptr<i8>, index) -> memref<6xi32> attributes {llvm.emit_c_interface}
+  //CHECK-LABEL: func.func private @sptFuse(!llvm.ptr<i8>, i32) -> !llvm.ptr<i8> attributes {llvm.emit_c_interface}
+  //CHECK-LABEL: func.func private @sptFromFile(!llvm.ptr<i8>) -> !llvm.ptr<i8> attributes {llvm.emit_c_interface}
+  //CHECK-LABEL: func.func private @getTensorFilename(index) -> !llvm.ptr<i8>
   func.func private @getTensorFilename(index) -> (!Filename)
   func.func @main() {
     %i0 = arith.constant 0: index
     %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)
     %A0 = sparlay.fromFile (%fileName): !llvm.ptr<i8> to tensor<7x7xf32, #COO>
     %A1 = sparlay.convert (%A0): tensor<7x7xf32, #COO> to tensor<7x7xf32, #DCSR>
+    //CHECK: %4 = call @getPtr(%2, %c0) : (!llvm.ptr<i8>, index) -> memref<7xi32>
+    //CHECK: %5 = call @getValue(%2, %c0) : (!llvm.ptr<i8>, index) -> memref<9xf32>
+    //CHECK: %6 = call @getSize(%2, %c0) : (!llvm.ptr<i8>, index) -> index
     %crd = sparlay.crd %A1, %i0: tensor<7x7xf32, #DCSR> to memref<6xi32>
     %ptr = sparlay.ptr %A1, %i0: tensor<7x7xf32, #DCSR> to memref<7xi32>
     %value = sparlay.value %A1, %i0: tensor<7x7xf32, #DCSR> to memref<9xf32>

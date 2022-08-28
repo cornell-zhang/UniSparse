@@ -9,7 +9,7 @@
 
 // ./exec
 
-
+// RUN: sparlay-opt %s -lower-format-conversion -lower-struct -dce | FileCheck %s
 
 !Filename = !llvm.ptr<i8>
 
@@ -44,8 +44,8 @@
 }>
 
 module {
-  // CHECK-LABEL: func @convert()
   func.func private @getTensorFilename(index) -> (!Filename)
+  //CHECK-LABEL: func.func @main
   func.func @main() {
     %i0 = arith.constant 0: index
     %fileName = call @getTensorFilename(%i0) : (index) -> (!Filename)

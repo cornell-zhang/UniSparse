@@ -1,3 +1,5 @@
+// RUN: sparlay-opt %s | FileCheck %s
+
 #1 = #sparlay.encoding<{
   compressMap = #sparlay.compress<fuse(0,1), trim(0)>,
   crdMap = #sparlay.crd<(i,j,k)[s0,s1]->(indirect (i+j minus s0)*4 mod 7, (k + (minus i)) floordiv s1)>
@@ -9,9 +11,13 @@
   sched = "ASAP"
 }>
 
-func.func private @F(%arg0: tensor<?x?x?xf64, #1>) -> ()
 
-func.func private @G(%arg1: tensor<?x?x?xf64, #2>) -> ()
+
+//CHECK-LABEL: func.func private @F
+func.func private @F(%arg0: tensor<?x?xf64, #1>) -> ()
+
+//CHECK-LABEL: func.func private @G
+func.func private @G(%arg1: tensor<?x?xf64, #2>) -> ()
 
 // #2 = #sparlay.encoding<{
 //   primaryMap = affine_map<(a1,a2,a3)->(a1)>,
