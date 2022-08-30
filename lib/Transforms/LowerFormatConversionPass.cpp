@@ -863,468 +863,88 @@ public:
   }
 };
 
-//===----------------------------------------------------------------------===//
-// RewritePatterns: Pack operations
-//===----------------------------------------------------------------------===//
-
-class PackOpLowering : public OpConversionPattern<sparlay::PackOp> {
+class ToPtrOpLowering: public OpConversionPattern<sparlay::ToPtrOp> {
 public:
-    using OpConversionPattern<sparlay::PackOp>::OpConversionPattern;
+  using OpConversionPattern<sparlay::ToPtrOp>::OpConversionPattern;
 
-    // enum padding_options {"none", "zero"};
-
-    LogicalResult 
-        matchAndRewrite(sparlay::PackOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(sparlay::ToPtrOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
-        Location loc = op->getLoc();
-        Value input = op->getOperand(0);
-        auto reduceDim = op.reduce_dim();
-        StringRef padding = op.padding();
-        AffineMap storageOrder = op.storage_order();
-
-        ShapedType inputTp = input.getType().cast<ShapedType>();
-        ArrayRef<int64_t> shape = inputTp.getShape();
-        Type indexTp = rewriter.getIndexType();
-        LLVM_DEBUG(llvm::dbgs()<< "shape.size() = " << shape.size() << "\n");
-
-        MemRefType indexArrTp = MemRefType::get(shape, indexTp);
-        Value index_arr = rewriter.create<memref::AllocaOp>(loc, indexArrTp);
-
-        std::vector<int64_t> reduce_shape;
-        int64_t reduceDimValue = reduceDim.getSExtValue();
-        for (unsigned i = 0; i < shape.size(); i++) {
-            if (i != reduceDimValue) {
-                reduce_shape.push_back(shape[i]);
-            }
-        }
-
-        MemRefType nnzPerRowTp = MemRefType::get(ArrayRef<int64_t>(reduce_shape), indexTp);
-        Value nnz_per_row = rewriter.create<memref::AllocaOp>(loc, nnzPerRowTp);
-
-        Type inputElmTp = input.getType().cast<MemRefType>().getElementType();
-        Value zeroElm = rewriter.create<arith::ConstantOp>(loc, inputElmTp, rewriter.getZeroAttr(inputElmTp));
-
-        Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(0));
-        Value one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
-        // Value dim = rewriter.create<memref::DimOp>(loc, input, zero);
-
-        SmallVector<Value> lb_outer, lb, lb_orig;
-        SmallVector<Value> hb_outer, hb, hb_orig;
-        SmallVector<Value> step_outer, step, step_orig;
-        for (unsigned i = 0; i < shape.size(); i++) {
-            Value dimSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(shape[i]));
-            if (i != reduceDimValue) {
-                lb_outer.push_back(zero);
-                hb_outer.push_back(dimSize);
-                step_outer.push_back(one);
-            }
-            lb_orig.push_back(zero);
-            hb_orig.push_back(dimSize);
-            step_orig.push_back(one);
-        }
-        lb.assign(lb_outer.begin(), lb_outer.end());
-        hb.assign(hb_outer.begin(), hb_outer.end());
-        step.assign(step_outer.begin(), step_outer.end());
-        lb.push_back(zero);
-        Value reduceDimSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(shape[reduceDimValue]));
-        hb.push_back(reduceDimSize);
-        step.push_back(one);  
-
-        // rewriter.create<linalg::FillOp>(loc, zero, nnz_per_row);
-        // rewriter.create<linalg::FillOp>(loc, dim, index_arr);
-        scf::buildLoopNest(rewriter, loc, lb_outer, hb_outer, step_outer, 
-            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                builder.create<memref::StoreOp>(loc, zero, nnz_per_row, ivs);
-                return;
-            });
-        scf::buildLoopNest(rewriter, loc, lb_orig, hb_orig, step_orig, 
-            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                builder.create<memref::StoreOp>(loc, reduceDimSize, index_arr, ivs);
-                return;
-            });
-
-              
-        scf::buildLoopNest(rewriter, loc, lb, hb, step, 
-            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                SmallVector<Value, 3> ivs_vec(lb.size());
-                ivs_vec.assign(ivs.begin(), ivs.end());
-                auto outer_ivs = llvm::makeArrayRef(ivs_vec).take_front(shape.size() - 1); // wrong size?
-                Value inner_iv = ivs_vec.pop_back_val();
-                unsigned drop_back_size = shape.size() - reduceDimValue - 1;
-                // if (drop_back_size > 0)
-                auto inner_reduce_dim_ivs = llvm::makeArrayRef(ivs_vec).drop_back(drop_back_size);
-                ivs_vec.pop_back_n(shape.size() - reduceDimValue - 1);
-                // LLVM_DEBUG(llvm::dbgs() << "shape size = " << shape.size() << "\n");
-                // LLVM_DEBUG(llvm::dbgs() << "reduce dim size = " << reduceDimValue << "\n");
-                // LLVM_DEBUG(llvm::dbgs() << "drop_back size = " << shape.size() - reduceDimValue - 1 << "\n");
-                // LLVM_DEBUG(llvm::dbgs() << "inner_reduce_dim_ivs.size = " << inner_reduce_dim_ivs.size() << "\n");
-                
-                Value elm = builder.create<memref::LoadOp>(loc, input, ivs);
-                Value not_zero = builder.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ONE, 
-                                    elm, zeroElm);
-                builder.create<scf::IfOp>(loc, not_zero, [&](OpBuilder &b, Location loc) {
-                    Value old_nnz = b.create<memref::LoadOp>(loc, nnz_per_row, outer_ivs);
-                    Value new_nnz = b.create<arith::AddIOp>(loc, old_nnz, one);
-                    b.create<memref::StoreOp>(loc, new_nnz, nnz_per_row, outer_ivs);
-                    
-                    // LLVM_DEBUG(llvm::dbgs() << "ivs_vec.size before = " << ivs_vec.size() << "\n");
-                    ivs_vec.push_back(old_nnz);
-                    for (unsigned i = 0; i < drop_back_size; i++) {
-                        // Value tmp = inner_reduce_dim_ivs[i];
-                        // LLVM_DEBUG(llvm::dbgs()<<"inner_reduce_dim_ivs: " << tmp << "\n");
-                        ivs_vec.push_back(inner_reduce_dim_ivs[i]);
-                    }
-                    // for (unsigned i = 0; i < ivs_vec.size(); i++) {
-                    //     Value tmp = ivs_vec[i];
-                    //     // LLVM_DEBUG(llvm::dbgs()<<"ivs_vec: " << tmp << "\n");
-                    // }
-                    // LLVM_DEBUG(llvm::dbgs() << "ivs_vec.size = " << ivs_vec.size() << "\n");
-
-                    ValueRange index_arr_idx = llvm::makeArrayRef(ivs_vec);
-                    b.create<memref::StoreOp>(loc, inner_iv, index_arr, index_arr_idx);
-                    b.create<scf::YieldOp>(loc, ValueRange{});
-                });
-            });
-        
-        Value nnz_count = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
-        rewriter.create<memref::StoreOp>(loc, zero, nnz_count, zero);
-        Value max_nnz = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
-        rewriter.create<memref::StoreOp>(loc, zero, max_nnz, zero);
-        scf::buildLoopNest(rewriter, loc, lb_outer, hb_outer, step_outer, 
-            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                Value row_nnz = builder.create<memref::LoadOp>(loc, nnz_per_row, ivs);
-                Value tmp_count = builder.create<memref::LoadOp>(loc, nnz_count, zero);
-                Value sum = builder.create<arith::AddIOp>(loc, row_nnz, tmp_count);
-                builder.create<memref::StoreOp>(loc, sum, nnz_count, zero);
-                Value tmp_max = builder.create<memref::LoadOp>(loc, max_nnz, zero);
-                Value is_row_nnz_greater = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, row_nnz, tmp_max);
-                builder.create<scf::IfOp>(loc, is_row_nnz_greater, [&](OpBuilder &b, Location loc) {
-                    b.create<memref::StoreOp>(loc, row_nnz, max_nnz, zero);
-                    b.create<scf::YieldOp>(loc, ValueRange{});
-                });
-                return;
-            });
-        
-        // Allocate result arrays
-        Value nnz = rewriter.create<memref::LoadOp>(loc, nnz_count, zero);
-        MemRefType dynamicIndexType = MemRefType::get(-1, indexTp);
-        MemRefType dynamicDataType = MemRefType::get(-1, input.getType().cast<MemRefType>().getElementType());
-        // switch (padding) {
-        //     case "none":
-        SmallVector<Value, 3> idx_array;
-        Value val_array;
-        if (padding == "none") {
-            for (unsigned i = 0; i < shape.size(); i++) {
-                idx_array.push_back(rewriter.create<memref::AllocOp>(loc, dynamicIndexType, nnz));
-            }
-            val_array = rewriter.create<memref::AllocOp>(loc, dynamicDataType, nnz);
-        } else if (padding == "zero") {
-            std::vector<int64_t> ell_shape;
-            for (unsigned i = 0; i < shape.size(); i++) {
-                if (i != reduceDimValue) 
-                    ell_shape.push_back(shape[i]);
-                else
-                    ell_shape.push_back(-1);
-            }
-            MemRefType ellIndexTp = MemRefType::get(ArrayRef<int64_t>(ell_shape), indexTp);
-            MemRefType ellDataTp = MemRefType::get(ArrayRef<int64_t>(ell_shape), input.getType().cast<MemRefType>().getElementType());
-            // Value ell_array_size = rewriter.create<MulOp>(loc, max_nnz, )
-            idx_array.push_back(rewriter.create<memref::AllocOp>(loc, ellIndexTp, max_nnz));
-            val_array = rewriter.create<memref::AllocOp>(loc, ellDataTp, max_nnz);
-        } else {
-            LLVM_DEBUG(llvm::dbgs() << "The padding option in PackOp can only support 'none' and 'zero' now.");
-        }
-         
-        Value max_nnz_val = rewriter.create<memref::LoadOp>(loc, max_nnz, zero);
-        Value len_count = rewriter.create<memref::AllocaOp>(loc, MemRefType::get(ArrayRef<int64_t>({1}), indexTp));
-        rewriter.create<memref::StoreOp>(loc, zero, len_count, zero); //////
-        // affine_map: reorder lb, hb 
-        SmallVector<Value> lb_ordered, hb_ordered, step_ordered;
-        for (unsigned i = 0; i < shape.size(); i++) {
-            unsigned reorderedDimPos = storageOrder.getDimPosition(i);
-            LLVM_DEBUG(llvm::dbgs() << "storage order dim = " << storageOrder.getDimPosition(i) <<
-                    " | permuted dim = " << storageOrder.getPermutedPosition(i) << "\n");
-            if (reorderedDimPos != reduceDimValue) {
-                lb_ordered.push_back(zero);
-                Value reorderedDimSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(shape[reorderedDimPos]));
-                hb_ordered.push_back(reorderedDimSize);
-                step_ordered.push_back(one);
-            }
-            else {
-                lb_ordered.push_back(zero);
-                hb_ordered.push_back(max_nnz_val);
-                step_ordered.push_back(one);
-            }
-        }
-        scf::buildLoopNest(rewriter, loc, lb_ordered, hb_ordered, step_ordered, 
-            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                // prepare the reordered loading index of the reordered index array
-                SmallVector<Value, 3> index_load_dim;
-                for (unsigned i = 0; i < shape.size(); i++) {
-                    unsigned reorderedDimPos = storageOrder.getPermutedPosition(i);
-                    index_load_dim.push_back(ivs[reorderedDimPos]);
-                }
-
-                Value reordered_idx = builder.create<memref::LoadOp>(loc, index_arr, llvm::makeArrayRef(index_load_dim));
-                if (padding == "none") {
-                    Value valid_idx = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, reordered_idx, reduceDimSize);
-                    builder.create<scf::IfOp>(loc, valid_idx, [&](OpBuilder &b, Location loc) {
-                        Value len_count_val = b.create<memref::LoadOp>(loc, len_count, zero);
-                        
-                        // prepare the reordered loading index of input A, store indices into index arrays
-                        SmallVector<Value, 3> load_dim;
-                        for (unsigned i = 0; i < shape.size(); i++) {
-                            unsigned reorderedDimPos = storageOrder.getPermutedPosition(i);
-                            if (i != reduceDimValue) {
-                                b.create<memref::StoreOp>(loc, ivs[reorderedDimPos], idx_array[i], len_count_val);
-                                load_dim.push_back(ivs[reorderedDimPos]);
-                            } else {
-                                b.create<memref::StoreOp>(loc, reordered_idx, idx_array[i], len_count_val);
-                                load_dim.push_back(reordered_idx);
-                            }
-                        }
-                        Value a_mem_val = b.create<memref::LoadOp>(loc, input, llvm::makeArrayRef(load_dim));
-                        b.create<memref::StoreOp>(loc, a_mem_val, val_array, len_count_val);
-                        Value len_count_sum = b.create<arith::AddIOp>(loc, len_count_val, one);
-                        b.create<memref::StoreOp>(loc, len_count_sum, len_count, zero);
-                        b.create<scf::YieldOp>(loc, ValueRange{});
-                    });
-                } else if (padding == "zero") {
-
-                } else 
-                    LLVM_DEBUG(llvm::dbgs() << "The padding option in PackOp can only support 'none' and 'zero' now.");
-            
-                // builder.create<memref::StoreOp>(loc, sum, nnz_count, zero);
-                // Value tmp_max = builder.create<memref::LoadOp>(loc, max_nnz, zero);
-                // Value is_row_nnz_greater = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, row_nnz, tmp_max);
-                // Value sum = builder.create<arith::AddIOp>(loc, row_nnz, tmp_count);
-                return;
-            });
-
-        // StructType 
-        // Value crd_struct = rewriter.create<sparlay::StructConstructOp>(loc, )
-        rewriter.eraseOp(op);
-        // LLVM_DEBUG(llvm::dbgs() << "hello!\n"); 
-        return success();
-    }
-}; 
-
-//===----------------------------------------------------------------------===//
-// RewritePatterns: Compress operations
-//===----------------------------------------------------------------------===//
-
-class CompressOpLowering : public OpConversionPattern<sparlay::CompressOp> {
-public:
-    using OpConversionPattern<sparlay::CompressOp>::OpConversionPattern;
-
-    LogicalResult
-        matchAndRewrite(sparlay::CompressOp op, OpAdaptor adaptor,
-                        ConversionPatternRewriter &rewriter) const final {
-        Location loc = op->getLoc();
-        Value input = op->getOperand(0);
-        Value output = op->getResult(0);
-        auto compressDim = op.compress_dim();
-        // AffineMap storageOrder = op.storage_order();
-
-        auto inputType = input.getType().dyn_cast<StructType>();
-        auto outputType = output.getType().dyn_cast<StructType>();
-
-        llvm::ArrayRef<mlir::Type> inputElmTypes = inputType.getElementTypes();
-        llvm::ArrayRef<mlir::Type> outputElmTypes = outputType.getElementTypes();
-        int64_t compressDimValue = compressDim.getSExtValue();
-        Type inputCrdType = inputElmTypes.front();
-        Type inputDataType = inputElmTypes.back();
-        llvm::ArrayRef<int64_t> inputDimSizes = inputType.getDimSizes();
-        uint64_t inputSize = inputDimSizes.size();
-        Type outputPtrType = outputElmTypes[0];
-        Type outputCrdType = outputElmTypes[1];
-        // Type outputValType = outputElmTypes[2];
-        auto indexTp = rewriter.getIndexType();
-        Type idxMemRefType = MemRefType::get({ShapedType::kDynamicSize}, indexTp);
-
-        // compose the new crd struct 
-        Value i0 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(0));
-        Value i1 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
-        Value crd_old = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input, 0);
-        Value val_old = rewriter.create<sparlay::StructAccessOp>(loc, inputDataType, input, 1);
-        std::vector<Value> crdArray;
-        for (uint64_t i = 0; i < inputSize; i++) {
-            // Value constI = rewriter.create<arith::ConstantOp>(loc, rewriter.getI64IntegerAttr(i));
-            crdArray.push_back(rewriter.create<sparlay::StructAccessOp>(loc, idxMemRefType, crd_old, i));
-        }
-        Value crd_new = rewriter.create<sparlay::StructConstructOp>(loc, outputCrdType, 
-            llvm::makeArrayRef(crdArray).take_back(inputSize - compressDimValue));
-
-        // compose the ptr struct
-        // %ptr = memref.alloca() : memref<4xindex>
-        int64_t ptrSizeVal = 1;
-        for (int64_t i = 0; i < compressDimValue; i++) {
-            ptrSizeVal = ptrSizeVal * inputDimSizes[i];
-        }
-        ptrSizeVal += 1;
-        Value ptrSize = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(ptrSizeVal));
-        MemRefType dynamicPtrType = MemRefType::get(-1, indexTp);
-        Value ptr = rewriter.create<memref::AllocOp>(loc, dynamicPtrType, ptrSize);
-
-        // memref.store %i0, %ptr[%i0] : memref<4xindex>
-        // ValueRange idx0 = llvm::makeArrayRef(i0);
-        rewriter.create<memref::StoreOp>(loc, i0, ptr, i0);
-        Value crd_dim = rewriter.create<memref::DimOp>(loc, crdArray.front(), i0);
-
-        // %ptr_dim = memref.dim %ptr, %i0 : memref<4xindex>
-        // Value ptr_dim = rewriter.create<memref::DimOp>(loc, ptr, i0);
-
-        // scf.for
-        SmallVector<Value, 1> lb, hb, step;
-        lb.push_back(i1);
-        hb.push_back(ptrSize);
-        step.push_back(i1);
-        scf::buildLoopNest(rewriter, loc, lb, hb, step, 
-            [&](OpBuilder &builder, Location loc, ValueRange ivs) {
-                SmallVector<Type, 3> resTypes;
-                SmallVector<Value, 3> initArgs;
-                resTypes.push_back(indexTp);
-                initArgs.push_back(i0);
-                auto whileOp = rewriter.create<scf::WhileOp>(loc, resTypes, initArgs);
-
-                // The before block of the while loop.
-                Block *before = rewriter.createBlock(&whileOp.getBefore(), {}, resTypes); 
-                rewriter.setInsertionPointToStart(&whileOp.getBefore().front());
-                // %cond1 = cmpi ult, %arg1, %dim : index
-                Value cond1 = builder.create<arith::CmpIOp>(whileOp.getLoc(), arith::CmpIPredicate::ult, before->getArguments()[0], crd_dim);
-                // %crd_val = memref.load %crd_0[%arg1] : memref<7xindex>
-                Value crd_val = rewriter.create<memref::LoadOp>(whileOp.getLoc(), crdArray.front(), before->getArgument(0));
-                // %cond2 = cmpi ult, %crd_val, %arg0 : index
-                Value cond2 = builder.create<arith::CmpIOp>(whileOp.getLoc(), arith::CmpIPredicate::ult, crd_val, ivs[0]);
-                // %cond = and %cond1, %cond2 : i1
-                Value cond = builder.create<arith::AndIOp>(whileOp.getLoc(), cond1, cond2);
-                // scf.condition (%cond) %arg1 : index
-                rewriter.create<scf::ConditionOp>(whileOp.getLoc(), cond, before->getArguments());
-
-                // ----------------Please revise the logic for general purpose ---------
-                // Value i5 = rewriter.create<arith::ConstantOp>(whileOp.getLoc(), rewriter.getIndexAttr(5));
-                // Value isLessThanFive = rewriter.create<arith::CmpIOp>(whileOp.getLoc(), 
-                //     arith::CmpIPredicate::ult, before->getArgument(0), i5);
-                // rewriter.create<scf::ConditionOp>(whileOp.getLoc(), isLessThanFive, before->getArguments());
-                
-                // The after block of the while loop.
-                Block *after = rewriter.createBlock(&whileOp.getAfter(), {}, resTypes);
-                rewriter.setInsertionPointToStart(&whileOp.getAfter().front());
-
-                // %sum = addi %arg2, %i1 : index
-                Value sum = builder.create<arith::AddIOp>(whileOp.getLoc(), after->getArgument(0), i1);
-                // scf.yield %sum : index
-                rewriter.create<scf::YieldOp>(whileOp.getLoc(), ValueRange({sum}));
-
-                rewriter.setInsertionPointAfter(whileOp);
-                // memref.store %next_sum, %ptr[%arg0] : memref<4xindex>
-                builder.create<memref::StoreOp>(loc, whileOp.getResult(0), ptr, ivs);
-                return;
-            });
-
-        // compose the compressed struct
-        Value ptr_new = rewriter.create<sparlay::StructConstructOp>(loc, outputPtrType, ptr);
-        rewriter.replaceOpWithNewOp<sparlay::StructConstructOp>(op, output.getType(), 
-            ValueRange({ptr_new, crd_new, val_old}));
-        // rewriter.eraseOp(op);
-        return success();
-        // DCE to remove redundant constant allocation - after finalizing lowering
-    }
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getPtr", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
 };
 
-//===----------------------------------------------------------------------===//
-// RewritePatterns: Multiply operations
-//===----------------------------------------------------------------------===//
-
-class MultiplyOpLowering : public OpConversionPattern<sparlay::MultiplyOp> {
+class ToCrdOpLowering: public OpConversionPattern<sparlay::ToCrdOp> {
 public:
-    using OpConversionPattern<sparlay::MultiplyOp>::OpConversionPattern;
+  using OpConversionPattern<sparlay::ToCrdOp>::OpConversionPattern;
 
-    LogicalResult 
-	    matchAndRewrite(sparlay::MultiplyOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(sparlay::ToCrdOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
-        Location loc = op->getLoc();
-        Value output = op->getResult(0);
-        auto outputType = output.getType();
-        Value input_A = op->getOperand(0);
-        auto inputType_A = input_A.getType().dyn_cast<StructType>();
-        Value input_B = op->getOperand(1);
-    //   auto inputdense_vecType = input_B.getType();
-        llvm::ArrayRef<int64_t> dimSizes = inputType_A.getDimSizes();
-        llvm::ArrayRef<mlir::Type> inputElmTypes = inputType_A.getElementTypes();
-//      llvm::ArrayRef<mlir::Type> inputElmTypes_B = inputType_B.getElementTypes();
-//      llvm::ArrayRef<mlir::Type> outputElmTypes = output_0.getElementTypes();
-      
-      if (inputElmTypes.size() > 2) {
-        Type inputPtrType = inputElmTypes[0];
-        Type inputCrdType = inputElmTypes[1];
-        Type inputValType = inputElmTypes[2];
-    //      Type inputdense_vecType = inputElmTypes_B[0];
-    //      Type outputType = outputElmTypes[0];
-        Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
-        auto ptrtype = ptr.getType().dyn_cast<StructType>();
-        llvm::ArrayRef<mlir::Type> ptrElmtypes = ptrtype.getElementTypes();
-        Type input_ptr_type = ptrElmtypes[0];
-        Value ptr_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_ptr_type, ptr, 0);
-        Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 1);
-        auto crdtype = crd.getType().dyn_cast<StructType>();
-        llvm::ArrayRef<mlir::Type> crdElmtypes = crdtype.getElementTypes();
-        Type input_crd_type = crdElmtypes[0];
-        Value crd_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_type, crd, 0);
-        Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 2);
-        StringRef call_spmv_name = "calculateCSRSpMV";
-        SmallVector<Value, 4> readParams;
-        readParams.push_back(ptr_memref);
-        readParams.push_back(crd_memref);
-        readParams.push_back(val);
-        readParams.push_back(input_B);
-        rewriter.replaceOpWithNewOp<func::CallOp>(op, outputType, 
-            getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
-            readParams);
-      } else {
-        Type inputCrdType = inputElmTypes[0];
-        Type inputValType = inputElmTypes[1];
-    //      Type inputdense_vecType = inputElmTypes_B[0];
-    //      Type outputType = outputElmTypes[0];
-        // Value ptr = rewriter.create<sparlay::StructAccessOp>(loc, inputPtrType, input_A, 0);
-        // auto ptrtype = ptr.getType().dyn_cast<StructType>();
-        // llvm::ArrayRef<mlir::Type> ptrElmtypes = ptrtype.getElementTypes();
-        // Type input_ptr_type = ptrElmtypes[0];
-        // Value ptr_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_ptr_type, ptr, 0);
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getCrd", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
 
-        Value crd = rewriter.create<sparlay::StructAccessOp>(loc, inputCrdType, input_A, 0);
-        auto crdtype = crd.getType().dyn_cast<StructType>();
-        llvm::ArrayRef<mlir::Type> crdElmtypes = crdtype.getElementTypes();
-        Type input_crd_0_type = crdElmtypes[0];
-        Type input_crd_1_type = crdElmtypes[1];
-        Value crd_0_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_0_type, crd, 0);
-        Value crd_1_memref = rewriter.create<sparlay::StructAccessOp>(loc, input_crd_1_type, crd, 1);
-        
-        Value val = rewriter.create<sparlay::StructAccessOp>(loc, inputValType, input_A, 1);
-        StringRef call_spmv_name = "calculateCOOSpMV";
-        SmallVector<Value, 4> readParams;
-        // readParams.push_back(ptr_memref);
-        readParams.push_back(crd_0_memref);
-        readParams.push_back(crd_1_memref);
-        readParams.push_back(val);
-        readParams.push_back(input_B);
-        for (unsigned i = 0; i < dimSizes.size(); i++) {
-            readParams.push_back(rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(dimSizes[i])));
-        }
-        rewriter.replaceOpWithNewOp<func::CallOp>(op, outputType, 
-            getFunc(op, call_spmv_name, outputType, readParams, /*emitCInterface=*/true),
-            readParams);
-      }
-      return success();
-        // StringRef target = op.target();
-        // StringRef pattern = op.pattern();
+class ToValueOpLowering: public OpConversionPattern<sparlay::ToValueOp> {
+public:
+  using OpConversionPattern<sparlay::ToValueOp>::OpConversionPattern;
 
-        // if (target == "CPU" && pattern == "inner") {
+  LogicalResult matchAndRewrite(sparlay::ToValueOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getValue", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
 
+class ToSizeOpLowering: public OpConversionPattern<sparlay::ToSizeOp> {
+public:
+  using OpConversionPattern<sparlay::ToSizeOp>::OpConversionPattern;
 
-        // } else
-        //     LLVM_DEBUG(llvm::dbgs() << "Target or pattern not supported yet.\n");
-    }
+  LogicalResult matchAndRewrite(sparlay::ToSizeOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "getSize", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
 };
 
 } // end anonymous namespace
@@ -1372,13 +992,11 @@ void LowerFormatConversionPass::runOnOperation() {
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
-    patterns.add<NewOpLowering, PackOpLowering,
-                 CompressOpLowering, MultiplyOpLowering, 
+    patterns.add<NewOpLowering, 
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
-                 StructAccessOpLowering, DecompseOpLowering>(&getContext());
-    // patterns.add<PackOpLowering>(&getContext());
-    // patterns.add<MultiplyOpLowering>(&getContext());
+                 StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
+                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
