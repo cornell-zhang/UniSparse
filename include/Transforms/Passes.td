@@ -29,6 +29,20 @@ def LowerFormatConversion : Pass<"lower-format-conversion", "func::FuncOp"> {
     ];
 }
 
+def TmpGenBuffer: Pass<"tmp-gen-buffer", "func::FuncOp"> {
+    let summary = "Temporarily generate buffer information";
+    let constructor = "mlir::sparlay::createTmpGenBuffer()";
+    let dependentDialects = [
+        "arith::ArithmeticDialect",
+        "func::FuncDialect",
+        "memref::MemRefDialect",
+        "scf::SCFDialect",
+        "vector::VectorDialect",
+        "linalg::LinalgDialect",
+        "LLVM::LLVMDialect"
+    ];
+}
+
 def LowerStruct : Pass<"lower-struct", "func::FuncOp"> {
     let summary = "Lower struct conversion";
     let constructor = "mlir::sparlay::createLowerStructPass()";
