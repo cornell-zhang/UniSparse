@@ -43,6 +43,9 @@ static cl::opt<std::string> outputFilename("o",
 static cl::opt<bool> lowerFormatConversion("lower-format-conversion",
                                            cl::init(false),
                                            cl::desc("Enable Format Lowering"));
+static cl::opt<bool> lowerStructConvert("lower-struct-convert",
+                                    cl::init(false),
+                                    cl::desc("Enable Decompose Lowering"));
 static cl::opt<bool> lowerStruct("lower-struct",
                                   cl::init(false),
                                   cl::desc("Enable Struct Lowering"));
@@ -84,25 +87,32 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   applyPassManagerCLOptions(pm);
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
 
-  if (lowerFormatConversion) {
-    // pm.addPass(mlir::createLowerFormatConversionPass());
-    optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
+  if (lowerStructConvert) {
+    optPM.addPass(mlir::sparlay::createLowerStructConvertPass());
   }
 
-  // if (lowerStruct) {
-  //   // pm.addPass(mlir::createLowerFormatConversionPass());
-  //   optPM.addPass(mlir::sparlay::createLowerStructPass());
-  // }
+  if (lowerStruct) {
+    optPM.addPass(mlir::sparlay::createLowerStructPass());
+  }
 
   if (dce) {
     // pm.addPass(mlir::createLowerFormatConversionPass());
     optPM.addPass(mlir::sparlay::createDeadCodeEliminationPass());
   }
 
-  // if(sparlayCodegen) {
-  //   optPM.addPass(mlir::sparlay::createSparlayCodegenPass());
-  // }
+  if(sparlayCodegen) {
+    optPM.addPass(mlir::sparlay::createSparlayCodegenPass());
+  }
 
+  
+
+  if (mlir::failed(pm.run(*module)))
+    return 3;
+  
+  if (lowerFormatConversion) {
+    // pm.addPass(mlir::createLowerFormatConversionPass());
+    optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
+  }
   if (mlir::failed(pm.run(*module)))
     return 3;
   return 0;

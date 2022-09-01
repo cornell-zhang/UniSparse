@@ -1,4 +1,4 @@
-//===- SparlayOps.td - Sparlay dialect ops -----------*- tablegen -*-===//
+//===- SparlayOps.td - Sparlay dialect ops -----------*- tablegen -*-========//
 //
 // This file is licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -14,7 +14,6 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "SparlayAttr.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
-include "mlir/Interfaces/InferTypeOpInterface.td"
 
 //===----------------------------------------------------------------------===//
 // Base sparlay operation definition.
@@ -22,10 +21,6 @@ include "mlir/Interfaces/InferTypeOpInterface.td"
 
 class Sparlay_Op<string mnemonic, list<Trait> traits = []> :
         Op<Sparlay_Dialect, mnemonic, traits>;
-
-//===----------------------------------------------------------------------===//
-// sparlay::NewOp
-//===----------------------------------------------------------------------===//
 
 def Sparlay_NewOp : Sparlay_Op<"new", [NoSideEffect]> {
     let summary = "Construct a sparlay tensor type from .";
@@ -36,13 +31,7 @@ def Sparlay_NewOp : Sparlay_Op<"new", [NoSideEffect]> {
         ```
     }];
     let arguments = (ins AnyType:$input);
-    // let results = (outs Sparlay_Type:$out_indices,
-    //                     Sparlay_Type:$out_values);
     let results = (outs Sparlay_Type:$output);
-    // let builders = [
-    //     OpBuilder<(ins "Value":$input, "IndexAttr":$reduce_dim,
-    //                     "StringRef":$padding, "AffineMapAttr":$storage_order)>,
-    // ];
     let assemblyFormat = [{
        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
     }];
@@ -57,7 +46,7 @@ def Sparlay_fromFileOp: Sparlay_Op<"fromFile", [NoSideEffect]> {
         ```
     }];
     let arguments = (ins AnyType:$input);
-    let results = (outs AnyTensor:$output);
+    let results = (outs AnyType:$output);
     let assemblyFormat = [{
        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
     }];
@@ -101,25 +90,34 @@ def Sparlay_checkOp: Sparlay_Op<"check", [NoSideEffect]> {
     }];
 }
 
-def Sparlay_ticOp: Sparlay_Op<"tic", [NoSideEffect]> {
-    let summary = "..";
-    let description = [{..}];
-    let assemblyFormat = [{
-        `(` `)` attr-dict
-    }];
+def Sparlay_DecomposeOp: Sparlay_Op<"decompose", [NoSideEffect]> {
+    let summary = "Split a tensor into sub-tensors according to reduce dimensions";
+    let arguments = (
+        ins AnyTensor: $input,
+            AnyType: $threshold,
+            AffineMapAttr: $rmap
+    );
+    let results = (outs Sparlay_StructType: $output);
+    let assemblyFormat = "`(` $input `,` $threshold `)`"
+        "attr-dict `:`  type($input) `,` type($threshold) `to` type($output)";
 }
 
-def Sparlay_tocOp: Sparlay_Op<"toc", [NoSideEffect]> {
-    let summary = "..";
-    let description = [{..}];
+def Sparlay_StructConvertOp : Sparlay_Op<"struct_convert", [NoSideEffect]> {
+    let summary = "Bulk convert from a struct of source formats into target formats";
+    let description = [{
+        Example:
+        ```mlir
+        %A_final = sparlay.struct_convert(%A_split): 
+           !sparlay.struct<tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>> to
+           !sparlay.struct<tensor<?x?xf32, #ELL>, tensor<?x?xf32, #BCSR>, tensor<?x?xf32, #COO>>
+        ```
+    }];
+    let arguments = (ins Sparlay_StructType:$input);
+    let results = (outs Sparlay_StructType:$output);
     let assemblyFormat = [{
-        `(` `)` attr-dict
+        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
     }];
 }
-
-//===----------------------------------------------------------------------===//
-// sparlay::ConvertOp
-//===----------------------------------------------------------------------===//
 
 def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect,SameOperandsAndResultElementType]> {
     let summary = "Convert from the source format to the target format.";
@@ -137,122 +135,68 @@ def Sparlay_ConvertOp : Sparlay_Op<"convert", [NoSideEffect,SameOperandsAndResul
     }];
 }
 
-//===----------------------------------------------------------------------===//
-// sparlay::AccessOp
-//===----------------------------------------------------------------------===//
-
-def Sparlay_AccessOp : Sparlay_Op<"access", [NoSideEffect]> {
-    let summary = "Access the dimensional data structures in the tensor.";
-    let description = [{
-        Example:
-        ```mlir
-        %A_CSR = sparlay.access (%A_COO) :
-            tensor<4x4xf32, #COO> to tensor<4x4xf32, #CSR>
-        ```
-    }];
-    let arguments = (ins AnyTensor:$input,
-                         IndexAttr:$dim);
-    let results = (outs Sparlay_Type:$output);
+def Sparlay_ticOp: Sparlay_Op<"tic", [NoSideEffect]> {
+    let summary = "..";
+    let description = [{..}];
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+        `(` `)` attr-dict
     }];
 }
 
-//===----------------------------------------------------------------------===//
-// deprecated ops 
-//===----------------------------------------------------------------------===//
-
-def Sparlay_PackOp : Sparlay_Op<"pack", [NoSideEffect]> {
-    let summary = "Remove zero elements selectively from the input tensor.";
-    let description = [{
-        Example:
-        ```mlir
-        // %A_crd, %A_val = sparlay.pack %A 
-        //     { reduce_dim = 1, padding = "none", 
-        //     storage_order = affine_map<(i,j) -> (i,j)> } :
-        //     tensor<4x4xf32> to 
-        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>
-        %A_COO = sparlay.pack (%A) 
-            { reduce_dim = 1, padding = "none", 
-            storage_order = affine_map<(i,j) -> (i,j)> } :
-            tensor<4x4xf32> to 
-            !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>>
-        ```
-    }];
-    let arguments = (ins Sparlay_Type:$input,
-                        IndexAttr:$reduce_dim,
-                        StrAttr:$padding,
-                        AffineMapAttr:$storage_order);
-    // let results = (outs Sparlay_Type:$out_indices,
-    //                     Sparlay_Type:$out_values);
-    let results = (outs Sparlay_Type:$output);
-    // let builders = [
-    //     OpBuilder<(ins "Value":$input, "IndexAttr":$reduce_dim,
-    //                     "StringRef":$padding, "AffineMapAttr":$storage_order)>,
-    // ];
+def Sparlay_tocOp: Sparlay_Op<"toc", [NoSideEffect]> {
+    let summary = "..";
+    let description = [{..}];
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input) `to` type($output) 
+        `(` `)` attr-dict
     }];
 }
 
-def Sparlay_CompressOp : Sparlay_Op<"compress", [NoSideEffect]> {
-    let summary = "Compress the coordinate arrays selectively from the input tensor.";
+def Sparlay_ToPtrOp: Sparlay_Op<"ptr", [NoSideEffect]> {
+    let summary = "Extracts pointers array at given dimension from a tensor";
     let description = [{
         Example:
-        ```mlir
-        // %csr_ptr, %csr_crd, %csr_val = sparlay.compress %in_crd, %in_val 
-        //     { compress_dim = 0, storage_order = affine_map<(i,j)->(i,j)> } :
-        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
-        //     tensor<?xf32> to 
-        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
-        //     !sparlay.struct<tensor<?xindex>, tensor<?xindex>>,
-        //     tensor<?xf32>
-        %A_CSR = sparlay.compress (%A_COO)
-            { compress_dim = 0, storage_order = affine_map<(i,j)->(i,j)> } :
-            !sparlay.struct<!sparlay.struct<tensor<?xindex>, tensor<?xindex>>, tensor<?xf32>> to 
-            !sparlay.struct<!sparlay.struct<tensor<?xindex>>, !sparlay.struct<tensor<?xindex>>,
-            tensor<?xf32>>
-        ```
     }];
-    // let arguments = (ins Sparlay_Type:$in_indices,
-    //                      Sparlay_Type:$in_values,
-    //                      StrAttr:$compress_dim,
-    //                      AffineMapAttr:$storage_order);
-    let arguments = (ins Sparlay_Type:$input,
-                         IndexAttr:$compress_dim,
-                         AffineMapAttr:$storage_order);
-
-    // let results = (outs Sparlay_Type:$out_pointers,
-    //                     Sparlay_Type:$out_indices,
-    //                     Sparlay_Type:$out_values);
-    let results = (outs Sparlay_Type:$output);
-    // let assemblyFormat = [{
-    //     `(` $in_indices `,` $in_values `)` attr-dict `:` 
-    //     type($in_indices) `,` type($in_values) `to` 
-    //     type($out_pointers) `,` type($out_indices) `,` type($out_values)
-    // }];
+    let arguments = (ins AnyTensor: $tensor, Index: $dim);
+    let results = (outs AnyStridedMemRefOfRank<1>: $result);
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input) `to` type($output)
+        $tensor `,` $dim attr-dict `:` type($tensor) `to` type($result)
     }];
-    // let verifier = [{ return ::verify(*this); }];
 }
 
-def Sparlay_MultiplyOp : Sparlay_Op<"multiply", [NoSideEffect]> {
-    let summary = "multiply";
+def Sparlay_ToCrdOp: Sparlay_Op<"crd", [NoSideEffect]> {
+    let summary = "Extracts coordinates array at given dimension from a tensor";
     let description = [{
-
+        Example:
     }];
-    let arguments = (ins Variadic<Sparlay_Type>:$input, 
-                        StrAttr:$target,
-                        StrAttr:$pattern);
-    let results = (outs Sparlay_Type:$output);
+    let arguments = (ins AnyTensor: $tensor, Index: $dim);
+    let results = (outs AnyStridedMemRefOfRank<1>: $result);
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input) `to` type($output)
+        $tensor `,` $dim attr-dict `:` type($tensor) `to` type($result)
     }];
+}
 
-    // let builders = [
-    //     OpBuilder<(ins "Value":$input, "size_t":$index)>
-    // ];
+def Sparlay_ToValueOp: Sparlay_Op<"value", [NoSideEffect]> {
+    let summary = "Extracts values array at given dimension from a tensor";
+    let description = [{
+        Example:
+    }];
+    let arguments = (ins AnyTensor: $tensor, Index: $dim);
+    let results = (outs AnyStridedMemRefOfRank<1>: $result);
+    let assemblyFormat = [{
+        $tensor `,` $dim attr-dict `:` type($tensor) `to` type($result)
+    }];
+}
+
+def Sparlay_ToSizeOp: Sparlay_Op<"size", [NoSideEffect]> {
+    let summary = "Extracts size of coordinate at given dimension from a tensor";
+    let description = [{
+        Example:
+    }];
+    let arguments = (ins AnyTensor: $tensor, Index: $dim);
+    let results = (outs Index: $result);
+    let assemblyFormat = [{
+        $tensor `,` $dim attr-dict `:` type($tensor) `to` `index`
+    }];
 }
 
 def Sparlay_StructConstructOp : Sparlay_Op<"struct_construct", [NoSideEffect]> {
@@ -266,12 +210,6 @@ def Sparlay_StructConstructOp : Sparlay_Op<"struct_construct", [NoSideEffect]> {
     let assemblyFormat = [{
         `(` $input `)` attr-dict `:` type($input) `to` type($output)
     }];
-
-    // let builders = [
-    //     OpBuilder<(ins "Value":$input, "size_t":$index)>
-    // ];
-    // let verifier = [{ return ::verify(*this); }];
-    // let hasFolder = 1;
 }
 
 def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]>, 
@@ -289,11 +227,8 @@ def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]>,
     let builders = [
         OpBuilder<(ins "Value":$input, "size_t":$index)>
     ];
-    // let verifier = [{ return ::verify(*this); }];
     let hasFolder = 1;
     let hasVerifier = 1;
 }
-
-// def Sparlay_StructConstantOp : 
 
 #endif // SPARLAY_OPS

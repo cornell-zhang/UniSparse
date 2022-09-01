@@ -24,6 +24,10 @@ namespace arith {
 class ArithmeticDialect;
 }
 
+namespace bufferization {
+class BufferizationDialect;
+}
+
 namespace func {
   class FuncDialect;
 }
@@ -52,10 +56,13 @@ namespace sparlay {
 
 void populateSparlayCodegenPatterns(RewritePatternSet &patterns);
 
+std::unique_ptr<mlir::Pass> createDeadCodeEliminationPass();
+std::unique_ptr<mlir::Pass> createLowerStructConvertPass();
 std::unique_ptr<mlir::Pass> createLowerFormatConversionPass();
 std::unique_ptr<mlir::Pass> createLowerStructPass();
-std::unique_ptr<mlir::Pass> createDeadCodeEliminationPass();
 std::unique_ptr<mlir::Pass> createSparlayCodegenPass();
+std::unique_ptr<mlir::Pass> createTmpGenBuffer();
+
 
 //===----------------------------------------------------------------------===//
 // Registration

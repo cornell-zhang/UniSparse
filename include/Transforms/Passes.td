@@ -29,10 +29,20 @@ def LowerFormatConversion : Pass<"lower-format-conversion", "func::FuncOp"> {
     ];
 }
 
-// def LowerStruct : Pass<"lower-struct", "ModuleOp"> {
-//     let summary = "Lower struct conversion";
-//     let constructor = "mlir::sparlay::createLowerStructPass()";
-// }
+def LowerStruct : Pass<"lower-struct", "func::FuncOp"> {
+    let summary = "Lower struct conversion";
+    let constructor = "mlir::sparlay::createLowerStructPass()";
+}
+
+def LowerStructConvert: Pass<"lower-struct-convert", "func::FuncOp"> {
+    let summary = "Lower Struct Convert conversion";
+    let constructor = "mlir::sparlay::createLowerStructConvertPass()";
+    let dependentDialects = [
+        "arith::ArithmeticDialect",
+        "func::FuncDialect",
+        "SparlayDialect"
+    ];
+}
 
 def DeadCodeElimination : Pass<"dce", "func::FuncOp"> {
     let summary = "dead code elimination";
@@ -44,6 +54,7 @@ def SparlayCodegen : Pass<"sparlay-codegen"> {
     let constructor = "mlir::sparlay::createSparlayCodegenPass()";
     let dependentDialects = [
       "AffineDialect",
+      "bufferization::BufferizationDialect",
       "memref::MemRefDialect",
       "scf::SCFDialect",
       "sparlay::SparlayDialect",
