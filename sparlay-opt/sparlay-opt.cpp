@@ -53,10 +53,6 @@ static cl::opt<bool> dce("dce",
                         cl::init(false),
                         cl::desc("dead code elimination"));
 
-static cl::opt<bool> tmpGenBuffer("tmp-gen-buffer",
-                        cl::init(false),
-                        cl::desc("dump buffer info"));
-
 static cl::opt<bool> sparlayCodegen("sparlay-codegen", cl::init(false), cl::desc("Enable Linagl generic op lowering"));
 
 
@@ -93,10 +89,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   if (lowerStructConvert) {
     optPM.addPass(mlir::sparlay::createLowerStructConvertPass());
-  }
-
-  if (tmpGenBuffer) {
-    optPM.addPass(mlir::sparlay::createTmpGenBuffer());
   }
 
   if (lowerStruct) {

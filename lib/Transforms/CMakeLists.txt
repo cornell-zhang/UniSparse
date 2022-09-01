@@ -5,7 +5,6 @@ add_mlir_dialect_library(MLIRSparlayTransforms
   DeadCodeEliminationPass.cpp
   SparlayCodegen.cpp
   LowerStructConvert.cpp
-  TmpGenBuffer.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/Transforms

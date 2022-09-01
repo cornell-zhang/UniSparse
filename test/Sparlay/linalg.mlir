@@ -1,3 +1,5 @@
+// sparlay-opt test/Sparlay/linalg.mlir -sparlay-codegen
+
 !Filename = !llvm.ptr<i8>
 
 #COO = #sparlay.encoding<{
@@ -40,12 +42,12 @@ module {
   // A kernel that multiplies a sparse matrix A with a dense vector b
   // into a dense vector x.
   //
-  func.func @kernel_matvec(%arga: tensor<?x?xi32, #DIA>,
+  func.func @kernel_matvec(%arga: tensor<?x?xi32, #CSR>,
                            %argb: tensor<?xi32>,
                            %argx: tensor<?xi32>)
 		      -> tensor<?xi32> {
     %0 = linalg.generic #matvec
-      ins(%arga, %argb: tensor<?x?xi32, #DIA>, tensor<?xi32>)
+      ins(%arga, %argb: tensor<?x?xi32, #CSR>, tensor<?xi32>)
       outs(%argx: tensor<?xi32>) {
       ^bb(%a: i32, %b: i32, %x: i32):
         %0 = arith.muli %a, %b : i32
@@ -70,7 +72,7 @@ module {
     // Read the sparse matrix from file, construct sparse storage.
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
     %a_1 = sparlay.fromFile (%fileName): !llvm.ptr<i8> to tensor<?x?xi32, #COO>
-    %a = sparlay.convert (%a_1): tensor<?x?xi32, #COO> to tensor<?x?xi32, #DIA>
+    %a = sparlay.convert (%a_1): tensor<?x?xi32, #COO> to tensor<?x?xi32, #CSR>
 
     // Initialize dense vectors.
     %init_256 = bufferization.alloc_tensor(%c256) : tensor<?xi32>
@@ -90,7 +92,7 @@ module {
 
     // Call kernel.
     %0 = call @kernel_matvec(%a, %b, %x)
-      : (tensor<?x?xi32, #DIA>, tensor<?xi32>, tensor<?xi32>) -> tensor<?xi32>
+      : (tensor<?x?xi32, #CSR>, tensor<?xi32>, tensor<?xi32>) -> tensor<?xi32>
 
     // Print the result for verification.
     //
@@ -100,7 +102,7 @@ module {
     vector.print %v : vector<4xi32>
 
     // Release the resources.
-    bufferization.dealloc_tensor %a : tensor<?x?xi32, #DIA>
+    bufferization.dealloc_tensor %a : tensor<?x?xi32, #CSR>
 
     return
   }
