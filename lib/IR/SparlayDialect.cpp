@@ -217,11 +217,11 @@ LogicalResult SparlayEncodingAttr::verifyEncoding(
   return success();
 }
 
-// SparlayEncodingAttr getSparlayEncoding(Type type) {
-//   if (auto ttp = type.dyn_cast<RankedTensorType>())
-//     return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
-//   return nullptr;
-// }
+ SparlayEncodingAttr getSparlayEncoding(Type type) {
+   if (auto ttp = type.dyn_cast<RankedTensorType>())
+     return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
+   return nullptr;
+ }
 
 //===----------------------------------------------------------------------===//
 // Sparlay dialect.

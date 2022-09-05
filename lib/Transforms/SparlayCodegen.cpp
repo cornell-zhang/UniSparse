@@ -29,7 +29,7 @@ namespace {
 #define GEN_PASS_CLASSES
 #include "Transforms/Passes.h.inc"
 
-
+/*
 static bool findAffine(Merger &merger, unsigned tensor, AffineExpr a, Dim dim,
                        bool isDense) {
   switch (a.getKind()) {
@@ -122,7 +122,7 @@ static bool computeIterationGraph(Merger &merger, linalg::GenericOp op,
   std::reverse(std::begin(topSort), std::end(topSort));
   return true;
 }
-
+*/
 struct GenericOpSparlayCodegen : public OpRewritePattern<linalg::GenericOp> {
 public:
   GenericOpSparlayCodegen(MLIRContext *context) : OpRewritePattern<linalg::GenericOp>(context) {}
