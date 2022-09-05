@@ -66,6 +66,6 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++
           cmake --build . -j $(nproc)
 
-      - name: Check Sparlay
-        run: |
-          ninja check-sparlay
+      # - name: Check Sparlay
+      #   run: |
+      #     ninja check-sparlay

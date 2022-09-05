@@ -73,6 +73,7 @@ class CrdMap: public AffineMap {
   std::vector<bool> getIsIndirect() const { return this->isIndirect; }
 
   void Print() {
+    this->dump();
     std::cerr << "isIndirect: (";
     for (auto ele: isIndirect) {
       std::cerr << ele << ',';

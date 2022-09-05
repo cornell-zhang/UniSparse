@@ -54,6 +54,7 @@ def SparlayCodegen : Pass<"sparlay-codegen"> {
     let constructor = "mlir::sparlay::createSparlayCodegenPass()";
     let dependentDialects = [
       "AffineDialect",
+      "bufferization::BufferizationDialect",
       "memref::MemRefDialect",
       "scf::SCFDialect",
       "sparlay::SparlayDialect",
