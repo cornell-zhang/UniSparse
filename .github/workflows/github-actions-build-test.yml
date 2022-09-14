@@ -13,38 +13,6 @@ jobs:
     container: 
       image: sibylau/mlir-llvm
       steps:   
-        # - name: Cache MLIR 
-        #   id: cache-mlir
-        #   uses: actions/cache@v3
-        #   env:
-        #     cache-name: cache-llvm-build
-        #   with:
-        #     path: |
-        #       ~/llvm-project/
-        #       ~/eigen-3.4.0/
-        #     key: ${{ matrix.config.os }}-${{ env.cache-name }}
-        #     restore-keys: |
-        #       ${{ matrix.config.os }}-${{ env.cache-name }}
-        #       ${{ matrix.config.os }}-
-
-        # - name: Build MLIR and add dependencies
-        #   if: steps.cache-mlir.outputs.cache-hit != 'true'
-        #   run: |
-        #     cd ~
-        #     wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
-        #     tar -xzf eigen-3.4.0.tar.gz && rm eigen-3.4.0.tar.gz
-        #     git clone https://github.com/llvm/llvm-project.git;
-        #     cd llvm-project && git checkout tags/llvmorg-15.0.0-rc1
-        #     mkdir -p build && cd build
-        #     cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
-        #       -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
-        #       -DLLVM_TARGETS_TO_BUILD="host" \
-        #       -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
-        #       -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
-        #       -DLLVM_USE_LINKER=lld \
-        #       -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-        #     cmake --build . -j $(nproc)
-
         - name: Check out repository code
           uses: actions/checkout@v3
 
