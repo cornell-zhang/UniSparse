@@ -23,8 +23,6 @@ jobs:
           export CPATH=/install/eigen-3.4.0:/install/llvm-project/mlir/lib:$CPATH
           export CPATH=/install/llvm-project/mlir/include/mlir:$CPATH
           export PATH=/install/llvm-project/build/bin:$PATH
-          echo "🔎 ls /install " && ls /install
-          echo "Where is eigen?" && find -name eigen-3.4.0 ../../../../
           cmake .. \
             -DMLIR_DIR="/install/llvm-project/build/lib/cmake/mlir" \
             -DLLVM_DIR="/install/llvm-project/build/lib/cmake/llvm" \
