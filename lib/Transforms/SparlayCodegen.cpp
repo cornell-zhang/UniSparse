@@ -375,7 +375,7 @@ static Value genOutputBuffer(CodeGen &codegen, OpBuilder &builder,
 
 void genBuffers(Merger &merger, CodeGen &codegen, OpBuilder &builder,
                        linalg::GenericOp op) {
-  std::cout << "Enter genBuffers() " << std::endl;
+  std::cerr << "Enter genBuffers() " << std::endl;
   Location loc = op.getLoc();
   assert(op.getNumInputsAndOutputs() == op.getNumInputs() + 1);
   // For every tensor, find lower and upper bound on dimensions, set the
@@ -427,7 +427,7 @@ void genBuffers(Merger &merger, CodeGen &codegen, OpBuilder &builder,
         codegen.buffers[tensor] =
             genOutputBuffer(codegen, builder, op, denseTp, args);
     } else if (t == codegen.sparseOut) {
-      std::cout << "Does not support sparse output right now" << std::endl;
+      std::cerr << "Does not support sparse output right now" << std::endl;
     } else {
       // Annotated sparse tensors.
     // auto dynShape = {ShapedType::kDynamicSize};
@@ -1324,7 +1324,7 @@ LogicalResult genBuffer(linalg::GenericOp op, PatternRewriter &rewriter, CodeGen
                     linalg::GenericOp op, std::vector<unsigned> &topSort,
                     unsigned exp, unsigned at) {
   // At each leaf, assign remaining tensor (sub)expression to output tensor.
-  std::cout << "topSort.size is " << topSort.size() << std::endl;
+  std::cerr << "topSort.size is " << topSort.size() << std::endl;
   if (at == topSort.size()) {
     unsigned ldx = topSort[at - 1];
     Value rhs = genExp(merger, codegen, rewriter, op, exp, ldx);
@@ -1336,7 +1336,7 @@ LogicalResult genBuffer(linalg::GenericOp op, PatternRewriter &rewriter, CodeGen
   unsigned idx = topSort[at];
   unsigned ldx = at == 0 ? -1u : topSort[at - 1];
   unsigned lts = merger.optimizeSet(merger.buildLattices(exp, idx));
-  std::cout << "start loop seq" << std::endl;
+  std::cerr << "start loop seq" << std::endl;
   // Start a loop sequence.
   bool needsUniv = startLoopSeq(merger, codegen, rewriter, op, topSort, exp, at,
                                 idx, ldx, lts);
@@ -1346,7 +1346,7 @@ LogicalResult genBuffer(linalg::GenericOp op, PatternRewriter &rewriter, CodeGen
   for (unsigned i = 0; i < lsize; i++) {
     // Start a loop.
     unsigned li = merger.set(lts)[i];
-    std::cout << "start loop of level " << i << std::endl;
+    std::cerr << "start loop of level " << i << std::endl;
     Operation *loop =
         startLoop(merger, codegen, rewriter, op, topSort, at, li, needsUniv);
 
@@ -1354,7 +1354,7 @@ LogicalResult genBuffer(linalg::GenericOp op, PatternRewriter &rewriter, CodeGen
     // loop-body, possibly with if statements for coiteration.
     Value redInput = codegen.redVal;
     Value cntInput = codegen.expCount;
-    std::cout << "gen merge lattice inside loop level " << i << std::endl;
+    std::cerr << "gen merge lattice inside loop level " << i << std::endl;
     bool isWhile = dyn_cast<scf::WhileOp>(loop) != nullptr;
     for (unsigned j = 0; j < lsize; j++) {
       unsigned lj = merger.set(lts)[j];
@@ -1383,7 +1383,7 @@ LogicalResult genBuffer(linalg::GenericOp op, PatternRewriter &rewriter, CodeGen
 
   void genResult(Merger &merger, CodeGen &codegen, RewriterBase &rewriter,
                       linalg::GenericOp op) {
-  std::cout << "Enter genResult() " << std::endl;
+  std::cerr << "Enter genResult() " << std::endl;
   OpOperand *lhs = op.getOutputOperand(0);
   Type resType = lhs->get().getType();
   assert(!getSparlayEncoding(resType));
@@ -1397,7 +1397,7 @@ LogicalResult genBuffer(linalg::GenericOp op, PatternRewriter &rewriter, CodeGen
 void testAffineMap(linalg::GenericOp op) {
   int count = 0;
   for(OpOperand *t : op.getInputAndOutputOperands()) {
-    std::cout << "The " << count << "th operand. " << std::endl;
+    std::cerr << "The " << count << "th operand. " << std::endl;
     count++; 
     auto map = op.getTiedIndexingMap(t);
     auto enc = getSparlayEncoding(t->get().getType());
@@ -1406,13 +1406,13 @@ void testAffineMap(linalg::GenericOp op) {
     }
     auto crd = enc.getCrdMap();
     unsigned rank = map.getNumResults();
-    std::cout << "rank of current map is : " << rank << std::endl;
+    std::cerr << "rank of current map is : " << rank << std::endl;
     for(unsigned d = 0; d < rank; d++) {
       unsigned d1 = perm(enc, d);
-      std::cout << "perm(end, " << d << ") is "<< d1 << std::endl;
+      std::cerr << "perm(end, " << d << ") is "<< d1 << std::endl;
       AffineExpr a = map.getResult(d1);
       unsigned idx = a.cast<AffineDimExpr>().getPosition();
-      std::cout << "position is: " << idx << std::endl;
+      std::cerr << "position is: " << idx << std::endl;
     }
   }
 }
@@ -1421,7 +1421,7 @@ struct GenericOpSparlayCodegen : public OpRewritePattern<linalg::GenericOp> {
 public:
   GenericOpSparlayCodegen(MLIRContext *context) : OpRewritePattern<linalg::GenericOp>(context) {}
   LogicalResult matchAndRewrite(linalg::GenericOp op, PatternRewriter &rewriter) const override {
-    std::cout << "Enter the matchAndRewrite function !!!" << std::endl; 
+    std::cerr << "Enter the matchAndRewrite function !!!" << std::endl; 
     assert(op.getNumOutputs() == 1);
     unsigned numTensors = op.getNumInputsAndOutputs();
     unsigned numLoops = op.iterator_types().getValue().size();
@@ -1474,7 +1474,7 @@ struct SparlayCodegenPass : public SparlayCodegenBase<SparlayCodegenPass> {
 } //namespace mlir
 
 std::unique_ptr<Pass> mlir::sparlay::createSparlayCodegenPass() {
-  std::cout << "Create SparlayCodegenPass pointer" << std::endl;
+  // std::cerr << "Create SparlayCodegenPass pointer" << std::endl;
   return std::make_unique<SparlayCodegenPass>();
 }
 

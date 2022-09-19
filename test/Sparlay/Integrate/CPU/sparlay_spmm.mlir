@@ -1,7 +1,8 @@
-// sparlay-opt test/Sparlay/convert-perf-all.mlir -lower-format-conversion -lower-struct -dce | \
-//     mlir-opt -convert-vector-to-scf --convert-scf-to-cf --tensor-bufferize \
-//     --scf-bufferize --func-bufferize --finalizing-bufferize --convert-vector-to-llvm \
-//     --convert-memref-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts | \
+// sparlay-opt test/Sparlay/Integrate/CPU/sparlay_spmm.mlir -lower-format-conversion -sparlay-codegen | \
+//     mlir-opt --arith-bufferize --tensor-bufferize --scf-bufferize --func-bufferize --vector-bufferize \
+//     --finalizing-bufferize --convert-vector-to-scf --lower-affine --convert-scf-to-cf \
+//     --convert-vector-to-llvm --convert-memref-to-llvm --convert-func-to-llvm --convert-cf-to-llvm \
+//     --convert-arith-to-llvm --reconcile-unrealized-casts | \
 //     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o 1.o
 
 // clang++ 1.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \

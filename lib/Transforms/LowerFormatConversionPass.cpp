@@ -15,10 +15,13 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Func/Transforms/FuncConversions.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -948,6 +951,20 @@ public:
 //===----------------------------------------------------------------------===//
 
 
+class SparseTensorTypeConverter : public TypeConverter {
+public:
+  SparseTensorTypeConverter() {
+    addConversion([](Type type) { return type; });
+    addConversion(convertSparseTensorTypes);
+  }
+  // Maps each sparse tensor type to an opaque pointer.
+  static Optional<Type> convertSparseTensorTypes(Type type) {
+    if (getSparlayEncoding(type) != nullptr)
+      return LLVM::LLVMPointerType::get(IntegerType::get(type.getContext(), 8));
+    return llvm::None;
+  }
+};
+
 namespace {
 
 struct LowerFormatConversionPass : 
@@ -967,6 +984,7 @@ void LowerFormatConversionPass::runOnOperation() {
     // The first thing to define is the conversion target. This will define the
     // final target for this lowering.
     ConversionTarget target(getContext());
+    SparseTensorTypeConverter converter;
 
     // We define the specific operations, or dialects, that are legal targets for
     // this lowering. In our case, we are lowering to a combination of the
@@ -980,12 +998,49 @@ void LowerFormatConversionPass::runOnOperation() {
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
     target.addIllegalDialect<sparlay::SparlayDialect>();
-    target.addLegalOp<sparlay::StructConstructOp>();
+    target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
+      return converter.isSignatureLegal(op.getFunctionType());
+    });
+    target.addDynamicallyLegalOp<func::CallOp>([&](func::CallOp op) {
+      return converter.isSignatureLegal(op.getCalleeType());
+    });
+    target.addDynamicallyLegalOp<func::ReturnOp>([&](func::ReturnOp op) {
+      return converter.isLegal(op.getOperandTypes());
+    });
+    target.addDynamicallyLegalOp<tensor::DimOp>([&](tensor::DimOp op) {
+      return converter.isLegal(op.getOperandTypes());
+    });
+    target.addDynamicallyLegalOp<tensor::CastOp>([&](tensor::CastOp op) {
+      return converter.isLegal(op.getSource().getType()) &&
+             converter.isLegal(op.getDest().getType());
+    });
+    target.addDynamicallyLegalOp<tensor::ExpandShapeOp>(
+        [&](tensor::ExpandShapeOp op) {
+          return converter.isLegal(op.getSrc().getType()) &&
+                 converter.isLegal(op.getResult().getType());
+        });
+    target.addDynamicallyLegalOp<tensor::CollapseShapeOp>(
+        [&](tensor::CollapseShapeOp op) {
+          return converter.isLegal(op.getSrc().getType()) &&
+                 converter.isLegal(op.getResult().getType());
+        });
+    target.addDynamicallyLegalOp<bufferization::AllocTensorOp>(
+        [&](bufferization::AllocTensorOp op) {
+          return converter.isLegal(op.getType());
+        });
+    target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
+        [&](bufferization::DeallocTensorOp op) {
+          return converter.isLegal(op.getTensor().getType());
+        });
     target.addLegalOp<linalg::FillOp>();
 
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
+    populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
+                                                                   converter);
+    populateCallOpTypeConversionPattern(patterns, converter);
+    //TODO: maybe add converter in this call? Need to figure out how converter works
     patterns.add<NewOpLowering, 
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
@@ -996,7 +1051,7 @@ void LowerFormatConversionPass::runOnOperation() {
     // With the target and rewrite patterns defined, we can now attempt the
     // conversion. The conversion will signal failure if any of our `illegal`
     // operations were not converted successfully.
-    func::FuncOp curOp = getOperation();
+    auto curOp = getOperation();
     if (failed(
             applyPartialConversion(curOp, target, std::move(patterns))))
         signalPassFailure();
