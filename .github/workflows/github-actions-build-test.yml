@@ -9,56 +9,27 @@ jobs:
       matrix:
         config:
           - { name: "Ubuntu-clang", os: ubuntu-latest, cc: "clang", cxx: "clang++" }
+    
+    container: 
+      image: sibylau/mlir-llvm
 
-    steps:    
-      - name: Cache MLIR 
-        id: cache-mlir
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-llvm-build
-        with:
-          path: |
-            ~/llvm-project/
-            ~/eigen-3.4.0/
-          key: ${{ matrix.config.os }}-${{ env.cache-name }}
-          restore-keys: |
-            ${{ matrix.config.os }}-${{ env.cache-name }}
-            ${{ matrix.config.os }}-
-
-      - name: Build MLIR and add dependencies
-        if: steps.cache-mlir.outputs.cache-hit != 'true'
-        run: |
-          cd ~
-          wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
-          tar -xzf eigen-3.4.0.tar.gz && rm eigen-3.4.0.tar.gz
-          git clone https://github.com/llvm/llvm-project.git;
-          cd llvm-project && git checkout tags/llvmorg-15.0.0-rc1
-          mkdir -p build && cd build
-          cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
-            -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
-            -DLLVM_TARGETS_TO_BUILD="host" \
-            -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
-            -DLLVM_INSTALL_UTILS=ON -DLLVM_BUILD_UTILS=ON \
-            -DLLVM_USE_LINKER=lld \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-          cmake --build . -j $(nproc)
-
+    steps:   
       - name: Check out repository code
         uses: actions/checkout@v3
 
       - name: Build Sparlay
         run: |
           mkdir -p build && cd build
-          export CPATH=~/eigen-3.4.0:~/llvm-project/mlir/lib:$CPATH
-          export CPATH=~/llvm-project/mlir/include/mlir:$CPATH
-          echo "🔎 ls ~ " && ls ~
+          export CPATH=/install/eigen-3.4.0:/install/llvm-project/mlir/lib:$CPATH
+          export CPATH=/install/llvm-project/mlir/include/mlir:$CPATH
+          export PATH=/install/llvm-project/build/bin:$PATH
           cmake .. \
-            -DMLIR_DIR="~/llvm-project/build/lib/cmake/mlir" \
-            -DLLVM_DIR="~/llvm-project/build/lib/cmake/llvm" \
-            -DLLVM_BUILD_LIBRARY_DIR="~/llvm-project/build" \
-            -DLLVM_EXTERNAL_LIT="~/llvm-project/build/bin/llvm-lit" \
-            -DEXTERNAL_INCLUDE_DIRS="~/eigen-3.4.0" \
-            -DMLIR_LIB_DIR="~/llvm-project/mlir/lib" \
+            -DMLIR_DIR="/install/llvm-project/build/lib/cmake/mlir" \
+            -DLLVM_DIR="/install/llvm-project/build/lib/cmake/llvm" \
+            -DLLVM_BUILD_LIBRARY_DIR="/install/llvm-project/build" \
+            -DLLVM_EXTERNAL_LIT="/install/llvm-project/build/bin/llvm-lit" \
+            -DEXTERNAL_INCLUDE_DIRS="/install/eigen-3.4.0" \
+            -DMLIR_LIB_DIR="/install/llvm-project/mlir/lib" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DLLVM_USE_LINKER=lld \
@@ -68,4 +39,4 @@ jobs:
 
       # - name: Check Sparlay
       #   run: |
-      #     ninja check-sparlay
+      #     cmake --build . --target check-sparlay -j $(nproc)
