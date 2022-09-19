@@ -169,12 +169,6 @@ public:
     }
 };
 
-SparlayEncodingAttr getSparlayEncoding(Type type) {
-  if (auto ttp = type.dyn_cast<RankedTensorType>())
-    return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
-  return nullptr;
-}
-
 typedef Eigen::Matrix<double, 2, 2> Matrix2f;
 typedef Eigen::Matrix<int, 2, 2> Matrix2i;
 
