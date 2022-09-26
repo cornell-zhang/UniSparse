@@ -110,10 +110,11 @@ module {
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
     %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-    %A_ori = sparlay.copy (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
+    %A_2 = sparlay.copy (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
+    %A_3 = sparlay.copy (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
     %a0 = sparlay.convert (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
-    %a1 = sparlay.convert (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSC>
-    %a2 = sparlay.convert (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DCSR>
+    %a1 = sparlay.convert (%A_2): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSC>
+    %a2 = sparlay.convert (%A_3): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DCSR>
 //    %a3 = sparlay.convert (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DCSC>
 
     // Initialize dense matrix.
