@@ -49,17 +49,9 @@ namespace {
 #define GEN_PASS_CLASSES
 #include "Transforms/Passes.h.inc"
 
-//===----------------------------------------------------------------------===//
-// RewritePatterns: New operations
-//===----------------------------------------------------------------------===//
-
-/// Returns a function reference (first hit also inserts into module). Sets
-/// the "_emit_c_interface" on the function declaration when requested,
-/// so that LLVM lowering generates a wrapper function that takes care
-/// of ABI complications with passing in and returning MemRefs to C functions.
 static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
                                  TypeRange resultType, ValueRange operands,
-                                 bool emitCInterface = false) {
+                                 bool emitCInterface) {
   MLIRContext *context = op->getContext();
   auto module = op->getParentOfType<ModuleOp>();
   auto result = SymbolRefAttr::get(context, name);
@@ -71,10 +63,14 @@ static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
         FunctionType::get(context, operands.getTypes(), resultType));
     func.setPrivate();
     if (emitCInterface)
-      func->setAttr("llvm.emit_c_interface", UnitAttr::get(context));
+      func->setAttr(LLVM::LLVMDialect::getEmitCWrapperAttrName(),
+                    UnitAttr::get(context));
   }
   return result;
 }
+//===----------------------------------------------------------------------===//
+// RewritePatterns: New operations
+//===----------------------------------------------------------------------===//
 
 class NewOpLowering : public OpConversionPattern<sparlay::NewOp> {
 public:
@@ -944,6 +940,24 @@ public:
   }
 };
 
+class SparlayDeallocConverter
+    : public OpConversionPattern<bufferization::DeallocTensorOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(bufferization::DeallocTensorOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {        
+    auto enc = getSparlayEncoding(op.getTensor().getType());
+    if (!enc) {
+      return failure();
+    }
+    StringRef name = "delSparlayTensor";
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
+            getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
+    return success();
+  }
+};
+
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
@@ -990,14 +1004,14 @@ void LowerFormatConversionPass::runOnOperation() {
     // this lowering. In our case, we are lowering to a combination of the
     // `Affine`, `MemRef` and `Standard` dialects.
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
-                           vector::VectorDialect, linalg::LinalgDialect,
+                           vector::VectorDialect, bufferization::BufferizationDialect,
                            arith::ArithmeticDialect, LLVM::LLVMDialect, func::FuncDialect>();
 
     // We also define the Sparlay dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
-    target.addIllegalDialect<sparlay::SparlayDialect>();
+  
     target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
       return converter.isSignatureLegal(op.getFunctionType());
     });
@@ -1028,10 +1042,13 @@ void LowerFormatConversionPass::runOnOperation() {
         [&](bufferization::AllocTensorOp op) {
           return converter.isLegal(op.getType());
         });
-    target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
+    target.addIllegalDialect<sparlay::SparlayDialect>();
+        target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
         [&](bufferization::DeallocTensorOp op) {
           return converter.isLegal(op.getTensor().getType());
-        });
+       });
+
+    //target.addLegalOp<bufferization::DeallocTensorOp>();    
     target.addLegalOp<linalg::FillOp>();
 
     // Now that the conversion target has been defined, we just need to provide
@@ -1045,15 +1062,14 @@ void LowerFormatConversionPass::runOnOperation() {
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
                  StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
-                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering>(&getContext());
+                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, SparlayDeallocConverter>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
     // conversion. The conversion will signal failure if any of our `illegal`
     // operations were not converted successfully.
     auto curOp = getOperation();
-    if (failed(
-            applyPartialConversion(curOp, target, std::move(patterns))))
+    if (failed(applyPartialConversion(curOp, target, std::move(patterns))))
         signalPassFailure();
 }
 

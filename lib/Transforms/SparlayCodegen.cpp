@@ -106,20 +106,43 @@ unsigned perm(const SparlayEncodingAttr &enc, unsigned d) {
   return d;
 }
 
+void createTrimVec(std::vector<int> trim, std::vector<bool> &trim_vec, unsigned rank) {
+  int trim_to = trim[0];
+  int trim_from = trim[1];
+  assert(trim_to <= trim_from);
+  for (int i = trim_to; i <= trim_from; i++) {
+    trim_vec[i] = true;
+  }  
+}
+
+void createMergeVec(std::vector<int> merge, std::vector<bool> &merge_vec, unsigned rank){
+  int end = merge[0];
+  for(int i = 0; i <= end; i++) {
+    merge_vec[i] = true;
+  } 
+}
+
 Dim toDim(const SparlayEncodingAttr &enc, unsigned d) {
-  if (enc) {
+  if(enc) { 
+    auto crdmap = enc.getCrdMap();
     auto compress = enc.getCompressMap();
     auto trim = compress.getTrimIndex();
-    int mn_trim_level = 1000, mx_trim_level = -1;
-    for (size_t i = 0; i < trim.size(); ++i) {
-      mn_trim_level = std::min(mn_trim_level, trim[i]);
-      mx_trim_level = std::max(mx_trim_level, trim[i]);
-    }
-    if (d >= mn_trim_level && d <= mx_trim_level) {
+    auto merge = compress.getFuseIndex();
+    unsigned rank = crdmap.getNumResults();
+    std::vector<bool> trim_vec(rank, false); 
+    createTrimVec(trim, trim_vec, rank);
+    std::vector<bool> merge_vec(rank, false);
+    createMergeVec(merge, merge_vec, rank);
+
+    if(d == 0) {
+      if(trim_vec[d]) {
+        return Dim::kSparse;
+      }
+    } else if (trim_vec[d] && merge_vec[d-1]) {
       return Dim::kSparse;
+    } else {
+      return Dim::kSingle;
     }
-//    if (tp == SparseTensorEncodingAttr::DimLevelType::Singleton)
-//      return Dim::kSingle;
   }
   return Dim::kDense;
 }
@@ -150,6 +173,7 @@ Dim toDim(const SparlayEncodingAttr &enc, unsigned d) {
 }
 
   bool findSparseAnnotations(Merger &merger, linalg::GenericOp op) {
+  std::cerr << "Enter findSparseAnnotations " << std::endl;
   bool annotated = false;
   for (OpOperand *t : op.getInputAndOutputOperands()) {
     auto map = op.getTiedIndexingMap(t);
@@ -266,7 +290,7 @@ bool isAdmissableTensorExp(Merger &merger, linalg::GenericOp op,
                                   unsigned &outerParNest) {
   OpOperand *lhs = op.getOutputOperand(0);
   unsigned tensor = lhs->getOperandNumber();
-  auto enc = getSparseTensorEncoding(lhs->get().getType());
+  auto enc = getSparlayEncoding(lhs->get().getType());
   // An non-annotated output tensor is assumed dense, and becomes a random
   // access n-dim memref. Admissable since insertions cannot occur.
   if (!enc)
@@ -375,11 +399,9 @@ static Value genOutputBuffer(CodeGen &codegen, OpBuilder &builder,
 
 void genBuffers(Merger &merger, CodeGen &codegen, OpBuilder &builder,
                        linalg::GenericOp op) {
-  std::cerr << "Enter genBuffers() " << std::endl;
   Location loc = op.getLoc();
   assert(op.getNumInputsAndOutputs() == op.getNumInputs() + 1);
-  // For every tensor, find lower and upper bound on dimensions, set the
-  // same bounds on loop indices, and obtain dense or sparse buffer(s).
+  std::cerr << "Enter genBuffers" << std::endl;
   SmallVector<Value, 4> args;
   for (OpOperand *t : op.getInputAndOutputOperands()) {
     unsigned tensor = t->getOperandNumber();
@@ -398,11 +420,12 @@ void genBuffers(Merger &merger, CodeGen &codegen, OpBuilder &builder,
       if (merger.isDim(tensor, idx, Dim::kSparse)) {
       //  auto dynShape = {ShapedType::kDynamicSize};
         Value dim = constantIndex(builder, loc, d);
+        Value dim_1 = constantIndex(builder, loc, d+1);
         // Generate sparse primitives to obtains pointer and indices.
         codegen.pointers[tensor][idx] =
             builder.create<sparlay::ToPtrOp>(loc, MemRefType::get({ShapedType::kDynamicSize}, i32Tp), t->get(), dim);
         codegen.indices[tensor][idx] =
-            builder.create<sparlay::ToCrdOp>(loc, MemRefType::get({ShapedType::kDynamicSize}, i32Tp), t->get(), dim);
+            builder.create<sparlay::ToCrdOp>(loc, MemRefType::get({ShapedType::kDynamicSize}, i32Tp), t->get(), dim_1);
       }
       // Find upper bound in current dimension.
       unsigned p = perm(enc, d);
@@ -1421,7 +1444,7 @@ struct GenericOpSparlayCodegen : public OpRewritePattern<linalg::GenericOp> {
 public:
   GenericOpSparlayCodegen(MLIRContext *context) : OpRewritePattern<linalg::GenericOp>(context) {}
   LogicalResult matchAndRewrite(linalg::GenericOp op, PatternRewriter &rewriter) const override {
-    std::cerr << "Enter the matchAndRewrite function !!!" << std::endl; 
+ 
     assert(op.getNumOutputs() == 1);
     unsigned numTensors = op.getNumInputsAndOutputs();
     unsigned numLoops = op.iterator_types().getValue().size();
