@@ -479,6 +479,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
   pos.resize(rowStore->crd.size(), 0);
   oriID.resize(pos.size(), 0);
   for (size_t i = 0; i < rowStore->crd.size(); ++i) {
+    
     assert((size_t)rowStore->crd[i] < bucket.size());
     bucket[rowStore->crd[i]].push_back(i);
     pos[i] = i;
