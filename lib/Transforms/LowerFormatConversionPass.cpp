@@ -15,10 +15,13 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Func/Transforms/FuncConversions.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -46,17 +49,9 @@ namespace {
 #define GEN_PASS_CLASSES
 #include "Transforms/Passes.h.inc"
 
-//===----------------------------------------------------------------------===//
-// RewritePatterns: New operations
-//===----------------------------------------------------------------------===//
-
-/// Returns a function reference (first hit also inserts into module). Sets
-/// the "_emit_c_interface" on the function declaration when requested,
-/// so that LLVM lowering generates a wrapper function that takes care
-/// of ABI complications with passing in and returning MemRefs to C functions.
 static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
                                  TypeRange resultType, ValueRange operands,
-                                 bool emitCInterface = false) {
+                                 bool emitCInterface) {
   MLIRContext *context = op->getContext();
   auto module = op->getParentOfType<ModuleOp>();
   auto result = SymbolRefAttr::get(context, name);
@@ -68,10 +63,14 @@ static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
         FunctionType::get(context, operands.getTypes(), resultType));
     func.setPrivate();
     if (emitCInterface)
-      func->setAttr("llvm.emit_c_interface", UnitAttr::get(context));
+      func->setAttr(LLVM::LLVMDialect::getEmitCWrapperAttrName(),
+                    UnitAttr::get(context));
   }
   return result;
 }
+//===----------------------------------------------------------------------===//
+// RewritePatterns: New operations
+//===----------------------------------------------------------------------===//
 
 class NewOpLowering : public OpConversionPattern<sparlay::NewOp> {
 public:
@@ -168,12 +167,6 @@ public:
         return success();
     }
 };
-
-SparlayEncodingAttr getSparlayEncoding(Type type) {
-  if (auto ttp = type.dyn_cast<RankedTensorType>())
-    return ttp.getEncoding().dyn_cast_or_null<SparlayEncodingAttr>();
-  return nullptr;
-}
 
 typedef Eigen::Matrix<double, 2, 2> Matrix2f;
 typedef Eigen::Matrix<int, 2, 2> Matrix2i;
@@ -947,12 +940,44 @@ public:
   }
 };
 
+class SparlayDeallocConverter
+    : public OpConversionPattern<bufferization::DeallocTensorOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(bufferization::DeallocTensorOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {        
+    auto enc = getSparlayEncoding(op.getTensor().getType());
+    if (!enc) {
+      return failure();
+    }
+    StringRef name = "delSparlayTensor";
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
+            getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
+    return success();
+  }
+};
+
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
 // LowerFormatConversionPass
 //===----------------------------------------------------------------------===//
 
+
+class SparseTensorTypeConverter : public TypeConverter {
+public:
+  SparseTensorTypeConverter() {
+    addConversion([](Type type) { return type; });
+    addConversion(convertSparseTensorTypes);
+  }
+  // Maps each sparse tensor type to an opaque pointer.
+  static Optional<Type> convertSparseTensorTypes(Type type) {
+    if (getSparlayEncoding(type) != nullptr)
+      return LLVM::LLVMPointerType::get(IntegerType::get(type.getContext(), 8));
+    return llvm::None;
+  }
+};
 
 namespace {
 
@@ -973,38 +998,78 @@ void LowerFormatConversionPass::runOnOperation() {
     // The first thing to define is the conversion target. This will define the
     // final target for this lowering.
     ConversionTarget target(getContext());
+    SparseTensorTypeConverter converter;
 
     // We define the specific operations, or dialects, that are legal targets for
     // this lowering. In our case, we are lowering to a combination of the
     // `Affine`, `MemRef` and `Standard` dialects.
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
-                           vector::VectorDialect, linalg::LinalgDialect,
+                           vector::VectorDialect, bufferization::BufferizationDialect,
                            arith::ArithmeticDialect, LLVM::LLVMDialect, func::FuncDialect>();
 
     // We also define the Sparlay dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
     // a partial lowering, we explicitly mark the Sparlay operations that don't want
     // to lower as `legal`.
+  
+    target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
+      return converter.isSignatureLegal(op.getFunctionType());
+    });
+    target.addDynamicallyLegalOp<func::CallOp>([&](func::CallOp op) {
+      return converter.isSignatureLegal(op.getCalleeType());
+    });
+    target.addDynamicallyLegalOp<func::ReturnOp>([&](func::ReturnOp op) {
+      return converter.isLegal(op.getOperandTypes());
+    });
+    target.addDynamicallyLegalOp<tensor::DimOp>([&](tensor::DimOp op) {
+      return converter.isLegal(op.getOperandTypes());
+    });
+    target.addDynamicallyLegalOp<tensor::CastOp>([&](tensor::CastOp op) {
+      return converter.isLegal(op.getSource().getType()) &&
+             converter.isLegal(op.getDest().getType());
+    });
+    target.addDynamicallyLegalOp<tensor::ExpandShapeOp>(
+        [&](tensor::ExpandShapeOp op) {
+          return converter.isLegal(op.getSrc().getType()) &&
+                 converter.isLegal(op.getResult().getType());
+        });
+    target.addDynamicallyLegalOp<tensor::CollapseShapeOp>(
+        [&](tensor::CollapseShapeOp op) {
+          return converter.isLegal(op.getSrc().getType()) &&
+                 converter.isLegal(op.getResult().getType());
+        });
+    target.addDynamicallyLegalOp<bufferization::AllocTensorOp>(
+        [&](bufferization::AllocTensorOp op) {
+          return converter.isLegal(op.getType());
+        });
     target.addIllegalDialect<sparlay::SparlayDialect>();
-    target.addLegalOp<sparlay::StructConstructOp>();
+        target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
+        [&](bufferization::DeallocTensorOp op) {
+          return converter.isLegal(op.getTensor().getType());
+       });
+
+    //target.addLegalOp<bufferization::DeallocTensorOp>();    
     target.addLegalOp<linalg::FillOp>();
 
     // Now that the conversion target has been defined, we just need to provide
     // the set of patterns that will lower the Sparlay operations.
     RewritePatternSet patterns(&getContext());
+    populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
+                                                                   converter);
+    populateCallOpTypeConversionPattern(patterns, converter);
+    //TODO: maybe add converter in this call? Need to figure out how converter works
     patterns.add<NewOpLowering, 
                  fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
                  StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
-                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering>(&getContext());
+                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, SparlayDeallocConverter>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
     // conversion. The conversion will signal failure if any of our `illegal`
     // operations were not converted successfully.
-    func::FuncOp curOp = getOperation();
-    if (failed(
-            applyPartialConversion(curOp, target, std::move(patterns))))
+    auto curOp = getOperation();
+    if (failed(applyPartialConversion(curOp, target, std::move(patterns))))
         signalPassFailure();
 }
 

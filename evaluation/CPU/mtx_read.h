@@ -15,7 +15,7 @@
 
 #include "mkl_spblas.h"
 
-using namespace std;
+//using namespace std;
 
 static char *toLower(char *token) {
   for (char *c = token; *c; c++)
@@ -111,7 +111,7 @@ public:
             exit(1); 
         } 
 
-        if (strcmp(toLower(symmetry), "general")) {
+        if (strcmp(toLower(symmetry), "general") && strcmp(toLower(symmetry), "symmetric")) {
             fprintf(stderr, "Non general matrix structure not yet supported.\n");                                       
             exit(1); 
         } 
@@ -125,7 +125,7 @@ public:
                 fprintf(stderr, "Cannot find next row index at line %lu\n", i);                    
                 exit(1);                                                                        
             }
-            cscRowInd[i] = rowInd;
+            cscRowInd[i] = rowInd - 1;
             if (fscanf(file, "%d", &colInd) != 1) {                                          
                 fprintf(stderr, "Cannot find next col index at line %lu\n", i);                    
                 exit(1);                                                                        
@@ -145,7 +145,8 @@ public:
                 cscValue[i] = value;
             }
         }
-        cscColPtr[num_cols] = num_nnz;
+        for(int i = lastRowInd; i <= num_cols; i++) 
+            cscColPtr[i] = num_nnz;
     }
 
     ~parse_CSC() {
@@ -166,19 +167,19 @@ public:
     parse_CSR(char* fileName) {
         FILE *file = fopen(fileName, "r");   
         printf("filename %s\n", fileName);                                                       
-        if (!file) {                                                                                
-            fprintf(stderr, "Cannot find %s\n", fileName);                                          
-            exit(1);                                                                                
-        }                                                                                           
-                                                                                                    
+        if (!file) {
+           fprintf(stderr, "Cannot find %s\n", fileName);
+           exit(1);                                                                              
+        }
+        
         uint64_t metaData[512];  
         char field[64];
         char symmetry[64];                                                                   
-        if (strstr(fileName, ".mtx")) {                                                             
-            readMTXHeader(file, fileName, metaData, field, symmetry);                                                
-        } else if (strstr(fileName, ".tns")) {                                                      
+        if (strstr(fileName, ".mtx")) {
+            readMTXHeader(file, fileName, metaData, field, symmetry);
+        } else if (strstr(fileName, ".tns")) {
             readFROSTTHeader(file, fileName, metaData);                                             
-        } else {                                                                                    
+        } else {
             fprintf(stderr, "Unknown format %s\n", fileName);                                       
             exit(1);                                                                                
         } 
@@ -217,13 +218,14 @@ public:
                 exit(1);                                                                        
             }
             while (rowInd > lastRowInd) {
-                csrRowPtr[lastRowInd++] = i;
+                csrRowPtr[lastRowInd] = i;
+                lastRowInd = lastRowInd + 1; 
             }
             if (fscanf(file, "%d", &colInd) != 1) {                                          
                 fprintf(stderr, "Cannot find next col index at line %lu\n", i);                    
                 exit(1);                                                                        
             }
-            csrColInd[i] = colInd;
+            csrColInd[i] = colInd - 1;
             
             if (!isFieldPattern) {
                 // Field is Pattern
@@ -237,7 +239,8 @@ public:
                 csrValue[i] = value;
             }
         }
-        csrRowPtr[num_rows] = num_nnz;
+        for (unsigned i = lastRowInd; i <= num_rows; i++ )
+            csrRowPtr[i] = num_nnz;
     }
 
     ~parse_CSR() {

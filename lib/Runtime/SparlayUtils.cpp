@@ -479,6 +479,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
   pos.resize(rowStore->crd.size(), 0);
   oriID.resize(pos.size(), 0);
   for (size_t i = 0; i < rowStore->crd.size(); ++i) {
+    
     assert((size_t)rowStore->crd[i] < bucket.size());
     bucket[rowStore->crd[i]].push_back(i);
     pos[i] = i;
@@ -1633,17 +1634,17 @@ extern "C" {
 
     void _mlir_ciface_getCrd(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      ref->basePtr = ref->data = sparT->vLevel[dim+1]->crd.data();
+      ref->basePtr = ref->data = sparT->vLevel[dim]->crd.data();
       ref->offset = 0;
-      ref->sizes[0] = sparT->vLevel[dim+1]->crd.size();
+      ref->sizes[0] = sparT->vLevel[dim]->crd.size();
       ref->strides[0] = 1;
     }
 
     void _mlir_ciface_getPtr(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      ref->basePtr = ref->data = sparT->vLevel[dim+1]->ptr.data();
+      ref->basePtr = ref->data = sparT->vLevel[dim]->ptr.data();
       ref->offset = 0;
-      ref->sizes[0] = sparT->vLevel[dim+1]->ptr.size();
+      ref->sizes[0] = sparT->vLevel[dim]->ptr.size();
       ref->strides[0] = 1;
     }
 
@@ -1770,7 +1771,11 @@ extern "C" {
     //   }
     //   printf(")\n");
       delete[] result;
-    } 
+    }
+
+void delSparlayTensor(void *tensor) {
+  delete static_cast<SparlayStorage *>(tensor);
+} 
 
     // void _mlir_ciface_release(void *ptr) {
     //     delete []ptr;

@@ -96,7 +96,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   }
 
   if (dce) {
-    // pm.addPass(mlir::createLowerFormatConversionPass());
     optPM.addPass(mlir::sparlay::createDeadCodeEliminationPass());
   }
 
@@ -104,17 +103,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::sparlay::createSparlayCodegenPass());
   }
 
-  
+  if (lowerFormatConversion) {
+    optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
+  }
 
   if (mlir::failed(pm.run(*module)))
     return 3;
-  
-  if (lowerFormatConversion) {
-    // pm.addPass(mlir::createLowerFormatConversionPass());
-    optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
-  }
-  if (mlir::failed(pm.run(*module)))
-    return 3;
+
   return 0;
 }
 

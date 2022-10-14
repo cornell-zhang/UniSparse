@@ -1,13 +1,24 @@
 make mkl_spmm
 
-export OMP_NUM_THREADS=32
+export OMP_NUM_THREADS=48
 
-DATASET_PATH=/work/shared/users/phd/jl3952/workspace/MLIR_dialect/sparlay/evaluation/dataset
+DATASET_PATH=/work/shared/common/datasets/versatile_sparse_xcel
 
-DATASETS=(  "abb313.mtx" 
-            "amazon0312.mtx" 
-            "p2p-Gnutella31.mtx" 
-            "wiki-Vote.mtx")
+DATASETS=(  "2cubes_sphere_row_major.mtx"
+            "cage12_row_major.mtx"
+            "email-Eu-core_row_major.mtx"
+            "mario002_row_major.mtx"
+            "poisson3Da_row_major.mtx"
+            "ca-CondMat_row_major.mtx"
+            "CollegeMsg_row_major.mtx"
+            "filter3D_row_major.mtx"
+            "offshore_row_major.mtx"
+            "scircuit_row_major.mtx"
+            "wiki-Vote_row_major.mtx"
+            "amazon0312_row_major.mtx"
+            "web-Google_row_major.mtx"
+            "p2p-Gnutella31_row_major.mtx"
+            "m133-b3_row_major.mtx")
 
 BUILD_DIR=./build
 
