@@ -10,8 +10,9 @@
 #define SPARLAY_OPS
 
 include "SparlayDialect.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
 include "SparlayAttr.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 
@@ -229,6 +230,149 @@ def Sparlay_StructAccessOp : Sparlay_Op<"struct_access", [NoSideEffect]>,
     ];
     let hasFolder = 1;
     let hasVerifier = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Sparse Tensor Management Operations. These operations are "impure" in the
+// sense that they do not properly operate on SSA values. Instead, the behavior
+// is solely defined by side-effects. These operations provide a bridge between
+// the code generator and the support library. The semantics of these operations
+// may be refined over time as our sparse abstractions evolve.
+//===----------------------------------------------------------------------===//
+
+def Sparlay_InsertOp : Sparlay_Op<"insert", []>,
+    Arguments<(ins AnyTensor:$tensor,
+               StridedMemRefRankOf<[Index], [1]>:$indices,
+               AnyType:$value)> {
+  string summary = "Inserts a value into given sparse tensor in lexicographical index order";
+  string description = [{
+    Inserts the given value at given indices into the underlying sparse
+    storage format of the given tensor with the given indices. This
+    operation can only be applied when a tensor materializes unintialized
+    with a `bufferization.alloc_tensor` operation, the insertions occur in
+    strict lexicographical index order, and the final tensor is constructed
+    with a `load` operation that has the `hasInserts` attribute set.
+
+    Note that this operation is "impure" in the sense that its behavior
+    is solely defined by side-effects and not SSA values. The semantics
+    may be refined over time as our sparse abstractions evolve.
+
+    Example:
+
+    ```mlir
+    sparlay.insert %tensor, %indices, %val
+      : tensor<1024x1024xf64, #CSR>, memref<?xindex>, memref<f64>
+    ```
+  }];
+  let assemblyFormat = "$tensor `,` $indices `,` $value attr-dict `:`"
+                       " type($tensor) `,` type($indices) `,` type($value)";
+}
+
+def Sparlay_ExpandOp : Sparlay_Op<"expand", []>,
+    Arguments<(ins AnyTensor:$tensor)>,
+    Results<(outs AnyStridedMemRefOfRank<1>:$values,
+                  StridedMemRefRankOf<[I1],[1]>:$filled,
+                  StridedMemRefRankOf<[Index],[1]>:$added,
+                  Index:$count)> {
+  string summary = "Expands an access pattern for insertion";
+  string description = [{
+    Performs an access pattern expansion for the innermost dimensions of the
+    given tensor. This operation is useful to implement kernels in which a
+    sparse tensor appears as output. This technique is known under several
+    different names and using several alternative implementations,
+    for example, phase counter [Gustavson72], expanded or switch array
+    [Pissanetzky84], in phase scan [Duff90], access pattern expansion [Bik96],
+    and workspaces [Kjolstad19].
+
+    The values and filled array have sizes that suffice for a *dense* innermost
+    dimension (e.g. a full row for matrices). The added array and count are used
+    to store new indices when a false value is encountered in the filled array.
+    All arrays should be allocated before the loop (possibly even shared between
+    loops in a future optimization) so that their *dense* initialization can be
+    amortized over many iterations. Setting and resetting the dense arrays in
+    the loop nest itself is kept *sparse* by only iterating over set elements
+    through an indirection using the added array, so that the operations are
+    kept proportional to the number of nonzeros.
+
+    Note that this operation is "impure" in the sense that its behavior
+    is solely defined by side-effects and not SSA values. The semantics
+    may be refined over time as our sparse abstractions evolve.
+
+    Example:
+
+    ```mlir
+    %values, %filled, %added, %count = sparlay.expand %0
+      : tensor<4x4xf64, #CSR> to memref<?xf64>, memref<?xi1>, memref<?xindex>, index
+    ```
+  }];
+  let assemblyFormat = "$tensor attr-dict `:` type($tensor) `to` type($values)"
+                       " `,` type($filled) `,` type($added) `,` type($count)";
+}
+
+def Sparlay_CompressOp : Sparlay_Op<"compress", []>,
+    Arguments<(ins AnyTensor:$tensor,
+                   StridedMemRefRankOf<[Index],[1]>:$indices,
+                   AnyStridedMemRefOfRank<1>:$values,
+                   StridedMemRefRankOf<[I1],[1]>:$filled,
+                   StridedMemRefRankOf<[Index],[1]>:$added,
+                   Index:$count)> {
+  string summary = "Compressed an access pattern for insertion";
+  string description = [{
+    Finishes a single access pattern expansion by moving inserted elements
+    into the sparse storage scheme. The values and filled array are reset
+    in a *sparse* fashion by only iterating over set elements through an
+    indirection using the added array, so that the operations are kept
+    proportional to the number of nonzeros. See the 'expand' operation
+    for more details.
+
+    Note that this operation is "impure" in the sense that its behavior
+    is solely defined by side-effects and not SSA values. The semantics
+    may be refined over time as our sparse abstractions evolve.
+
+    Example:
+
+    ```mlir
+    sparlay.compress %0, %1, %values, %filled, %added, %2
+        : tensor<4x4xf64, #CSR>, memref<?xindex>, memref<?xf64>,
+	  memref<?xi1>, memref<?xindex>, index
+    ```
+  }];
+  let assemblyFormat = "$tensor `,` $indices `,` $values `,` $filled `,`"
+                        " $added `,` $count attr-dict `:` type($tensor) `,`"
+			" type($indices) `,` type($values) `,` type($filled) `,`"
+			" type($added) `,` type($count)";
+}
+
+def Sparlay_LoadOp : Sparlay_Op<"load", [SameOperandsAndResultType]>,
+    Arguments<(ins AnyTensor:$tensor, UnitAttr:$hasInserts)>,
+    Results<(outs AnyTensor:$result)> {
+  let summary =
+    "Rematerializes tensor from underlying sparse storage format";
+  let description = [{
+    Rematerializes a tensor from the underlying sparse storage format of the
+    given tensor. This is similar to the `bufferization.to_tensor` operation
+    in the sense that it provides a bridge between a bufferized world view
+    and a tensor world view. Unlike the `bufferization.to_tensor` operation,
+    however, this sparse operation is used only temporarily to maintain a
+    correctly typed intermediate representation during progressive
+    bufferization.
+
+    The `hasInserts` attribute denote whether insertions to the underlying
+    sparse storage format may have occurred, in which case the underlying
+    sparse storage format needs to be finalized. Otherwise, the operation
+    simply folds away.
+
+    Note that this operation is "impure" in the sense that its behavior
+    is solely defined by side-effects and not SSA values. The semantics
+    may be refined over time as our sparse abstractions evolve.
+
+    Example:
+
+    ```mlir
+    %1 = sparlay.load %0 : tensor<8xf64, #SV>
+    ```
+  }];
+  let assemblyFormat = "$tensor (`hasInserts` $hasInserts^)? attr-dict `:` type($tensor)";
 }
 
 #endif // SPARLAY_OPS
