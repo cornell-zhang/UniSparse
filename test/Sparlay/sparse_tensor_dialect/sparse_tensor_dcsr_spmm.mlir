@@ -44,12 +44,12 @@ module {
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %c4 = arith.constant 1000 : index
-    %c256 = arith.constant 1005 : index
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %t_start2 = call @rtclock() : () -> f64
     %a2 = sparse_tensor.new %fileName : !Filename to tensor<?x?xf32, #DCSR>
+    %c256 = tensor.dim %a2, %c1 : tensor<?x?xf32, #DCSR>
     %t_end2 = call @rtclock() : () -> f64
     %t_2 = arith.subf %t_end2, %t_start2: f64
     vector.print %t_2 : f64

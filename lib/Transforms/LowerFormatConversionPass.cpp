@@ -26,6 +26,7 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
+#include "mlir/../../lib/Dialect/SparseTensor/Transforms/CodegenUtils.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -68,6 +69,150 @@ static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
   }
   return result;
 }
+
+static func::CallOp replaceOpWithFuncCall(RewriterBase &rewriter, Operation *op,
+                                          StringRef name, TypeRange resultType,
+                                          ValueRange operands,
+                                          bool emitCInterface) {
+  auto fn = getFunc(op, name, resultType, operands, emitCInterface);
+  return rewriter.replaceOpWithNewOp<func::CallOp>(op, resultType, fn,
+                                                   operands);
+}
+
+static func::CallOp createFuncCall(OpBuilder &builder, Operation *op,
+                                   StringRef name, TypeRange resultType,
+                                   ValueRange operands,
+                                   bool emitCInterface) {
+  auto fn = getFunc(op, name, resultType, operands, emitCInterface);
+  return builder.create<func::CallOp>(op->getLoc(), resultType, fn, operands);
+}
+
+static Value genSparlayDimSizeCall(OpBuilder &builder, Operation *op,
+                            SparlayEncodingAttr &enc, Value src,
+                            int64_t idx) {
+  // Permute the index according to an optional dimension ordering.
+  if (AffineMap p = enc.getCrdMap())
+    idx = p.getPermutedPosition(idx);
+  // Generate the call.
+  StringRef name = "sparseDimSize";
+  SmallVector<Value, 2> params{src, sparse_tensor::constantIndex(builder, op->getLoc(), idx)};
+  Type iTp = builder.getIndexType();
+  return createFuncCall(builder, op, name, iTp, params, true).getResult(0);
+}
+
+static Value genSparlayAlloc(RewriterBase &rewriter, Location loc, Value sz, Type tp) {
+  auto memTp = MemRefType::get({ShapedType::kDynamicSize}, tp);
+  return rewriter.create<memref::AllocOp>(loc, memTp, ValueRange{sz});
+}
+
+static Value genSparlayAlloca(OpBuilder &builder, Location loc, Value sz, Type tp) {
+  auto memTp = MemRefType::get({ShapedType::kDynamicSize}, tp);
+  return builder.create<memref::AllocaOp>(loc, memTp, ValueRange{sz});
+}
+
+static Value genSparlayAlloca(OpBuilder &builder, Location loc, unsigned sz, Type tp) {
+  return genSparlayAlloca(builder, loc, sparse_tensor::constantIndex(builder, loc, sz), tp);
+}
+
+static Value genSparlayBuffer(OpBuilder &builder, Location loc, ValueRange values) {
+  unsigned sz = values.size();
+  assert(sz >= 1);
+  Value buffer = genSparlayAlloca(builder, loc, sz, values[0].getType());
+  for (unsigned i = 0; i < sz; i++) {
+    Value idx = sparse_tensor::constantIndex(builder, loc, i);
+    builder.create<memref::StoreOp>(loc, values[i], buffer, idx);
+  }
+  return buffer;
+}
+
+std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> inferDimLevelType(SparlayEncodingAttr enc, int64_t rank) {
+  std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> lt;
+  assert(enc);
+//  std::cerr << "rank is " << rank << std::endl;
+  auto crdmap = enc.getCrdMap();
+  auto compress = enc.getCompressMap();
+  auto trim = compress.getTrimIndex();
+  auto merge = compress.getFuseIndex();
+  std::vector<bool> trim_vec(rank, false); 
+  int trim_to = trim[0];
+  int trim_from = trim[1];
+  assert(trim_to <= trim_from);
+  for (int i = trim_to; i <= trim_from; i++) {
+    trim_vec[i] = true;
+  }
+  std::vector<bool> merge_vec(rank, false);
+  int end = merge[0];
+  for(int i = 0; i <= end; i++) {
+    merge_vec[i] = true;
+  }
+//  std::cerr << "start fill lt " << rank << std::endl;
+  for(int64_t d = 0; d < rank; d++) {
+    if(d == 0) {
+      if(trim_vec[d]) {
+        lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Compressed);
+        continue;
+      }
+    } else if (trim_vec[d] && merge_vec[d-1]) {
+      lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Compressed);
+      continue;
+    } else {
+      lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Singleton);
+      continue;
+    }
+    lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Dense);
+  }
+  return lt;
+}
+
+static void SparlaynewParams(OpBuilder &builder, SmallVector<Value, 8> &params, Operation *op, 
+                             SparlayEncodingAttr &enc, ValueRange szs, int64_t rank, Value ptr = Value()) {
+  Location loc = op->getLoc();
+  std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> dlt = inferDimLevelType(enc, rank);
+//  std::cerr << "Finish infer DimLevelType " << std::endl;
+  unsigned sz = dlt.size();
+  // Sparsity annotations.
+  SmallVector<Value, 4> attrs;
+  for (unsigned i = 0; i < sz; i++)
+    attrs.push_back(constantDimLevelTypeEncoding(builder, loc, dlt[i]));
+  params.push_back(genSparlayBuffer(builder, loc, attrs));
+// std::cerr << "Finish gen level attr buffer " << std::endl;
+  // Dimension sizes array of the enveloping tensor. Useful for either
+  // verification of external data, or for construction of internal data.
+  params.push_back(genSparlayBuffer(builder, loc, szs));
+//  std::cerr << "Finish gen dimension size " << std::endl;
+  // Dimension order permutation array. This is the "identity" permutation by
+  // default, or otherwise the "reverse" permutation of a given ordering, so
+  // that indices can be mapped quickly to the right position.
+  SmallVector<Value, 4> rev(sz);
+  if (AffineMap p = enc.getCrdMap()) {
+    for (unsigned i = 0; i < sz; i++)
+      rev[p.getDimPosition(i)] = sparse_tensor::constantIndex(builder, loc, i);
+  } else {
+    for (unsigned i = 0; i < sz; i++)
+      rev[i] = sparse_tensor::constantIndex(builder, loc, i);
+  }
+  params.push_back(genSparlayBuffer(builder, loc, rev));
+//  std::cerr << "Finish gen reverse permutation " << std::endl;
+  // Secondary and primary types encoding.
+//  Type elemTp = stp.getElementType();
+//  params.push_back(sparse_tensor::constantOverheadTypeEncoding(builder, loc, 32));
+//  params.push_back(sparse_tensor::constantOverheadTypeEncoding(builder, loc, 32));
+//  params.push_back(sparse_tensor::constantPrimaryTypeEncoding(builder, loc, elemTp));
+  // User action.
+//  params.push_back(constantAction(builder, loc, action));
+  // Payload pointer.
+  if (!ptr)
+    ptr = builder.create<LLVM::NullOp>(loc, LLVM::LLVMPointerType::get(builder.getI8Type()));
+  params.push_back(ptr);
+}
+
+static Value genSparlayNewCall(OpBuilder &builder, Operation *op,
+                        ArrayRef<Value> params) {
+  StringRef name = "newSparlayTensor";
+  Type pTp = LLVM::LLVMPointerType::get(builder.getI8Type());
+  return createFuncCall(builder, op, name, pTp, params, true).getResult(0);
+}
+
 //===----------------------------------------------------------------------===//
 // RewritePatterns: New operations
 //===----------------------------------------------------------------------===//
@@ -940,10 +1085,80 @@ public:
   }
 };
 
+class SparlayReturnConverter : public OpConversionPattern<func::ReturnOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(func::ReturnOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<func::ReturnOp>(op, adaptor.getOperands());
+    return success();
+  }
+};
+
+class SparlayToDimSizeConverter
+    : public OpConversionPattern<tensor::DimOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(tensor::DimOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // Only rewrite annotated DimOp with constant index.
+    auto enc = getSparlayEncoding(op.getSource().getType());
+    if (!enc)
+      return failure();
+    Optional<int64_t> index = op.getConstantIndex();
+    if (!index)
+      return failure();
+    // Generate the call.
+    Value src = adaptor.getOperands()[0];
+    int64_t idx = *index;
+    rewriter.replaceOp(op, genSparlayDimSizeCall(rewriter, op, enc, src, idx));
+    return success();
+  }
+};
+
+class SparlayAllocConverter
+    : public OpConversionPattern<bufferization::AllocTensorOp> {
+public:
+  using OpConversionPattern<bufferization::AllocTensorOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(bufferization::AllocTensorOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering AllocTensorOp " << std::endl;
+    if (op.getCopy())
+      return rewriter.notifyMatchFailure(op, "sparse tensor copy not implemented");
+    RankedTensorType resType = op.getType();
+    int64_t rank = resType.getRank();
+    auto enc = getSparlayEncoding(resType);
+    if (!enc)
+      return failure();
+    // Gather all dimension sizes as SSA values.
+    SmallVector<Value> sizes;
+    unsigned int operandCtr = 0;
+    for (int64_t i = 0; i < rank; ++i) {
+      if (resType.isDynamicDim(i)) {
+        sizes.push_back(adaptor.getOperands()[operandCtr++]);
+      } else {
+        sizes.push_back(rewriter.create<arith::ConstantIndexOp>(
+            op.getLoc(), op.getStaticSize(i)));
+      }
+    }
+    // Generate the call to construct empty tensor. The sizes are
+    // explicitly defined by the arguments to the alloc operator.
+    SmallVector<Value, 8> params;
+    std::cerr << "Enter SparlaynewParams" << std::endl;
+    SparlaynewParams(rewriter, params, op, enc, sizes, rank);
+    std::cerr << "Finish SparlaynewParams" << std::endl;
+    rewriter.replaceOp(op, genSparlayNewCall(rewriter, op, params)); 
+    return success();
+  }
+};
+
 class SparlayDeallocConverter
     : public OpConversionPattern<bufferization::DeallocTensorOp> {
 public:
-  using OpConversionPattern::OpConversionPattern;
+  using OpConversionPattern<bufferization::DeallocTensorOp>::OpConversionPattern;
   LogicalResult
   matchAndRewrite(bufferization::DeallocTensorOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {        
@@ -958,26 +1173,135 @@ public:
   }
 };
 
-} // end anonymous namespace
-
 //===----------------------------------------------------------------------===//
 // LowerFormatConversionPass
 //===----------------------------------------------------------------------===//
-
-
-class SparseTensorTypeConverter : public TypeConverter {
+class SparlayTensorTypeConverter : public TypeConverter {
 public:
-  SparseTensorTypeConverter() {
+  SparlayTensorTypeConverter() {
     addConversion([](Type type) { return type; });
-    addConversion(convertSparseTensorTypes);
+    addConversion(convertSparlayTypes);
   }
   // Maps each sparse tensor type to an opaque pointer.
-  static Optional<Type> convertSparseTensorTypes(Type type) {
+  static Optional<Type> convertSparlayTypes(Type type) {
     if (getSparlayEncoding(type) != nullptr)
       return LLVM::LLVMPointerType::get(IntegerType::get(type.getContext(), 8));
     return llvm::None;
   }
 };
+
+/// Sparse conversion rule for tensor rematerialization.
+class SparlayLoadConverter : public OpConversionPattern<sparlay::LoadOp> {
+public:
+  using OpConversionPattern<sparlay::LoadOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(sparlay::LoadOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering LoadOp " << std::endl;
+    if (op.hasInserts()) {
+      // Finalize any pending insertions.
+      StringRef name = "endInsert";
+      TypeRange noTp;
+      createFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
+    }
+    rewriter.replaceOp(op, adaptor.getOperands());
+    return success();
+  }
+};
+
+/// Sparse conversion rule for inserting in lexicographic index order.
+class SparlayInsertConverter : public OpConversionPattern<sparlay::InsertOp> {
+public:
+  using OpConversionPattern<sparlay::InsertOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(sparlay::InsertOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering InsertOp " << std::endl;
+//    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
+    StringRef name = "lexInsert";
+    TypeRange noTp;
+    replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
+    return success();
+  }
+};
+
+class SparlayExpandConverter : public OpConversionPattern<sparlay::ExpandOp> {
+public:
+  using OpConversionPattern<sparlay::ExpandOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(sparlay::ExpandOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering ExpandOp " << std::endl;
+    Location loc = op->getLoc();
+    ShapedType srcType = op.tensor().getType().cast<ShapedType>();
+    Type eltType = srcType.getElementType();
+    Type boolType = rewriter.getIntegerType(1);
+    Type idxType = rewriter.getIndexType();
+    // All initialization should be done on entry of the loop nest.
+    rewriter.setInsertionPointAfter(op.tensor().getDefiningOp());
+    // Determine the size for access expansion.
+    auto enc = getSparlayEncoding(srcType);
+    Value src = adaptor.getOperands()[0];
+    Value sz = genSparlayDimSizeCall(rewriter, op, enc, src, srcType.getRank() - 1);
+    // Allocate temporary buffers for values, filled-switch, and indices.
+    // We do not use stack buffers for this, since the expanded size may
+    // be rather large (as it envelops a single expanded dense dimension).
+    Value values = genSparlayAlloc(rewriter, loc, sz, eltType);
+    Value filled = genSparlayAlloc(rewriter, loc, sz, boolType);
+    Value indices = genSparlayAlloc(rewriter, loc, sz, idxType);
+    Value zero = mlir::sparse_tensor::constantZero(rewriter, loc, idxType);
+    // Reset the values/filled-switch to all-zero/false. Note that this
+    // introduces an O(N) operation into the computation, but this reset
+    // operation is amortized over the innermost loops for the access
+    // pattern expansion. As noted in the operation doc, we would like
+    // to amortize this setup cost even between kernels.
+    rewriter.create<linalg::FillOp>(
+        loc, ValueRange{mlir::sparse_tensor::constantZero(rewriter, loc, eltType)},
+        ValueRange{values});
+    rewriter.create<linalg::FillOp>(
+        loc, ValueRange{mlir::sparse_tensor::constantZero(rewriter, loc, boolType)},
+        ValueRange{filled});
+    // Replace expansion op with these buffers and initial index.
+    assert(op.getNumResults() == 4);
+    rewriter.replaceOp(op, {values, filled, indices, zero});
+    return success();
+  }
+};
+
+class SparlayCompressConverter : public OpConversionPattern<sparlay::CompressOp> {
+public:
+  using OpConversionPattern<sparlay::CompressOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(sparlay::CompressOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Location loc = op->getLoc();
+    // Note that this method call resets the values/filled-switch back to
+    // all-zero/false by only iterating over the set elements, so the
+    // complexity remains proportional to the sparsity of the expanded
+    // access pattern.
+//    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
+//    std::cerr << "Enter the lowering CompressOp " << std::endl;
+    StringRef name = "expInsert";
+    TypeRange noTp;
+    replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
+    // Deallocate the buffers on exit of the loop nest.
+    Operation *parent = op;
+    for (; isa<scf::ForOp>(parent->getParentOp()) ||
+           isa<scf::WhileOp>(parent->getParentOp()) ||
+           isa<scf::ParallelOp>(parent->getParentOp()) ||
+           isa<scf::IfOp>(parent->getParentOp());
+         parent = parent->getParentOp())
+      ;
+    rewriter.setInsertionPointAfter(parent);
+    rewriter.create<memref::DeallocOp>(loc, adaptor.getOperands()[2]);
+    rewriter.create<memref::DeallocOp>(loc, adaptor.getOperands()[3]);
+    rewriter.create<memref::DeallocOp>(loc, adaptor.getOperands()[4]);
+    return success();
+  }
+};
+} // end anonymous namespace
+
+
 
 namespace {
 
@@ -998,7 +1322,7 @@ void LowerFormatConversionPass::runOnOperation() {
     // The first thing to define is the conversion target. This will define the
     // final target for this lowering.
     ConversionTarget target(getContext());
-    SparseTensorTypeConverter converter;
+    SparlayTensorTypeConverter converter;
 
     // We define the specific operations, or dialects, that are legal targets for
     // this lowering. In our case, we are lowering to a combination of the
@@ -1006,6 +1330,7 @@ void LowerFormatConversionPass::runOnOperation() {
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
                            vector::VectorDialect, bufferization::BufferizationDialect,
                            arith::ArithmeticDialect, LLVM::LLVMDialect, func::FuncDialect>();
+    target.addIllegalDialect<sparlay::SparlayDialect>();
 
     // We also define the Sparlay dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
@@ -1042,11 +1367,11 @@ void LowerFormatConversionPass::runOnOperation() {
         [&](bufferization::AllocTensorOp op) {
           return converter.isLegal(op.getType());
         });
-    target.addIllegalDialect<sparlay::SparlayDialect>();
-        target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
-        [&](bufferization::DeallocTensorOp op) {
-          return converter.isLegal(op.getTensor().getType());
-       });
+
+    target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
+    [&](bufferization::DeallocTensorOp op) {
+        return converter.isLegal(op.getTensor().getType());
+    });
 
     //target.addLegalOp<bufferization::DeallocTensorOp>();    
     target.addLegalOp<linalg::FillOp>();
@@ -1058,11 +1383,13 @@ void LowerFormatConversionPass::runOnOperation() {
                                                                    converter);
     populateCallOpTypeConversionPattern(patterns, converter);
     //TODO: maybe add converter in this call? Need to figure out how converter works
-    patterns.add<NewOpLowering, 
-                 fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
+    patterns.add<NewOpLowering, fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
                  StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
-                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, SparlayDeallocConverter>(&getContext());
+                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, 
+                 SparlayAllocConverter, SparlayDeallocConverter, SparlayToDimSizeConverter,
+                 SparlayLoadConverter, SparlayInsertConverter, SparlayReturnConverter,
+                 SparlayExpandConverter, SparlayCompressConverter>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the

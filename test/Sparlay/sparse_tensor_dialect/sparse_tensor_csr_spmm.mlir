@@ -1,16 +1,9 @@
-// sparlay-opt test/Sparlay/Integrate/CPU/sparlay_spmm.mlir -sparlay-codegen -lower-format-conversion -lower-struct -dce | \
-//     mlir-opt --arith-bufferize --tensor-bufferize --scf-bufferize --func-bufferize --vector-bufferize \
-//     --finalizing-bufferize --convert-vector-to-scf --lower-affine --convert-scf-to-cf \
-//     --convert-vector-to-llvm --convert-memref-to-llvm --convert-func-to-llvm --convert-cf-to-llvm \
-//     --convert-arith-to-llvm --reconcile-unrealized-casts | \
-//     mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o 1.o
+// mlir-opt ./sparse_tensor_csr_spmm.mlir -sparse-compiler | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o spmm.o
 
-// clang++ 1.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
-//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o exec_all
+// clang++ spmm.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
+//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o spmm
 
-// ./exec_all
-
-// RUN: sparlay-opt %s -lower-format-conversion -lower-struct -dce | FileCheck %s
+// ./spmm
 
 !Filename = !llvm.ptr<i8>
 
@@ -51,12 +44,12 @@ module {
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %c4 = arith.constant 1000 : index
-    %c256 = arith.constant 1005 : index
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %t_start0 = call @rtclock() : () -> f64
     %a0 = sparse_tensor.new %fileName : !Filename to tensor<?x?xf32, #CSR>
+    %c256 = tensor.dim %a0, %c1 : tensor<?x?xf32, #CSR>
     %t_end0 = call @rtclock() : () -> f64
     %t_0 = arith.subf %t_end0, %t_start0: f64
     vector.print %t_0 : f64

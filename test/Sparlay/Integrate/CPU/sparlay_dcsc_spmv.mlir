@@ -53,12 +53,12 @@ module {
     %i0 = arith.constant 0.0 : f32
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
-    %c256 = arith.constant 1005 : index
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %t_start3 = call @rtclock() : () -> f64
     %A_3 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
+    %c256 = tensor.dim %A_3, %c1 : tensor<?x?xf32, #COO>
     %a3 = sparlay.convert (%A_3): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DCSC>
     %t_end3 = call @rtclock() : () -> f64
     %t_3 = arith.subf %t_end3, %t_start3: f64

@@ -34,52 +34,63 @@
 #include <chrono>
 #include "Eigen/Dense"
 
+
+using namespace mlir;
+extern "C" {
+
+enum class SparlayDimLevelType : uint8_t {
+  kDense = 0,
+  kCompressed = 1,
+  kSingleton = 2
+};
+}
+
 template <typename indexTp, typename valueTp>
 class SparseCoordinate {
 public:
 
-    SparseCoordinate(uint64_t rank) {
-        indices.reserve(rank);
-        for (unsigned i = 0; i < rank; i++) {
-            std::vector<indexTp> tmp;
-            indices.push_back(tmp);
-        }
-    }
+  SparseCoordinate(uint64_t rank) {
+      indices.reserve(rank);
+      for (unsigned i = 0; i < rank; i++) {
+          std::vector<indexTp> tmp;
+          indices.push_back(tmp);
+      }
+  }
 
-    ~SparseCoordinate() {}
+  ~SparseCoordinate() {}
 
-    void insert(const std::vector<indexTp> &indices_read, const valueTp value_read) {
-        // printf("indices_read size = %zu, getRank = %lu\n", indices_read.size() , getRank());
-        // assert(getRank() == indices_read.size());
-        for (unsigned i = 0; i < indices_read.size(); i++) {
-            indices[i].push_back(indices_read[i]);
-        }
-        values.push_back(value_read);
-    }
+  void insert(const std::vector<indexTp> &indices_read, const valueTp value_read) {
+      // printf("indices_read size = %zu, getRank = %lu\n", indices_read.size() , getRank());
+      // assert(getRank() == indices_read.size());
+      for (unsigned i = 0; i < indices_read.size(); i++) {
+          indices[i].push_back(indices_read[i]);
+      }
+      values.push_back(value_read);
+  }
 
-    uint64_t getRank() {
-        return indices.size();
-    }
+  uint64_t getRank() {
+      return indices.size();
+  }
 
-    void getIndex(std::vector<indexTp> **output, uint64_t dim) {
-        assert(dim < getRank());
-        *output = &indices[dim];
-    }
+  void getIndex(std::vector<indexTp> **output, uint64_t dim) {
+      assert(dim < getRank());
+      *output = &indices[dim];
+  }
 
-    void getValue(std::vector<valueTp> **output) {
-        *output = &values;
-    }
+  void getValue(std::vector<valueTp> **output) {
+      *output = &values;
+  }
 
-    void print() {
-        printf("SparseCoordinate: \n");
-        assert(indices.size() == values.size());
-        for (unsigned i = 0; i < indices.size(); i++) {
-            for (unsigned j = 0; j < indices[i].size(); j++) {
-                printf("%d  ", indices[i][j]);
-            }
-            printf("%f  \n", values[i]);
-        }
-    }
+  void print() {
+      printf("SparseCoordinate: \n");
+      assert(indices.size() == values.size());
+      for (unsigned i = 0; i < indices.size(); i++) {
+          for (unsigned j = 0; j < indices[i].size(); j++) {
+              printf("%d  ", indices[i][j]);
+          }
+          printf("%f  \n", values[i]);
+      }
+  }
 
 private:
     std::vector<std::vector<indexTp>> indices;
@@ -221,9 +232,9 @@ public:
 class SparlayStorage {
 public:
 
+  std::vector<uint64_t> dimSizes;
   std::vector< std::shared_ptr<LevelStorage> > vLevel;
   std::vector< std::shared_ptr<Vector2i> > exprs;
-  std::vector<int> oriSize;
   std::vector<float> valueArray;
   std::vector< std::vector<float> > vectorArray;
   int singleVectorSize;
@@ -233,6 +244,30 @@ public:
   #define LVFUSE 2
 
   SparlayStorage() {singleVectorSize=0;}
+  SparlayStorage(std::vector<uint64_t> &dimSizes, uint64_t *perm, const SparlayDimLevelType *sparsity)
+        :dimSizes(dimSizes), rev(getRank()), dimTypes(sparsity, sparsity + getRank()), idx(getRank())  {
+    assert(perm && sparsity);
+    const uint64_t rank = getRank();
+    // Validate parameters.
+    assert(rank > 0 && "Trivial shape is unsupported");
+    for (uint64_t r = 0; r < rank; r++) {
+      assert(dimSizes[r] > 0 && "Dimension size zero has trivial storage");
+      assert((dimTypes[r] == SparlayDimLevelType::kDense ||
+              dimTypes[r] == SparlayDimLevelType::kCompressed) &&
+             "Unsupported DimLevelType");
+    }
+    // Construct the "reverse" (i.e., inverse) permutation.
+    for (uint64_t r = 0; r < rank; r++)
+      rev[perm[r]] = r;
+    vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage));
+    vLevel[0]->type = LVFUSE | LVINFO;
+    vLevel[0]->size = 1;
+    vLevel[0]->ptr.push_back(0);
+    for(uint64_t i = 1; i <= rank; i++) {
+      vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage));
+      vLevel[1]->size = dimSizes[rev[i-1]];
+    }  
+  }
 
   void initCOO(int sizeI, int sizeJ) {
     vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage));
@@ -247,8 +282,8 @@ public:
     vLevel[2]->type = LVTRIM;
     valueArray.clear();
     vectorArray.clear();
-    oriSize.push_back(0);
-    oriSize.push_back(sizeI), oriSize.push_back(sizeJ);
+//    dimSizes.push_back(0);
+    dimSizes.push_back(sizeI), dimSizes.push_back(sizeJ);
     exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(0,0)));
     exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(1,0)));
     exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(0,1)));
@@ -279,13 +314,18 @@ public:
 
   void getSize(size_t lv) {
     assert(lv < exprs.size());
-    assert(oriSize.size() == 3);
+    assert(dimSizes.size() == 3);
     
-    Vector2i t0(0,0), t1(0,oriSize[2]), t2(oriSize[1],0), t3(oriSize[1],oriSize[2]);
+    Vector2i t0(0,0), t1(0,dimSizes[1]), t2(dimSizes[0],0), t3(dimSizes[0],dimSizes[1]);
     const auto& expr = exprs[lv];
     int mn = std::min(0, std::min(expr->dot(t1), std::min(expr->dot(t2), expr->dot(t3))));
     int mx = std::max(0, std::max(expr->dot(t1), std::max(expr->dot(t2), expr->dot(t3))));
     vLevel[lv]->size = (mx - mn);
+  }
+
+  bool isCompressedDim(uint64_t d) const {
+    assert(d < getRank());
+    return (dimTypes[d] == SparlayDimLevelType::kCompressed);
   }
 
   void swapStorage(int srcLv, int targetLv) {
@@ -355,7 +395,7 @@ public:
         ret.valueArray.push_back(valueArray[i]);
       }
     }
-    ret.oriSize = oriSize;
+    ret.dimSizes = dimSizes;
     if (vectorArray.size()) { 
       assert(0);
     }
@@ -377,6 +417,138 @@ public:
     }
     return 1;
   }
+
+  uint64_t getRank() const { return dimSizes.size(); }
+
+  uint64_t getDimSize(uint64_t d) const {
+    assert(d < getRank());
+    return dimSizes[d];
+  }
+  
+  void lexInsert(const uint64_t *cursor, float val) {
+    // First, wrap up pending insertion path.
+//    std::cerr << "Enter lexInsert " << std::endl;
+    uint64_t diff = 0;
+    uint64_t top = 0;
+    if (!valueArray.empty()) {
+      diff = lexDiff(cursor);
+      endPath(diff + 1);
+      top = idx[diff] + 1;
+    }
+    // Then continue with insertion path.
+    insPath(cursor, diff, top, val);
+  }
+
+  void expInsert(uint64_t *cursor, float *values, bool *filled, uint64_t *added,
+                 uint64_t count) {
+    if (count == 0)
+      return;
+    // Sort.
+    std::sort(added, added + count);
+    // Restore insertion path for first insert.
+    const uint64_t lastDim = getRank() - 1;
+    uint64_t index = added[0];
+    cursor[lastDim] = index;
+    lexInsert(cursor, values[index]);
+    assert(filled[index]);
+    values[index] = 0;
+    filled[index] = false;
+    // Subsequent insertions are quick.
+    for (uint64_t i = 1; i < count; i++) {
+      assert(index < added[i] && "non-lexicographic insertion");
+      index = added[i];
+      cursor[lastDim] = index;
+      insPath(cursor, lastDim, added[i - 1] + 1, values[index]);
+      assert(filled[index]);
+      values[index] = 0;
+      filled[index] = false;
+    }
+  }
+
+  void endInsert() {
+    if (valueArray.empty())
+      finalizeSegment(0);
+    else
+      endPath(0);
+  }
+
+private:
+
+  void appendPointer(uint64_t d, uint64_t pos, uint64_t count = 1) {
+    assert(isCompressedDim(d));
+    assert(pos <= std::numeric_limits<int32_t>::max() &&
+           "Pointer value is too large for the P-type");
+    vLevel[d]->ptr.insert(vLevel[d]->ptr.end(), count, static_cast<int32_t>(pos));
+  }
+
+  void finalizeSegment(uint64_t d, uint64_t full = 0, uint64_t count = 1) {
+    if (count == 0)
+      return; // Short-circuit, since it'll be a nop.
+    if (isCompressedDim(d)) {
+      appendPointer(d, vLevel[d+1]->crd.size(), count);
+    } else { // Dense dimension.
+      const uint64_t sz = getDimSize(d);
+      assert(sz >= full && "Segment is overfull");
+      assert((count == 0 || (sz - full) <= std::numeric_limits<uint64_t>::max() / count) &&
+         "Integer overflow");
+      count = count * (sz - full);
+      if (d + 1 == getRank())
+        valueArray.insert(valueArray.end(), count, 0);
+      else
+        finalizeSegment(d + 1, 0, count);
+    }
+  }
+
+  void appendIndex(uint64_t d, uint64_t full, uint64_t i) {
+    if (isCompressedDim(d)) {
+      assert(i <= std::numeric_limits<int32_t>::max() && "Index value is too large for the I-type");
+      vLevel[d+1]->crd.push_back(static_cast<int32_t>(i));
+    } else { // Dense dimension.
+      assert(i >= full && "Index was already filled");
+      if (i == full)
+        return; // Short-circuit, since it'll be a nop.
+      if (d + 1 == getRank())
+        valueArray.insert(valueArray.end(), i - full, 0);
+      else
+        finalizeSegment(d + 1, 0, i - full);
+    }
+  }
+  
+  void insPath(const uint64_t *cursor, uint64_t diff, uint64_t top, float val) {
+    uint64_t rank = getRank();
+    assert(diff < rank);
+    for (uint64_t d = diff; d < rank; d++) {
+      uint64_t i = cursor[d];
+      appendIndex(d, top, i);
+      top = 0;
+      idx[d] = i;
+    }
+    valueArray.push_back(val);
+  }
+
+  uint64_t lexDiff(const uint64_t *cursor) const {
+//    std::cerr << "Enter lexDiff " << std::endl;
+    for (uint64_t r = 0, rank = getRank(); r < rank; r++)
+      if (cursor[r] > idx[r])
+        return r;
+      else
+        assert(cursor[r] == idx[r] && "non-lexicographic insertion");
+    assert(0 && "duplication insertion");
+    return -1u;
+  }
+
+  void endPath(uint64_t diff) {
+    uint64_t rank = getRank();
+    assert(diff <= rank);
+    for (uint64_t i = 0; i < rank - diff; i++) {
+      const uint64_t d = rank - i - 1;
+      finalizeSegment(d, idx[d] + 1);
+    }
+  }
+
+  std::vector<uint64_t> rev;
+  std::vector<SparlayDimLevelType> dimTypes;
+  std::vector<uint64_t> idx;
 };
 
 SparlayStorage* readFromFile(std::istream& fin);
@@ -514,8 +686,8 @@ SparlayStorage* readFromFile(std::istream& fin) {
 
   ret->vLevel.push_back(std::shared_ptr<LevelStorage>(rowStore));
   ret->vLevel.push_back(std::shared_ptr<LevelStorage>(colStore));
-  ret->oriSize.push_back(0);
-  ret->oriSize.push_back(H), ret->oriSize.push_back(W);
+//  ret->dimSizes.push_back(0);
+  ret->dimSizes.push_back(H), ret->dimSizes.push_back(W);
   ret->exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(0,0)));
   ret->exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(1,0)));
   ret->exprs.push_back(std::shared_ptr<Vector2i>(new Vector2i(0,1)));
@@ -721,7 +893,6 @@ std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
 #endif
   return ret;
 }
-
 
 bool SparlayStorage::grow(const int lv) {
   if (!(vLevel[lv]->type & 1)) { //already not trimmed
@@ -1285,497 +1456,563 @@ void sortCrd(SparlayStorage* T, SparlayWindow* W, const std::vector<float>& thre
 
 extern "C" {
     // refactor into a swiss army knife function in the future
-    void* readSparseCoordinate(void* ptr) {
-        char* fileName = static_cast<char *>(ptr);
-        char field[64];
-        char symmetry[64];                                               
-                                                                                                    
-        FILE *file = fopen(fileName, "r");   
-        printf("filename %s\n", fileName);                                                       
-        if (!file) {                                                                                
-            fprintf(stderr, "Cannot find %s\n", fileName);                                          
-            exit(1);                                                                                
-        }                                                                                           
-                                                                                                    
-        uint64_t metaData[512];                                                                     
-        if (strstr(fileName, ".mtx")) {                                                             
-            readMTXHeader(file, fileName, metaData, field, symmetry);                                                
-        } else if (strstr(fileName, ".tns")) {                                                      
-            readFROSTTHeader(file, fileName, metaData);                                             
-        } else {                                                                                    
-            fprintf(stderr, "Unknown format %s\n", fileName);                                       
-            exit(1);                                                                                
-        } 
+  void* readSparseCoordinate(void* ptr) {
+    char* fileName = static_cast<char *>(ptr);
+    char field[64];
+    char symmetry[64];                                               
+                                                                                                
+    FILE *file = fopen(fileName, "r");   
+    printf("filename %s\n", fileName);                                                       
+    if (!file) {                                                                                
+        fprintf(stderr, "Cannot find %s\n", fileName);                                          
+        exit(1);                                                                                
+    }                                                                                           
+                                                                                                
+    uint64_t metaData[512];                                                                     
+    if (strstr(fileName, ".mtx")) {                                                             
+        readMTXHeader(file, fileName, metaData, field, symmetry);                                                
+    } else if (strstr(fileName, ".tns")) {                                                      
+        readFROSTTHeader(file, fileName, metaData);                                             
+    } else {                                                                                    
+        fprintf(stderr, "Unknown format %s\n", fileName);                                       
+        exit(1);                                                                                
+    } 
 
-        // printf("in getTensorIndices  :\n");
-        // for (unsigned i = 0; i < 4; i++)
-        //     printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
-                                                                                                    
-        uint64_t rank = metaData[0];    
-        uint64_t nnz = metaData[1]; 
+    // printf("in getTensorIndices  :\n");
+    // for (unsigned i = 0; i < 4; i++)
+    //     printf("metaData[%u] = %lu \n", i, metaData[i]);                                                                                          
+                                                                                                
+    uint64_t rank = metaData[0];    
+    uint64_t nnz = metaData[1]; 
 
-        bool notFieldPattern = strcmp(toLower(field), "pattern");
-        if (!strcmp(toLower(field), "complex")) {
-            fprintf(stderr, "Complex data type not yet supported.\n");                                       
-            exit(1); 
-        } 
-        if (strcmp(toLower(symmetry), "general")) {
-            fprintf(stderr, "Non general matrix structure not yet supported.\n");                                       
-            exit(1); 
-        }                                                               
-        
-        static SparseCoordinate<uint64_t, double> tensor(rank);
-        // read data                                              
-        for (unsigned i = 0; i < nnz; i++) {   
-            std::vector<uint64_t> indices;                                                       
-            uint64_t idx = -1;                                                                      
-            for (uint64_t r = 0; r < rank; r++) {                                                   
-                if (fscanf(file, "%" PRIu64, &idx) != 1) {                                          
-                    fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
-                    exit(1);                                                                        
-                }
-                indices.push_back(idx - 1);
+    bool notFieldPattern = strcmp(toLower(field), "pattern");
+    if (!strcmp(toLower(field), "complex")) {
+        fprintf(stderr, "Complex data type not yet supported.\n");                                       
+        exit(1); 
+    } 
+    if (strcmp(toLower(symmetry), "general")) {
+        fprintf(stderr, "Non general matrix structure not yet supported.\n");                                       
+        exit(1); 
+    }                                                               
+    
+    static SparseCoordinate<uint64_t, double> tensor(rank);
+    // read data                                              
+    for (unsigned i = 0; i < nnz; i++) {   
+        std::vector<uint64_t> indices;                                                       
+        uint64_t idx = -1;                                                                      
+        for (uint64_t r = 0; r < rank; r++) {                                                   
+            if (fscanf(file, "%" PRIu64, &idx) != 1) {                                          
+                fprintf(stderr, "Cannot find next index in %s\n", fileName);                    
+                exit(1);                                                                        
             }
-            double val;
-            if (!notFieldPattern) {
-                // Field is pattern
-                val = 1;
-            } else {
-                if (fscanf(file, "%lg\n", &val) != 1) {
-                    fprintf(stderr, "Cannot find next value in %s\n", fileName);
-                    exit(1);
-                }
-            }
-            tensor.insert(indices, val);
+            indices.push_back(idx - 1);
         }
-
-        fclose(file);
-        return &tensor;
+        double val;
+        if (!notFieldPattern) {
+            // Field is pattern
+            val = 1;
+        } else {
+            if (fscanf(file, "%lg\n", &val) != 1) {
+                fprintf(stderr, "Cannot find next value in %s\n", fileName);
+                exit(1);
+            }
+        }
+        tensor.insert(indices, val);
     }
 
-    void* _mlir_ciface_sptFromFile(void* ptr) {
-        std::ios::sync_with_stdio(0);
-        #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        char* fileName = static_cast<char*>(ptr);
-        std::ifstream fin(fileName);
-        void* ret = readFromFile(fin);
-        fin.close();
-        #ifdef DEBUG
-        std::cerr << std::endl << "Read from file done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        return ret;
-    }
+    fclose(file);
+    return &tensor;
+  }
 
-    void _mlir_ciface_sptTic() {
-      Perf::tic();
-    }
+  void* _mlir_ciface_sptFromFile(void* ptr) {
+    std::ios::sync_with_stdio(0);
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    char* fileName = static_cast<char*>(ptr);
+    std::ifstream fin(fileName);
+    void* ret = readFromFile(fin);
+    fin.close();
+    #ifdef DEBUG
+    std::cerr << std::endl << "Read from file done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    return ret;
+  }
 
-    void _mlir_ciface_sptToc() {
-      Perf::toc();
-    }
+  void _mlir_ciface_sptTic() {
+    Perf::tic();
+  }
 
-    void _mlir_ciface_sptCheck(void* A, void* B) {
-      SparlayStorage* aa = (SparlayStorage*)(A);
-      SparlayStorage* bb = (SparlayStorage*)(B);
-      if ((*aa) == (*bb)) {
-        std::cerr << "Check Success" << std::endl;
-      } else {
-        std::cerr << "Check Failed" << std::endl;
-        assert(0);
-      }
-    }
+  void _mlir_ciface_sptToc() {
+    Perf::toc();
+  }
 
-    void* _mlir_ciface_sptCopy(void* A) {
-      SparlayStorage* aa = (SparlayStorage*)(A);
-      SparlayStorage* ret = new SparlayStorage();
-      (*ret) = aa->copy();
-      return (void*)ret;
+  void _mlir_ciface_sptCheck(void* A, void* B) {
+    SparlayStorage* aa = (SparlayStorage*)(A);
+    SparlayStorage* bb = (SparlayStorage*)(B);
+    if ((*aa) == (*bb)) {
+      std::cerr << "Check Success" << std::endl;
+    } else {
+      std::cerr << "Check Failed" << std::endl;
+      assert(0);
     }
+  }
 
-    void* _mlir_ciface_sptFuse(void* ptr, int lv) {
-      #ifdef DEBUG
-        auto tic = TI;
-      #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->fuse(lv+1);
-        // sparT->Print(std::cerr, 1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        return (void*)sparT;
-    }
+  void* _mlir_ciface_sptCopy(void* A) {
+    SparlayStorage* aa = (SparlayStorage*)(A);
+    SparlayStorage* ret = new SparlayStorage();
+    (*ret) = aa->copy();
+    return (void*)ret;
+  }
 
-    void* _mlir_ciface_sptGrow(void* ptr, int lv) {
-      #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->grow(lv+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptTrim(void* ptr, int lv) {
-      #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->trim(lv+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        // sparT->Print(std::cerr);
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptSeparate(void* ptr, int lv) {
-      #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->separate(lv+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        // sparT->Print(std::cerr);
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptSwap(void* ptr, int LU, int LD) {
-      #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->swap(LU+1, LD+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        // sparT->Print(std::cerr);
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptSub(void* ptr, int Ltarget, int Lsrc) {
-        #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->sub(Ltarget+1, Lsrc+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        // sparT->Print(std::cerr, 1);
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptAdd(void* ptr, int Ltarget, int Lsrc) {
-        #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->add(Ltarget+1, Lsrc+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        // sparT->Print(std::cerr, 1);
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptNeg(void* ptr, int lv) {
-      #ifdef DEBUG
-        auto tic = TI;
-        #endif
-        SparlayStorage* sparT = (SparlayStorage*)(ptr);
-        sparT->neg(lv+1);
-        #ifdef DEBUG
-        std::cerr << std::endl << "Neg done, time = " << TI-tic << "(s)" << std::endl;
-        #endif
-        // sparT->Print(std::cerr);
-        return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptTileSplit(void* ptr, int lv, int factor) {
-      #ifdef DEBUG
+  void* _mlir_ciface_sptFuse(void* ptr, int lv) {
+    #ifdef DEBUG
       auto tic = TI;
-      #endif
+    #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->tile_split(lv+1, factor);
+      sparT->fuse(lv+1);
       // sparT->Print(std::cerr, 1);
       #ifdef DEBUG
-      std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
+      std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
       #endif
       return (void*)sparT;
-    }
+  }
 
-    void* _mlir_ciface_sptTileMerge(void* ptr, int lv, int factor) {
+  void* _mlir_ciface_sptGrow(void* ptr, int lv) {
+    #ifdef DEBUG
+      auto tic = TI;
+      #endif
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      sparT->grow(lv+1);
+      #ifdef DEBUG
+      std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
+      return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptTrim(void* ptr, int lv) {
+    #ifdef DEBUG
+      auto tic = TI;
+      #endif
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      sparT->trim(lv+1);
+      #ifdef DEBUG
+      std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
+      // sparT->Print(std::cerr);
+      return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptSeparate(void* ptr, int lv) {
+    #ifdef DEBUG
+      auto tic = TI;
+      #endif
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      sparT->separate(lv+1);
+      #ifdef DEBUG
+      std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
+      // sparT->Print(std::cerr);
+      return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptSwap(void* ptr, int LU, int LD) {
+    #ifdef DEBUG
+      auto tic = TI;
+      #endif
+      SparlayStorage* sparT = (SparlayStorage*)(ptr);
+      sparT->swap(LU+1, LD+1);
+      #ifdef DEBUG
+      std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
+      #endif
+      // sparT->Print(std::cerr);
+      return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptSub(void* ptr, int Ltarget, int Lsrc) {
       #ifdef DEBUG
       auto tic = TI;
       #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->tile_merge(lv+1, factor);
+      sparT->sub(Ltarget+1, Lsrc+1);
       #ifdef DEBUG
-      std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
+      std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      return (void*)sparT;
-    }
-
-    void* _mlir_ciface_sptMove(void* ptr, int srcLv, int dstLv) {
-      #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->moveLv(srcLv+1, dstLv+1);
       // sparT->Print(std::cerr, 1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
-      #endif
       return (void*)sparT;
-    }
+  }
 
-    void* _mlir_ciface_sptVectorize(void* ptr, int lv) {
+  void* _mlir_ciface_sptAdd(void* ptr, int Ltarget, int Lsrc) {
       #ifdef DEBUG
       auto tic = TI;
       #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->vectorize(lv+1);
+      sparT->add(Ltarget+1, Lsrc+1);
       #ifdef DEBUG
-      std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+      std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      // sparT->Print(std::cerr, 1);
       return (void*)sparT;
-    }
+  }
 
-    void* _mlir_ciface_sptDevectorize(void* ptr) {
-      #ifdef DEBUG
+  void* _mlir_ciface_sptNeg(void* ptr, int lv) {
+    #ifdef DEBUG
       auto tic = TI;
       #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->devectorize();
+      sparT->neg(lv+1);
       #ifdef DEBUG
-      std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
+      std::cerr << std::endl << "Neg done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      // sparT->Print(std::cerr);
       return (void*)sparT;
-    }
+  }
 
-    void _mlir_ciface_sptPrint(void* ptr) {
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->Print(std::cerr, 1);
-    }
+  void* _mlir_ciface_sptTileSplit(void* ptr, int lv, int factor) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->tile_split(lv+1, factor);
+    // sparT->Print(std::cerr, 1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    return (void*)sparT;
+  }
 
-    void* _mlir_ciface_structAccess(void* ptr, uint64_t index) {
-      SparlayStruct* SS = (SparlayStruct*)(ptr);
-      return SS->get(index);
-    }
+  void* _mlir_ciface_sptTileMerge(void* ptr, int lv, int factor) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->tile_merge(lv+1, factor);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    return (void*)sparT;
+  }
 
-    void* _mlir_ciface_spwNew() {
-      SparlayWindow* ret = new SparlayWindow;
-      return (void*)ret;
-    }
+  void* _mlir_ciface_sptMove(void* ptr, int srcLv, int dstLv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->moveLv(srcLv+1, dstLv+1);
+    // sparT->Print(std::cerr, 1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+    #endif
+    return (void*)sparT;
+  }
 
-    void* _mlir_ciface_spwAssign(void* ptr, uint64_t i, uint64_t j, int v) {
-      SparlayWindow* ret = (SparlayWindow*)(ptr);
-      ret->assign(i,j,v);
-      return (void*)ret;
-    }
+  void* _mlir_ciface_sptVectorize(void* ptr, int lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->vectorize(lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+    #endif
+    return (void*)sparT;
+  }
 
-    void* _mlir_ciface_spwTile(void* ptr, uint64_t i, uint64_t type, int size) {
-      SparlayWindow* ret = (SparlayWindow*)(ptr);
-      ret->tile(i,type,size);
-      return (void*)ret;
-    }
+  void* _mlir_ciface_sptDevectorize(void* ptr) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->devectorize();
+    #ifdef DEBUG
+    std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    return (void*)sparT;
+  }
 
-    void* _mlir_ciface_sptSplit(StridedMemRefType<float, 1>* thres, void* ptr, void* win) {
-      std::cerr << "enter split" << std::endl;
-      SparlayStruct* ret = new SparlayStruct;
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      assert(thres->offset == 0);
-      int64_t size = thres->sizes[0];
-      float* _thres_data = thres->data;
-      std::vector<float> thres_data;
-      for (int64_t i = 0; i < size; ++i) { thres_data.push_back(_thres_data[i]); }
-      std::cerr << "size = " << size << std::endl;
-      std::vector<SparlayStorage*> cand;
-      for (int64_t i = 0; i < size + 1; ++i) {
-        cand.push_back(new SparlayStorage);
-        SparlayStorage* newT = new SparlayStorage;
-        (*newT) = sparT->copy();
-        // ret->vec.push_back((void*)newT);
+  void _mlir_ciface_sptPrint(void* ptr) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->Print(std::cerr, 1);
+  }
+
+  void* _mlir_ciface_structAccess(void* ptr, uint64_t index) {
+    SparlayStruct* SS = (SparlayStruct*)(ptr);
+    return SS->get(index);
+  }
+
+  void* _mlir_ciface_spwNew() {
+    SparlayWindow* ret = new SparlayWindow;
+    return (void*)ret;
+  }
+
+  void* _mlir_ciface_spwAssign(void* ptr, uint64_t i, uint64_t j, int v) {
+    SparlayWindow* ret = (SparlayWindow*)(ptr);
+    ret->assign(i,j,v);
+    return (void*)ret;
+  }
+
+  void* _mlir_ciface_spwTile(void* ptr, uint64_t i, uint64_t type, int size) {
+    SparlayWindow* ret = (SparlayWindow*)(ptr);
+    ret->tile(i,type,size);
+    return (void*)ret;
+  }
+
+  void* _mlir_ciface_sptSplit(StridedMemRefType<float, 1>* thres, void* ptr, void* win) {
+    std::cerr << "enter split" << std::endl;
+    SparlayStruct* ret = new SparlayStruct;
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    assert(thres->offset == 0);
+    int64_t size = thres->sizes[0];
+    float* _thres_data = thres->data;
+    std::vector<float> thres_data;
+    for (int64_t i = 0; i < size; ++i) { thres_data.push_back(_thres_data[i]); }
+    std::cerr << "size = " << size << std::endl;
+    std::vector<SparlayStorage*> cand;
+    for (int64_t i = 0; i < size + 1; ++i) {
+      cand.push_back(new SparlayStorage);
+      SparlayStorage* newT = new SparlayStorage;
+      (*newT) = sparT->copy();
+      // ret->vec.push_back((void*)newT);
+    }
+    SparlayWindow* swin = (SparlayWindow*)(win);
+    std::cerr << "==============" << std::endl;
+    std::cerr << "window: " << std::endl;
+    std::cerr << "affine: " << std::endl;
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j) {
+        std::cerr << swin->M[i][j] << ' ';
       }
-      SparlayWindow* swin = (SparlayWindow*)(win);
-      std::cerr << "==============" << std::endl;
-      std::cerr << "window: " << std::endl;
-      std::cerr << "affine: " << std::endl;
-      for (int i = 0; i < 2; ++i) {
-        for (int j = 0; j < 2; ++j) {
-          std::cerr << swin->M[i][j] << ' ';
-        }
-        std::cerr << std::endl;
+      std::cerr << std::endl;
+    }
+    std::cerr << "tile: " << std::endl;
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j) {
+        std::cerr << swin->T[i][j] << ' ';
       }
-      std::cerr << "tile: " << std::endl;
-      for (int i = 0; i < 2; ++i) {
-        for (int j = 0; j < 2; ++j) {
-          std::cerr << swin->T[i][j] << ' ';
-        }
-        std::cerr << std::endl;
-      }
-      std::cerr << "===============" << std::endl;
-      float mx_density = decompose::getMaxDensity(sparT, swin);
-      std::cerr << "mx_density = " << mx_density << std::endl;
-      decompose::sortCrd(sparT, swin, thres_data, mx_density, cand);
-      for (size_t i = 0; i < cand.size(); ++i) {
-        cand[i]->Print(std::cerr, 1);
-        ret->vec.push_back((void*)cand[i]);
-      }
-      std::cerr << "leave split" << std::endl;
-      return (void*)ret;
+      std::cerr << std::endl;
     }
+    std::cerr << "===============" << std::endl;
+    float mx_density = decompose::getMaxDensity(sparT, swin);
+    std::cerr << "mx_density = " << mx_density << std::endl;
+    decompose::sortCrd(sparT, swin, thres_data, mx_density, cand);
+    for (size_t i = 0; i < cand.size(); ++i) {
+      cand[i]->Print(std::cerr, 1);
+      ret->vec.push_back((void*)cand[i]);
+    }
+    std::cerr << "leave split" << std::endl;
+    return (void*)ret;
+  }
 
-    void _mlir_ciface_getCrd(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      ref->basePtr = ref->data = sparT->vLevel[dim]->crd.data();
-      ref->offset = 0;
-      ref->sizes[0] = sparT->vLevel[dim]->crd.size();
-      ref->strides[0] = 1;
-    }
+  void _mlir_ciface_getCrd(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    ref->basePtr = ref->data = sparT->vLevel[dim]->crd.data();
+    ref->offset = 0;
+    ref->sizes[0] = sparT->vLevel[dim]->crd.size();
+    ref->strides[0] = 1;
+  }
 
-    void _mlir_ciface_getPtr(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      ref->basePtr = ref->data = sparT->vLevel[dim]->ptr.data();
-      ref->offset = 0;
-      ref->sizes[0] = sparT->vLevel[dim]->ptr.size();
-      ref->strides[0] = 1;
-    }
+  void _mlir_ciface_getPtr(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    ref->basePtr = ref->data = sparT->vLevel[dim]->ptr.data();
+    ref->offset = 0;
+    ref->sizes[0] = sparT->vLevel[dim]->ptr.size();
+    ref->strides[0] = 1;
+  }
 
-    void _mlir_ciface_getValue(StridedMemRefType<float, 1>* ref, void* ptr, uint64_t dim) {
-      assert(dim == (uint64_t)0);
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      ref->basePtr = ref->data = sparT->valueArray.data();
-      ref->offset = 0;
-      ref->sizes[0] = sparT->valueArray.size();
-      ref->strides[0] = 1;
-    }
+  void _mlir_ciface_getValue(StridedMemRefType<float, 1>* ref, void* ptr, uint64_t dim) {
+    assert(dim == (uint64_t)0);
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    ref->basePtr = ref->data = sparT->valueArray.data();
+    ref->offset = 0;
+    ref->sizes[0] = sparT->valueArray.size();
+    ref->strides[0] = 1;
+  }
 
-    uint64_t _mlir_ciface_getSize(void* ptr, uint64_t dim) {
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      return sparT->vLevel[dim+1]->crd.size();
-    }
+  uint64_t _mlir_ciface_getSize(void* ptr, uint64_t dim) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    return sparT->vLevel[dim+1]->crd.size();
+  }
 
 // #define GETINDICES(TYPE)
-    void _mlir_ciface_getTensorIndices(StridedMemRefType<uint64_t, 1> *ref, void *ptr, uint64_t dim) {   
+  void _mlir_ciface_getTensorIndices(StridedMemRefType<uint64_t, 1> *ref, void *ptr, uint64_t dim) {   
 
-        SparseCoordinate<uint64_t, double> *tensor = nullptr;
-        tensor = static_cast<SparseCoordinate<uint64_t, double> *>(ptr);
+      SparseCoordinate<uint64_t, double> *tensor = nullptr;
+      tensor = static_cast<SparseCoordinate<uint64_t, double> *>(ptr);
 
-        std::vector<uint64_t> *index;
+      std::vector<uint64_t> *index;
 
-        tensor->getIndex(&index, dim);
+      tensor->getIndex(&index, dim);
 
-        ref->basePtr = ref->data = index->data();  
-        ref->offset = 0;  
-        ref->sizes[0] = index->size();  
-        ref->strides[0] =1; 
+      ref->basePtr = ref->data = index->data();  
+      ref->offset = 0;  
+      ref->sizes[0] = index->size();  
+      ref->strides[0] =1; 
 
-        // printf("ref->basePtr: %x\n", ref->basePtr);
-        // printf("ref->size: %zu\n", index->size());
-        // printf("ref->data: ");
-        // for (unsigned i = 0; i < index->size(); i++) {
-        //     printf("%lu  ", *(ref->data + ref->offset + i * ref->strides[0]));
-        // }
-        // printf("\n");
-    }
+      // printf("ref->basePtr: %x\n", ref->basePtr);
+      // printf("ref->size: %zu\n", index->size());
+      // printf("ref->data: ");
+      // for (unsigned i = 0; i < index->size(); i++) {
+      //     printf("%lu  ", *(ref->data + ref->offset + i * ref->strides[0]));
+      // }
+      // printf("\n");
+  }
 
 // #define GETVALUES(TYPE)
-    void _mlir_ciface_getTensorValues(StridedMemRefType<double, 1> *ref, void *ptr) {
-        SparseCoordinate<uint64_t, double> *tensor = nullptr;
-        tensor = static_cast<SparseCoordinate<uint64_t, double> *>(ptr);
+  void _mlir_ciface_getTensorValues(StridedMemRefType<double, 1> *ref, void *ptr) {
+      SparseCoordinate<uint64_t, double> *tensor = nullptr;
+      tensor = static_cast<SparseCoordinate<uint64_t, double> *>(ptr);
 
-        std::vector<double> *value;
+      std::vector<double> *value;
 
-        tensor->getValue(&value);
+      tensor->getValue(&value);
 
-        ref->data = value->data();    
-        ref->basePtr = value->data();
-        ref->offset = 0;  
-        ref->sizes[0] = value->size();  
-        ref->strides[0] = 1; 
+      ref->data = value->data();    
+      ref->basePtr = value->data();
+      ref->offset = 0;  
+      ref->sizes[0] = value->size();  
+      ref->strides[0] = 1; 
 
-        // printf("value->basePtr: %x\n", ref->basePtr);
-        // printf("value->size: %zu\n", value->size());
-        // printf("value->data: ");
-        // for (unsigned i = 0; i < value->size(); i++) {
-        //     printf("%f  ", *(ref->data + ref->offset + i * ref->strides[0]));
-        // }
-        // printf("\n");
+      // printf("value->basePtr: %x\n", ref->basePtr);
+      // printf("value->size: %zu\n", value->size());
+      // printf("value->data: ");
+      // for (unsigned i = 0; i < value->size(); i++) {
+      //     printf("%f  ", *(ref->data + ref->offset + i * ref->strides[0]));
+      // }
+      // printf("\n");
 
-    }
+  }
 
-    void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, 
-                                       StridedMemRefType<uint64_t, 1> *ptr, 
-                                       StridedMemRefType<uint64_t, 1> *col, 
-                                       StridedMemRefType<double, 1> *value, 
-                                       StridedMemRefType<double, 1> *input) {
-      uint64_t row = ptr->sizes[0] - 1;
-      double *result = new double[row];
+  void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, 
+                                      StridedMemRefType<uint64_t, 1> *ptr, 
+                                      StridedMemRefType<uint64_t, 1> *col, 
+                                      StridedMemRefType<double, 1> *value, 
+                                      StridedMemRefType<double, 1> *input) {
+    uint64_t row = ptr->sizes[0] - 1;
+    double *result = new double[row];
 //      printf("row size is: %d\n", row);
-      for(uint64_t i = 0; i < row; i++) {
-        double temp = 0;
-        for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
-        temp += value->data[j] * input->data[col->data[j]];
-    //	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
-        }
-        result[i] = temp;
+    for(uint64_t i = 0; i < row; i++) {
+      double temp = 0;
+      for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
+      temp += value->data[j] * input->data[col->data[j]];
+  //	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
+      }
+      result[i] = temp;
 //        printf("outdata[%d] is %f\n", i, out->data[i]);
-      }
-        out->data = result;
-        out->basePtr = result;
-        out->offset = 0;  
-        out->strides[0] = 1;
-    }  
+    }
+    out->data = result;
+    out->basePtr = result;
+    out->offset = 0;  
+    out->strides[0] = 1;
+  }  
 
-    void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
-                                       StridedMemRefType<uint64_t, 1> *row, 
-                                       StridedMemRefType<uint64_t, 1> *col, 
-                                       StridedMemRefType<double, 1> *value, 
-                                       StridedMemRefType<double, 1> *input,
-                                       uint64_t size_0, uint64_t size_1) {
-      uint64_t nnz = row->sizes[0];
-    //   uint64_t out_size = out->sizes[0];
-    //   printf("out size = %lu \n", out_size);
-    //   printf("nnz is: %lu\n", nnz);
-      double *result = new double[size_0];
-      for (uint64_t i = 0; i < size_0; i++) {
-        // out->data[i] = 0;
-        result[i] = 0;
-      }
-
-      for(uint64_t i = 0; i < nnz; i++) {
-        // double temp = 0;
-        uint64_t rowInd = row->data[i];
-        uint64_t colInd = col->data[i];
-        result[rowInd] += value->data[i] * input->data[colInd];
-        // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
-        // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
-      }
-
-        out->data = result;    
-        out->basePtr = result;
-        out->offset = 0;  
-        out->strides[0] = 1;
-        
-    //     printf("output: (");
-    //   for (uint64_t i = 0; i < size_0; i++) {
-    //     printf("%f ", out->data[i]);
-    //     // out->data[i] = result[i];
-    //   }
-    //   printf(")\n");
-      delete[] result;
+  void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
+                                      StridedMemRefType<uint64_t, 1> *row, 
+                                      StridedMemRefType<uint64_t, 1> *col, 
+                                      StridedMemRefType<double, 1> *value, 
+                                      StridedMemRefType<double, 1> *input,
+                                      uint64_t size_0, uint64_t size_1) {
+    uint64_t nnz = row->sizes[0];
+  //   uint64_t out_size = out->sizes[0];
+  //   printf("out size = %lu \n", out_size);
+  //   printf("nnz is: %lu\n", nnz);
+    double *result = new double[size_0];
+    for (uint64_t i = 0; i < size_0; i++) {
+      // out->data[i] = 0;
+      result[i] = 0;
     }
 
-void delSparlayTensor(void *tensor) {
-  delete static_cast<SparlayStorage *>(tensor);
-} 
+    for(uint64_t i = 0; i < nnz; i++) {
+      // double temp = 0;
+      uint64_t rowInd = row->data[i];
+      uint64_t colInd = col->data[i];
+      result[rowInd] += value->data[i] * input->data[colInd];
+      // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
+      // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
+    }
+
+      out->data = result;    
+      out->basePtr = result;
+      out->offset = 0;  
+      out->strides[0] = 1;
+      
+  //     printf("output: (");
+  //   for (uint64_t i = 0; i < size_0; i++) {
+  //     printf("%f ", out->data[i]);
+  //     // out->data[i] = result[i];
+  //   }
+  //   printf(")\n");
+    delete[] result;
+  }
+
+  void delSparlayTensor(void *tensor) {
+    delete static_cast<SparlayStorage *>(tensor);
+  }
+
+  uint64_t _mlir_ciface_sparseDimSize(void *tensor, uint64_t d) {
+    return static_cast<SparlayStorage *>(tensor)->getDimSize(d);
+  }
+
+  void _mlir_ciface_endInsert(void *tensor) {
+//    std::cout << "Start endInsert " << std::endl;
+    return static_cast<SparlayStorage *>(tensor)->endInsert();
+  }
+
+  void _mlir_ciface_lexInsert(void *tensor,
+                              StridedMemRefType<uint64_t, 1> *cref, 
+                              StridedMemRefType<float, 0> *vref) {
+//    std::cout << "Start lexInsert " << std::endl;        
+    assert(tensor &&cref &&vref);                                        
+    assert(cref->strides[0] == 1);                               
+    uint64_t *cursor = cref->data + cref->offset;                
+    assert(cursor);                                                       
+    float *value = vref->data + vref->offset;                                    
+    static_cast<SparlayStorage *>(tensor)->lexInsert(cursor, *value);
+  }
+
+  void _mlir_ciface_expInsert(                                          
+        void *tensor, StridedMemRefType<uint64_t, 1> *cref,                   
+        StridedMemRefType<float, 1> *vref, StridedMemRefType<bool, 1> *fref,       
+        StridedMemRefType<uint64_t, 1> *aref, uint64_t count) {  
+//    std::cerr << "Start Expand Insert " << std::endl;           
+    assert(tensor &&cref &&vref &&fref &&aref);                            
+    assert(cref->strides[0] == 1);                                          
+    assert(vref->strides[0] == 1);                                          
+    assert(fref->strides[0] == 1);                                           
+    assert(aref->strides[0] == 1);                                            
+    assert(vref->sizes[0] == fref->sizes[0]);                                 
+    uint64_t *cursor = cref->data + cref->offset;                          
+    float *values = vref->data + vref->offset;                                   
+    bool *filled = fref->data + fref->offset;                                 
+    uint64_t *added = aref->data + aref->offset;
+//    std::cerr << "Enter Expand Insert " << std::endl;                            
+    static_cast<SparlayStorage *>(tensor)->expInsert(               
+        cursor, values, filled, added, count);                          
+  }
+
+  void* _mlir_ciface_newSparlayTensor(StridedMemRefType<SparlayDimLevelType, 1> *aref,
+                               StridedMemRefType<uint64_t, 1> *sref,
+                               StridedMemRefType<uint64_t, 1> *pref, void *ptr ) {
+
+    std::cout << "Start newSparlayTensor " << std::endl;
+    assert(aref && sref && pref);
+    assert(aref->strides[0] == 1 && sref->strides[0] == 1 && pref->strides[0] == 1);
+    assert(aref->sizes[0] == sref->sizes[0] && sref->sizes[0] == pref->sizes[0]);
+    const SparlayDimLevelType *sparsity = aref->data + aref->offset;
+    uint64_t *shape = sref->data + sref->offset;
+    uint64_t *perm = pref->data + pref->offset;
+    uint64_t rank = aref->sizes[0];
+    std::vector<uint64_t> vshape;
+//    std::cerr << "sref->offset " << sref->offset << std::endl;
+//    std::cerr << *shape << std::endl;
+//    std::cerr << *(shape+1) << std::endl;
+//    std::cerr << *(shape+2) << std::endl;
+    for(uint64_t i = 0; i < rank; ++i) {
+      vshape.push_back(shape[i]);
+    }
+//    std::cout << "Create SparlayStorage " << std::endl;
+    auto *tensor = new SparlayStorage(vshape, perm, sparsity);
+    return tensor;
+  }
 
     // void _mlir_ciface_release(void *ptr) {
     //     delete []ptr;

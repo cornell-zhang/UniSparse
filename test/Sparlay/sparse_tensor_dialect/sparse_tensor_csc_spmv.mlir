@@ -1,5 +1,4 @@
 // mlir-opt ./sparse_tensor_csc_spmv.mlir -sparse-compiler | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o spmv.o
-
 // clang++ spmm.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
 //         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o spmv
 
@@ -45,12 +44,12 @@ module {
     %i0 = arith.constant 0.0 : f32
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
-    %c256 = arith.constant 1005 : index
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %t_start1 = call @rtclock() : () -> f64
     %a1 = sparse_tensor.new %fileName : !Filename to tensor<?x?xf32, #CSC>
+    %c256 = tensor.dim %a1, %c1 : tensor<?x?xf32, #CSC>
     %t_end1 = call @rtclock() : () -> f64
     %t_1 = arith.subf %t_end1, %t_start1: f64
     vector.print %t_1 : f64
