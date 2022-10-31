@@ -176,6 +176,18 @@ def Sparlay_ToCrdOp: Sparlay_Op<"crd", [NoSideEffect]> {
     }];
 }
 
+def Sparlay_COOSpMVOp: Sparlay_Op<"coo_spmv", [NoSideEffect]> {
+    let summary = "A COO SpMV runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmv %tensor, %vector : <?x?xf32, #COO>, memref<?xf32> to memref<?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor, AnyStridedMemRefOfRank<1>: $vector, AnyStridedMemRefOfRank<1>: $out_vec);
+    let results = (outs AnyStridedMemRefOfRank<1>: $result);
+    let assemblyFormat = [{
+        $tensor `,` $vector `,` $out_vec attr-dict `:` type($tensor) `,` type($vector) `,` type($out_vec) `to` type($result)
+    }];
+}
+
 def Sparlay_ToValueOp: Sparlay_Op<"value", [NoSideEffect]> {
     let summary = "Extracts values array at given dimension from a tensor";
     let description = [{

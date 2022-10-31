@@ -1905,43 +1905,30 @@ extern "C" {
     out->strides[0] = 1;
   }  
 
-  void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
-                                      StridedMemRefType<uint64_t, 1> *row, 
-                                      StridedMemRefType<uint64_t, 1> *col, 
-                                      StridedMemRefType<double, 1> *value, 
-                                      StridedMemRefType<double, 1> *input,
-                                      uint64_t size_0, uint64_t size_1) {
-    uint64_t nnz = row->sizes[0];
-  //   uint64_t out_size = out->sizes[0];
-  //   printf("out size = %lu \n", out_size);
-  //   printf("nnz is: %lu\n", nnz);
-    double *result = new double[size_0];
-    for (uint64_t i = 0; i < size_0; i++) {
-      // out->data[i] = 0;
-      result[i] = 0;
-    }
-
+  void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<float, 1> *out, void *ptr, 
+                                     StridedMemRefType<float, 1> *input, StridedMemRefType<float, 1> *ref) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    int32_t *row_crd = sparT->vLevel[1]->crd.data();
+    int32_t *col_crd = sparT->vLevel[2]->crd.data();
+    float *values = sparT->valueArray.data();
+    uint64_t nnz = sparT->vLevel[2]->crd.size();
+    std::cout << "nnz is " << nnz << std::endl;
+    std::cout << input->data << std::endl;
+    std::cout << ref->data << std::endl;
     for(uint64_t i = 0; i < nnz; i++) {
       // double temp = 0;
-      uint64_t rowInd = row->data[i];
-      uint64_t colInd = col->data[i];
-      result[rowInd] += value->data[i] * input->data[colInd];
+      int32_t rowInd =row_crd[i];
+      int32_t colInd = col_crd[i];
+      ref->data[rowInd] += values[i] * input->data[colInd];
+      
       // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
       // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
     }
-
-      out->data = result;    
-      out->basePtr = result;
-      out->offset = 0;  
-      out->strides[0] = 1;
-      
-  //     printf("output: (");
-  //   for (uint64_t i = 0; i < size_0; i++) {
-  //     printf("%f ", out->data[i]);
-  //     // out->data[i] = result[i];
-  //   }
-  //   printf(")\n");
-    delete[] result;
+    std::cout << "End loop " << std::endl;
+    out->data = ref->data;
+    out->basePtr = ref->data;
+    out->offset = 0;  
+    out->strides[0] = 1;
   }
 
   void delSparlayTensor(void *tensor) {

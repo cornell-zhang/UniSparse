@@ -1064,6 +1064,28 @@ public:
   }
 };
 
+class COOSpMVOpLowering: public OpConversionPattern<sparlay::COOSpMVOp> {
+public:
+  using OpConversionPattern<sparlay::COOSpMVOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::COOSpMVOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value vec = adaptor.getOperands()[1];
+    Value out_vec = adaptor.getOperands()[2];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, vec, out_vec};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "calculateCOOSpMV", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
 class ToSizeOpLowering: public OpConversionPattern<sparlay::ToSizeOp> {
 public:
   using OpConversionPattern<sparlay::ToSizeOp>::OpConversionPattern;
@@ -1389,7 +1411,7 @@ void LowerFormatConversionPass::runOnOperation() {
                  ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, 
                  SparlayAllocConverter, SparlayDeallocConverter, SparlayToDimSizeConverter,
                  SparlayLoadConverter, SparlayInsertConverter, SparlayReturnConverter,
-                 SparlayExpandConverter, SparlayCompressConverter>(&getContext());
+                 SparlayExpandConverter, SparlayCompressConverter, COOSpMVOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
