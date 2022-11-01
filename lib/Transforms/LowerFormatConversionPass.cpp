@@ -1064,28 +1064,6 @@ public:
   }
 };
 
-class COOSpMVOpLowering: public OpConversionPattern<sparlay::COOSpMVOp> {
-public:
-  using OpConversionPattern<sparlay::COOSpMVOp>::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(sparlay::COOSpMVOp op, OpAdaptor adaptor,
-                        ConversionPatternRewriter &rewriter) const final {
-    Location loc = op.getLoc();
-    Value inputTensor = adaptor.getOperands()[0];
-    Value vec = adaptor.getOperands()[1];
-    Value out_vec = adaptor.getOperands()[2];
-    Type outputType = op->getResult(0).getType();
-    std::vector<Value> params = {inputTensor, vec, out_vec};
-    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "calculateCOOSpMV", outputType, params, true),
-        params
-    );
-    auto ret = callOp.getResult(0);
-    rewriter.replaceOp(op, ret);
-    return success();
-  }
-};
-
 class ToSizeOpLowering: public OpConversionPattern<sparlay::ToSizeOp> {
 public:
   using OpConversionPattern<sparlay::ToSizeOp>::OpConversionPattern;
@@ -1321,6 +1299,96 @@ public:
     return success();
   }
 };
+
+class DiaSpmvOpLowering : public OpConversionPattern<sparlay::DiaSpmvOp> {
+public:
+    using OpConversionPattern<sparlay::DiaSpmvOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(sparlay::DiaSpmvOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        Value output = op->getResult(0);
+        auto outputType = output.getType();
+        Value input_A = adaptor.getOperands()[0];
+        Value input_B = adaptor.getOperands()[1];
+        Value input_C = adaptor.getOperands()[2];
+
+        std::vector<Value> params = {input_A, input_B, input_C};
+        func::CallOp SpmvOp = rewriter.create<func::CallOp>(loc, outputType, 
+            getFunc(op, "kernel_dia_spmv", outputType, params, /*emitCInterface=*/true), params);
+        auto ret = SpmvOp.getResult(0);
+        rewriter.replaceOp(op, ret);
+        return success();
+    }
+};
+
+class DiaSpmmOpLowering : public OpConversionPattern<sparlay::DiaSpmmOp> {
+public:
+    using OpConversionPattern<sparlay::DiaSpmmOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(sparlay::DiaSpmmOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        Value output = op->getResult(0);
+        auto outputType = output.getType();
+        Value input_A = adaptor.getOperands()[0];
+        Value input_B = adaptor.getOperands()[1];
+        Value input_C = adaptor.getOperands()[2];
+        
+        std::vector<Value> params = {input_A, input_B, input_C};
+        func::CallOp SpmmOp = rewriter.create<func::CallOp>(loc, outputType, 
+            getFunc(op, "kernel_dia_spmm", outputType, params, /*emitCInterface=*/true), params);
+        auto ret = SpmmOp.getResult(0);
+        rewriter.replaceOp(op, ret);
+        return success();
+    }
+};
+
+class COOSpMVOpLowering: public OpConversionPattern<sparlay::COOSpMVOp> {
+public:
+  using OpConversionPattern<sparlay::COOSpMVOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::COOSpMVOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value vec = adaptor.getOperands()[1];
+    Value out_vec = adaptor.getOperands()[2];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, vec, out_vec};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "calculateCOOSpMV", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class COOSpMMOpLowering: public OpConversionPattern<sparlay::COOSpMMOp> {
+public:
+  using OpConversionPattern<sparlay::COOSpMMOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::COOSpMMOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value vec = adaptor.getOperands()[1];
+    Value out_vec = adaptor.getOperands()[2];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, vec, out_vec};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "calculateCOOSpMM", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
 } // end anonymous namespace
 
 
@@ -1411,7 +1479,8 @@ void LowerFormatConversionPass::runOnOperation() {
                  ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, 
                  SparlayAllocConverter, SparlayDeallocConverter, SparlayToDimSizeConverter,
                  SparlayLoadConverter, SparlayInsertConverter, SparlayReturnConverter,
-                 SparlayExpandConverter, SparlayCompressConverter, COOSpMVOpLowering>(&getContext());
+                 SparlayExpandConverter, SparlayCompressConverter, 
+                 DiaSpmvOpLowering, DiaSpmmOpLowering, COOSpMVOpLowering, COOSpMMOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the

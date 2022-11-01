@@ -1,14 +1,14 @@
-// sparlay-opt ./sparlay_csr_spmv.mlir -sparlay-codegen -lower-format-conversion -lower-struct -dce | \
+// sparlay-opt ./sparlay_coo_spmv.mlir -sparlay-codegen -lower-format-conversion -lower-struct -dce | \
 // mlir-opt -one-shot-bufferize="bufferize-function-boundaries=1 allow-return-allocs unknown-type-conversion=identity-layout-map function-boundary-type-conversion=identity-layout-map" \
 // -finalizing-bufferize -convert-linalg-to-loops -convert-vector-to-scf -convert-scf-to-cf -lower-affine \
 // -convert-vector-to-llvm -convert-memref-to-llvm -convert-complex-to-standard -convert-math-to-llvm \
 // -convert-math-to-libm -convert-complex-to-libm -convert-complex-to-llvm -convert-func-to-llvm \
-// -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o spmv.o
+// -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o coo_spmv.o
 
-// clang++ spmv.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
-//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o spmv
+// clang++ coo_spmv.o -L$SPLHOME/build/lib -lmlir_sparlay_runner_utils \
+//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o coo_spmv
 
-// ./spmv
+// ./coo_spmv
 
 !Filename = !llvm.ptr<i8>
 
@@ -30,6 +30,8 @@ indexing_maps = [
 module {
   func.func private @rtclock() -> f64
   func.func private @getTensorFilename(index) -> (!Filename)
+  func.func private @getTensorDim(!Filename, index) -> (index)
+  func.func private @printU64(index) -> ()
 
   //CHECK-LABEL: func.func @main
   func.func @main() {
@@ -40,8 +42,12 @@ module {
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %A_0 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-    %dim0 = tensor.dim %A_0, %c0 : tensor<?x?xf32, #COO>
-    %dim1 = tensor.dim %A_0, %c1 : tensor<?x?xf32, #COO>
+    %dim0 = call @getTensorDim(%fileName, %c0) : (!Filename, index) -> (index)
+    %dim1 = call @getTensorDim(%fileName, %c1) : (!Filename, index) -> (index)
+    call @printU64(%dim0) : (index) -> ()
+    call @printU64(%dim1) : (index) -> ()
+    // %dim0 = tensor.dim %A_0, %c0 : tensor<?x?xf32, #COO>
+    // %dim1 = tensor.dim %A_0, %c1 : tensor<?x?xf32, #COO>
 
     // Initialize vector matrix.
     %init_256_4 = memref.alloc(%dim1) : memref<?xf32>
@@ -64,6 +70,8 @@ module {
     %t_end4 = call @rtclock() : () -> f64
     %t_4 = arith.subf %t_end4, %t_start4: f64
     vector.print %t_4 : f64
+    %v1 = vector.transfer_read %init_256_4[%c0], %i0: memref<?xf32>, vector<4xf32>
+    vector.print %v1 : vector<4xf32>
     %v0 = vector.transfer_read %0[%c0], %i0: memref<?xf32>, vector<4xf32>
     vector.print %v0 : vector<4xf32>
 

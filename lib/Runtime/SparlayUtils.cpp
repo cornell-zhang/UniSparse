@@ -314,7 +314,7 @@ public:
 
   void getSize(size_t lv) {
     assert(lv < exprs.size());
-    assert(dimSizes.size() == 3);
+    // assert(dimSizes.size() == 3);
     
     Vector2i t0(0,0), t1(0,dimSizes[1]), t2(dimSizes[0],0), t3(dimSizes[0],dimSizes[1]);
     const auto& expr = exprs[lv];
@@ -1905,32 +1905,6 @@ extern "C" {
     out->strides[0] = 1;
   }  
 
-  void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<float, 1> *out, void *ptr, 
-                                     StridedMemRefType<float, 1> *input, StridedMemRefType<float, 1> *ref) {
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    int32_t *row_crd = sparT->vLevel[1]->crd.data();
-    int32_t *col_crd = sparT->vLevel[2]->crd.data();
-    float *values = sparT->valueArray.data();
-    uint64_t nnz = sparT->vLevel[2]->crd.size();
-    std::cout << "nnz is " << nnz << std::endl;
-    std::cout << input->data << std::endl;
-    std::cout << ref->data << std::endl;
-    for(uint64_t i = 0; i < nnz; i++) {
-      // double temp = 0;
-      int32_t rowInd =row_crd[i];
-      int32_t colInd = col_crd[i];
-      ref->data[rowInd] += values[i] * input->data[colInd];
-      
-      // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
-      // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
-    }
-    std::cout << "End loop " << std::endl;
-    out->data = ref->data;
-    out->basePtr = ref->data;
-    out->offset = 0;  
-    out->strides[0] = 1;
-  }
-
   void delSparlayTensor(void *tensor) {
     delete static_cast<SparlayStorage *>(tensor);
   }
@@ -2009,6 +1983,188 @@ extern "C" {
     //     delete static_cast<SparseCoordinate<uint64_t, double> *>(tensor);
     // }
 
-}
+    using index_type = uint64_t;
+    index_type getTensorDim(void* ptr, index_type dim) {
+        char* fileName = static_cast<char*>(ptr);
+        char field[64];
+        char symmetry[64];   
+
+        FILE *file = fopen(fileName, "r"); 
+        printf("filename %s\n", fileName);                                                       
+        if (!file) {                                                                                
+            fprintf(stderr, "Cannot find %s\n", fileName);                                          
+            exit(1);                                                                                
+        }
+
+        index_type metaData[512]; 
+        if (strstr(fileName, ".mtx")) {                                                             
+            readMTXHeader(file, fileName, metaData, field, symmetry);                                                
+        } else if (strstr(fileName, ".tns")) {                                                      
+            readFROSTTHeader(file, fileName, metaData);                                             
+        } else {                                                                                    
+            fprintf(stderr, "Unknown format %s\n", fileName);                                       
+            exit(1);                                                                                
+        }
+
+        index_type request_dim = dim + 2;
+        return metaData[request_dim];
+    }
+
+    // Vanilla DIA SpMM
+    void _mlir_ciface_kernel_dia_spmm(StridedMemRefType<float, 2> *outC,
+                                      void* inA, 
+                                      StridedMemRefType<float, 2> *inB, 
+                                      StridedMemRefType<float, 2> *inC) {
+        printf("enter in kernel_dia_spmm\n");
+        SparlayStorage* spA = (SparlayStorage*)inA;
+        // printf("spA->vLevel.size = %zu \n", spA->vLevel.size());
+        std::shared_ptr<LevelStorage> spA_dim0 = spA->vLevel[0];
+        std::shared_ptr<LevelStorage> spA_dim1 = spA->vLevel[1];
+        // std::vector<float> spA_data = spA->valueArray;
+        std::vector< std::vector<float> > spA_vector = spA->vectorArray;
+        // printf("spA_data.size = %zu\n", spA_data.size());
+        // printf("spA_vector.size = %zu\n", spA_vector.size());
+        int64_t iSize = inC->sizes[0];
+        int64_t jSize = inB->sizes[0];
+        int64_t kSize = inC->sizes[1];
+        printf("iSize = %ld, jSize = %ld, kSize = %ld\n", iSize, jSize, kSize);
+        // std::vector<int> spA_dim0_crd = spA_dim0->crd;
+        std::vector<int> spA_dim1_crd = spA_dim1->crd;
+        // // int spA_dim0_size = spA_dim0->size;
+        // // int spA_dim1_size = spA_dim1->size;
+        // printf("spA_dim0_crd = ");
+        // for (auto elm: spA_dim0_crd) {
+        //   printf("%d ", elm);
+        // }
+        // printf("\n");
+        // printf("spA_dim1_crd = ");
+        // for (auto elm: spA_dim1_crd) {
+        //   printf("%d ", elm);
+        // }
+        // printf("\n");
+        // printf("spA_dim0_size = %d, spA_dim1_size = %d \n",spA_dim0_size,spA_dim1_size);
+        
+        // printf("spA_vector = \n");
+        // for (auto v: spA_vector) {
+        //   for (auto elm: v) {
+        //     printf("%f ", elm);
+        //   }
+        //   printf("\n");
+        // }
+        // printf("\n");
+
+        // A*B + C
+        outC->basePtr = outC->data = inC->basePtr;
+        outC->offset = inC->offset;
+        outC->strides[0] = outC->strides[1] = 1;
+        outC->sizes[0] = inC->sizes[0];
+        outC->sizes[1] = inC->sizes[1];
+        // printf("inB_data = \n");
+        // for (unsigned j=0; j < jSize; j++) {
+        //   for (unsigned k = 0; k < kSize; k++)
+        //     printf("%f ", inB->data[j*kSize+k]);
+        //   printf("\n");
+        // }
+        // printf("outC_data = \n");
+        // for (unsigned i=0; i < iSize; i++) {
+        //   for (unsigned k = 0; k < kSize; k++)
+        //     printf("%f ", outC->data[i*iSize+k]);
+        //   printf("\n");
+        // }
+        for (unsigned diag = 0; diag < spA_dim1_crd.size(); diag++) {
+          for (int i = 0; i < iSize; i++) {
+            int j = spA_dim1_crd[diag] + i;
+            if (j >=0 && j < jSize) {
+              for (int k = 0; k < kSize; k++) {
+                outC->data[i*kSize+k] += spA_vector[diag][i] * inB->data[j*kSize+k];
+              }
+            }
+          }
+        }
+        // printf("outC_data = \n");
+        // for (unsigned i=0; i < iSize; i++) {
+        //   for (unsigned k = 0; k < kSize; k++)
+        //     printf("%f ", outC->data[i*kSize+k]);
+        //   printf("\n");
+        // }
+        // printf("\n");
+    }
+
+    void _mlir_ciface_kernel_dia_spmv(StridedMemRefType<float, 1> *outC,
+                                      void* inA, 
+                                      StridedMemRefType<float, 1> *inB, 
+                                      StridedMemRefType<float, 1> *inC) {
+        SparlayStorage* spA = (SparlayStorage*)inA;
+        int32_t* spA_dim0_crd = spA->vLevel[1]->crd.data();
+        uint64_t spA_dim0_size = spA->vLevel[1]->crd.size();
+        std::vector< std::vector<float> > spA_vector = spA->vectorArray;
+        int64_t iSize = inC->sizes[0];
+        int64_t jSize = inB->sizes[0];
+
+        // A*B + C
+        outC->basePtr = outC->data = inC->basePtr;
+        outC->offset = inC->offset;
+        outC->strides[0] = 1;
+        outC->sizes[0] = inC->sizes[0];
+
+        for (unsigned diag = 0; diag < spA_dim0_size; diag++) {
+          for (int i = 0; i < iSize; i++) {
+            int j = spA_dim0_crd[diag] + i;
+            if (j >=0 && j < jSize) {
+              outC->data[i] += spA_vector[diag][i] * inB->data[j];
+            }
+          }
+        }
+    }
+
+    void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<float, 1> *out, void *ptr, 
+                                     StridedMemRefType<float, 1> *input, StridedMemRefType<float, 1> *ref) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    int32_t *row_crd = sparT->vLevel[1]->crd.data();
+    int32_t *col_crd = sparT->vLevel[2]->crd.data();
+    float *values = sparT->valueArray.data();
+    uint64_t nnz = sparT->vLevel[2]->crd.size();
+    std::cout << "nnz is " << nnz << std::endl;
+    std::cout << input->data << std::endl;
+    std::cout << ref->data << std::endl;
+    for(uint64_t i = 0; i < nnz; i++) {
+      int32_t rowInd =row_crd[i];
+      int32_t colInd = col_crd[i];
+      ref->data[rowInd] += values[i] * input->data[colInd];
+    }
+    std::cout << "End loop " << std::endl;
+    out->data = ref->data;
+    out->basePtr = ref->data;
+    out->offset = 0;  
+    out->strides[0] = 1;
+  }
+
+  void _mlir_ciface_calculateCOOSpMM(StridedMemRefType<float, 2> *out, void *ptr, 
+                                     StridedMemRefType<float, 2> *input, StridedMemRefType<float, 2> *ref) {
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    int32_t *row_crd = sparT->vLevel[1]->crd.data();
+    int32_t *col_crd = sparT->vLevel[2]->crd.data();
+    float *values = sparT->valueArray.data();
+    uint64_t nnz = sparT->vLevel[2]->crd.size();
+    uint64_t kSize = input->sizes[1];
+    std::cout << "nnz is " << nnz << std::endl;
+    std::cout << input->data << std::endl;
+    std::cout << ref->data << std::endl;
+    for(uint64_t i = 0; i < nnz; i++) {
+      for(uint64_t k = 0; k < kSize; k++) {
+        int32_t rowInd =row_crd[i];
+        int32_t colInd = col_crd[i];
+        ref->data[rowInd*kSize + k] += values[i] * input->data[colInd*kSize + k];
+      }
+    }
+    std::cout << "End loop " << std::endl;
+    out->data = ref->data;
+    out->basePtr = ref->data;
+    out->offset = 0;  
+    out->strides[0] = 1;
+    out->strides[1] = 1;
+  }
+
+} // extern C
 
 // #endif // MLIR_CRUNNERUTILS_DEFINE_FUNCTIONS
