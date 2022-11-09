@@ -1389,6 +1389,75 @@ public:
     return success();
   }
 };
+
+class BDIASpMVOpLowering: public OpConversionPattern<sparlay::BDIASpMVOp> {
+public:
+  using OpConversionPattern<sparlay::BDIASpMVOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::BDIASpMVOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor_CSR = adaptor.getOperands()[0];
+    Value inputTensor_BDIA = adaptor.getOperands()[1];
+    Value input_B = adaptor.getOperands()[2];
+    auto inputType_B = input_B.getType().dyn_cast<TensorType>();
+    Value input_C = adaptor.getOperands()[3];
+    auto inputType_C = input_C.getType().dyn_cast<TensorType>();
+    Value output = op->getResult(0);
+    auto outputType = output.getType();
+
+    // auto dynShape = {ShapedType::kDynamicSize};
+    auto mem_B_tp = MemRefType::get(inputType_B.getShape(), inputType_B.getElementType());
+    auto mem_C_tp = MemRefType::get(inputType_C.getShape(), inputType_C.getElementType());
+    Value mem_input_B = rewriter.create<bufferization::ToMemrefOp>(loc, mem_B_tp, input_B);
+    Value mem_input_C = rewriter.create<bufferization::ToMemrefOp>(loc, mem_C_tp, input_C);
+
+    std::vector<Value> params = {inputTensor_CSR, inputTensor_BDIA, mem_input_B, mem_input_C};
+    // auto out_tp = MemRefType::get(outputType.getShape(), outputType.getElementType());
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "kernel_bdia_spmv_iter", outputType, params, true),
+        params
+    );
+    rewriter.replaceOp(op, callOp.getResult(0));
+    // rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, outputType, 
+    //         ValueRange({callOp.getResult(0)}));
+    return success();
+  }
+};
+class DecomposeBDIAOpLowering: public OpConversionPattern<sparlay::DecomposeBDIAOp> {
+public:
+  using OpConversionPattern<sparlay::DecomposeBDIAOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::DecomposeBDIAOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value blockSize = adaptor.getOperands()[1];
+    Value thres = adaptor.getOperands()[2];
+    Type outputType = inputTensor.getType();
+    std::vector<Value> params = {inputTensor, blockSize, thres};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "decompose_BDIA_opt2", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class ReleaseOpLowering: public OpConversionPattern<sparlay::ReleaseOp> {
+public:
+  using OpConversionPattern<sparlay::ReleaseOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::ReleaseOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
+            getFunc(op, "release", llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
+    return success();
+  }
+};
+
 } // end anonymous namespace
 
 
@@ -1480,7 +1549,8 @@ void LowerFormatConversionPass::runOnOperation() {
                  SparlayAllocConverter, SparlayDeallocConverter, SparlayToDimSizeConverter,
                  SparlayLoadConverter, SparlayInsertConverter, SparlayReturnConverter,
                  SparlayExpandConverter, SparlayCompressConverter, 
-                 DiaSpmvOpLowering, DiaSpmmOpLowering, COOSpMVOpLowering, COOSpMMOpLowering>(&getContext());
+                 DiaSpmvOpLowering, DiaSpmmOpLowering, COOSpMVOpLowering, COOSpMMOpLowering,
+                 DecomposeBDIAOpLowering, BDIASpMVOpLowering, ReleaseOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
