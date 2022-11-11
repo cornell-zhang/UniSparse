@@ -229,14 +229,15 @@ public:
 /*!
  * \brief assume that Level 0 is root
  */
+template<typename V> 
 class SparlayStorage {
 public:
 
   std::vector<uint64_t> dimSizes;
   std::vector< std::shared_ptr<LevelStorage> > vLevel;
   std::vector< std::shared_ptr<Vector2i> > exprs;
-  std::vector<float> valueArray;
-  std::vector< std::vector<float> > vectorArray;
+  std::vector<V> valueArray;
+  std::vector< std::vector<V> > vectorArray;
   int singleVectorSize;
 
   #define LVINFO 4
@@ -355,7 +356,7 @@ public:
 
   void applyPerm(std::vector<int>& perm) {
     if (valueArray.size()) {
-      static std::vector<float> new_val_array;
+      static std::vector<V> new_val_array;
       assert(perm.size() == valueArray.size());
       new_val_array.clear();
       new_val_array.resize(perm.size(),0);
@@ -364,7 +365,7 @@ public:
       }
       valueArray = std::move(new_val_array);
     } else if (vectorArray.size()) {
-      static std::vector< std::vector<float> > new_vector_array;
+      static std::vector< std::vector<V> > new_vector_array;
       assert(perm.size() == vectorArray.size());
       new_vector_array.clear();
       new_vector_array.resize(perm.size(), {});
@@ -425,7 +426,7 @@ public:
     return dimSizes[d];
   }
   
-  void lexInsert(const uint64_t *cursor, float val) {
+  void lexInsert(const uint64_t *cursor, V val) {
     // First, wrap up pending insertion path.
 //    std::cerr << "Enter lexInsert " << std::endl;
     uint64_t diff = 0;
@@ -439,7 +440,7 @@ public:
     insPath(cursor, diff, top, val);
   }
 
-  void expInsert(uint64_t *cursor, float *values, bool *filled, uint64_t *added,
+  void expInsert(uint64_t *cursor, V *values, bool *filled, uint64_t *added,
                  uint64_t count) {
     if (count == 0)
       return;
@@ -514,7 +515,7 @@ private:
     }
   }
   
-  void insPath(const uint64_t *cursor, uint64_t diff, uint64_t top, float val) {
+  void insPath(const uint64_t *cursor, uint64_t diff, uint64_t top, V val) {
     uint64_t rank = getRank();
     assert(diff < rank);
     for (uint64_t d = diff; d < rank; d++) {
@@ -551,9 +552,11 @@ private:
   std::vector<uint64_t> idx;
 };
 
-SparlayStorage* readFromFile(std::istream& fin);
+template<typename V>
+SparlayStorage<V>* readFromFile(std::istream& fin);
 
-void SparlayStorage::Print(std::ostream& fout, bool verbose) {
+template<typename V>
+void SparlayStorage<V>::Print(std::ostream& fout, bool verbose) {
   fout << "==============================================" << std::endl;
   for (size_t i = 0; i < vLevel.size(); ++i) {
     fout << "crd: ";
@@ -600,7 +603,8 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
 }
 
 //Read a COO file
-SparlayStorage* readFromFile(std::istream& fin) {
+template<typename V>
+SparlayStorage<V>* readFromFile(std::istream& fin) {
   std::string tmp;
   while (1) {
     getline(fin, tmp);
@@ -615,7 +619,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
   LevelStorage* rowStore = new LevelStorage();
   LevelStorage* colStore = new LevelStorage();
   LevelStorage* rootStore = new LevelStorage();
-  static std::vector<float> valStore;
+  static std::vector<V> valStore;
   valStore.clear();
 
   //Must be row major, otherwise the fuse operation will be incorrect
@@ -631,7 +635,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
   rootStore->ptr.push_back(0);
 
   for (int row, col, i = 0; i < N_ele; ++i) {
-    float v;
+    V v;
     fin >> row >> col >> v;
     --row, --col;
     // std::cerr << row << ' ' << col << ' ' << v << std::endl;
@@ -642,7 +646,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
 
   rootStore->ptr.push_back(rowStore->crd.size());
 
-  auto ret = new SparlayStorage();
+  auto ret = new SparlayStorage<V>();
   ret->vLevel.push_back(std::shared_ptr<LevelStorage>(rootStore));
 
   std::vector< std::vector<int> > bucket;
@@ -695,7 +699,8 @@ SparlayStorage* readFromFile(std::istream& fin) {
   return ret;
 }
 
-bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
+template<typename V>
+bool SparlayStorage<V>::moveLv(const int srcLv, const int dstLv) {
   assert(dstLv <= srcLv);
   assert(dstLv >= 1);
   for (int curLv = dstLv; curLv <= srcLv; ++curLv) {
@@ -786,7 +791,8 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
   return 1;
 }
 
-bool SparlayStorage::tile_split(int lv, int factor) {
+template<typename V>
+bool SparlayStorage<V>::tile_split(int lv, int factor) {
   assert(!(vLevel[lv]->type & LVFUSE));
   assert(vLevel[lv]->type & LVTRIM);
   std::vector<int> new_crd;
@@ -817,7 +823,8 @@ bool SparlayStorage::tile_split(int lv, int factor) {
   return 1;
 }
 
-bool SparlayStorage::tile_merge(int lv, int factor) {
+template<typename V>
+bool SparlayStorage<V>::tile_merge(int lv, int factor) {
   assert(!(vLevel[lv]->type & LVFUSE));
   assert(vLevel[lv]->type & LVTRIM);
   assert(vLevel[lv+1]->type & LVTRIM);
@@ -837,7 +844,8 @@ bool SparlayStorage::tile_merge(int lv, int factor) {
 /*!
  * \param pos current dense position
  */
-void SparlayStorage::dfsLowerPtr(int cur_lv, int id, int pos, int target_lv, std::vector<int>& ret) {
+template<typename V>
+void SparlayStorage<V>::dfsLowerPtr(int cur_lv, int id, int pos, int target_lv, std::vector<int>& ret) {
   if (cur_lv == target_lv) {
     assert(ret.size() > (size_t)pos);
     assert(ret[pos+1] <= id);
@@ -864,7 +872,8 @@ void SparlayStorage::dfsLowerPtr(int cur_lv, int id, int pos, int target_lv, std
   }
 }
 
-std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
+template<typename V>
+std::vector<int> SparlayStorage<V>::lowerPtr(int st_lv, int ed_lv) {
   std::vector<int> ret;
   u64 ed_level_size = 1;
   for (int i = 0; i <= ed_lv; ++i) {
@@ -894,7 +903,8 @@ std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
   return ret;
 }
 
-bool SparlayStorage::grow(const int lv) {
+template<typename V>
+bool SparlayStorage<V>::grow(const int lv) {
   if (!(vLevel[lv]->type & 1)) { //already not trimmed
     return 1;
   }
@@ -927,7 +937,8 @@ bool SparlayStorage::grow(const int lv) {
   return 1;
 }
 
-bool SparlayStorage::trim(const int lv) {
+template<typename V>
+bool SparlayStorage<V>::trim(const int lv) {
   if (vLevel[lv]->type & 1) return 1; //already trimmed
   int lower_lv = vLevel.size()-1;
   while (lower_lv != 0 && (vLevel[lower_lv-1]->type & LVTRIM)) lower_lv--;
@@ -994,7 +1005,8 @@ bool SparlayStorage::trim(const int lv) {
   return 1;
 }
 
-bool SparlayStorage::fuse(const int lv) {
+template<typename V>
+bool SparlayStorage<V>::fuse(const int lv) {
   if (vLevel[lv]->type & 2) return 1;
   if (vLevel[lv]->type & 1) {
     int upper_lv = lv;
@@ -1076,7 +1088,8 @@ bool SparlayStorage::fuse(const int lv) {
   return 1;
 }
 
-bool SparlayStorage::separate(const int lv) {
+template<typename V>
+bool SparlayStorage<V>::separate(const int lv) {
   if (!(vLevel[lv]->type & LVFUSE)) return 1;
   if (vLevel[lv]->type & LVTRIM) {
     int upper_lv = lv;
@@ -1118,7 +1131,8 @@ bool SparlayStorage::separate(const int lv) {
   return 1;
 }
 
-bool SparlayStorage::swap(const int LU, const int LD) {
+template<typename V>
+bool SparlayStorage<V>::swap(const int LU, const int LD) {
   assert(LU < LD);
   for (int i = LU; i <= LD; ++i) {
     assert(!(vLevel[i]->type & LVFUSE));
@@ -1128,7 +1142,8 @@ bool SparlayStorage::swap(const int LU, const int LD) {
   return 1;
 }
 
-bool SparlayStorage::add(const int Ltarget, const int Lsrc) {
+template<typename V>
+bool SparlayStorage<V>::add(const int Ltarget, const int Lsrc) {
   assert(Lsrc != Ltarget);
   for (int i = Lsrc; i <= Ltarget; ++i) {
     assert(!(vLevel[i]->type & LVFUSE));
@@ -1141,7 +1156,8 @@ bool SparlayStorage::add(const int Ltarget, const int Lsrc) {
   return 1;
 }
 
-bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
+template<typename V>
+bool SparlayStorage<V>::sub(const int Ltarget, const int Lsrc) {
   assert(Lsrc != Ltarget);
   int ULv = (Lsrc < Ltarget ? Lsrc : Ltarget);
   int DLv = (ULv == Lsrc ? Ltarget : Lsrc);
@@ -1157,7 +1173,8 @@ bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
   return 1;
 }
 
-bool SparlayStorage::vectorize(const int lv) {
+template<typename V>
+bool SparlayStorage<V>::vectorize(const int lv) {
   assert(lv == 2);
   assert((size_t)lv == vLevel.size()-1);
   bool mark = !(vLevel[lv]->type&LVFUSE);
@@ -1170,15 +1187,15 @@ bool SparlayStorage::vectorize(const int lv) {
     assert(vectorArray.size() == 0);
     vectorArray.resize(father_crd.size(),{});
     assert(valueArray.size() == vLevel[lv]->crd.size());
-    static std::vector<float> V;
+    static std::vector<V> new_value;
     for (size_t i = 0; i < father_crd.size(); ++i) {
-      V.clear();
-      V.resize(cur_lv_size, 0.0);
+      new_value.clear();
+      new_value.resize(cur_lv_size, 0.0);
       assert(father_ptr[i+1] > prev_ptr);
       for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
-        V[vLevel[lv]->crd[j]] = std::move(valueArray[j]);
+        new_value[vLevel[lv]->crd[j]] = std::move(valueArray[j]);
       }
-      vectorArray[i] = std::move(V);
+      vectorArray[i] = std::move(new_value);
       int add_one = (father_ptr[i+1]>prev_ptr);
       int new_ptr = father_ptr[i] + add_one;
       prev_ptr = father_ptr[i+1];
@@ -1195,7 +1212,8 @@ bool SparlayStorage::vectorize(const int lv) {
   return 1;
 }
 
-bool SparlayStorage::devectorize() {
+template<typename V>
+bool SparlayStorage<V>::devectorize() {
   int lv = vLevel.size()-1;
   bool mark = !(vLevel[lv]->type&LVFUSE);
   fuse(lv);
@@ -1206,7 +1224,7 @@ bool SparlayStorage::devectorize() {
     assert(vLevel[lv]->crd.size() == vectorArray.size());
     std::vector<int> new_crd;
     std::vector<bool> new_same_path;
-    static std::vector<float> new_value;
+    static std::vector<V> new_value;
     new_value.clear();
     size_t Size = this->singleVectorSize;
     if (vectorArray.size() != 0) {
@@ -1240,7 +1258,8 @@ bool SparlayStorage::devectorize() {
   return 1;
 }
 
-bool SparlayStorage::neg(int lv) {
+template<typename V>
+bool SparlayStorage<V>::neg(int lv) {
   assert(!(vLevel[lv]->type & LVFUSE));
   for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
     vLevel[lv]->crd[i] = -vLevel[lv]->crd[i];
@@ -1248,211 +1267,218 @@ bool SparlayStorage::neg(int lv) {
   return 1;
 }
 
-namespace decompose {
+// namespace decompose {
 
-static int curRow;
-static int innz;
-static std::vector<int> vnnz;
-static std::map<int, int> mnnz;
-static int nnz_type;
+// static int curRow;
+// static int innz;
+// static std::vector<int> vnnz;
+// static std::map<int, int> mnnz;
+// static int nnz_type;
 
-void genWindowBuffer(SparlayStorage* T, SparlayWindow* W) {
-  assert(W->M[1][0] == 0);
-  if (W->M[0][1]) {
-    assert(W->M[0][0] == 0);
-    assert(W->M[1][1] == 0);
-  }
-  curRow = -2147483633;
-  if (W->M[1][1]) {
-    assert(W->M[1][1] == 1);
-  }
-  if (W->M[0][0]) {
-    assert(W->M[0][0] == 1);
-  }
-  if (W->M[0][1]) {
-    assert(W->M[0][1] == 1);
-  }
-  assert(!W->T[0][1]);
-  assert(!W->T[1][1]);
-  vnnz.clear();
-  mnnz.clear();
-  innz = 0;
-  if (W->M[0][0] && W->M[1][1]) {
-    nnz_type = 2;
-  } else if (W->M[0][0]) {
-    nnz_type = 0;
-  } else if (W->M[0][1]) {
-    nnz_type = 1;
-    vnnz.resize(T->vLevel[2]->size,0);
-  }
-}
+// void genWindowBuffer(SparlayStorage* T, SparlayWindow* W) {
+//   assert(W->M[1][0] == 0);
+//   if (W->M[0][1]) {
+//     assert(W->M[0][0] == 0);
+//     assert(W->M[1][1] == 0);
+//   }
+//   curRow = -2147483633;
+//   if (W->M[1][1]) {
+//     assert(W->M[1][1] == 1);
+//   }
+//   if (W->M[0][0]) {
+//     assert(W->M[0][0] == 1);
+//   }
+//   if (W->M[0][1]) {
+//     assert(W->M[0][1] == 1);
+//   }
+//   assert(!W->T[0][1]);
+//   assert(!W->T[1][1]);
+//   vnnz.clear();
+//   mnnz.clear();
+//   innz = 0;
+//   if (W->M[0][0] && W->M[1][1]) {
+//     nnz_type = 2;
+//   } else if (W->M[0][0]) {
+//     nnz_type = 0;
+//   } else if (W->M[0][1]) {
+//     nnz_type = 1;
+//     vnnz.resize(T->vLevel[2]->size,0);
+//   }
+// }
 
-float getWindowSize(SparlayStorage* T, SparlayWindow* W) {
-  float n = 1.0, m = 1.0;
-  if (W->M[0][0] && W->M[1][1]) {
-    n = (W->T[0][0] ? (float)W->T[0][0] : 1.0);
-    m = (W->T[1][0] ? (float)W->T[1][0] : 1.0);
-  } else if (W->M[0][0]) {
-    m = T->vLevel[2]->size;
-    n = (W->T[0][0] ? (float)W->T[0][0] : 1.0);
-  } else if (W->M[0][1]) {
-    n = T->vLevel[1]->size;
-    m = (W->T[1][0] ? (float)W->T[1][0] : 1.0);
-  }
-  return n * m;
-}
+// float getWindowSize(SparlayStorage* T, SparlayWindow* W) {
+//   float n = 1.0, m = 1.0;
+//   if (W->M[0][0] && W->M[1][1]) {
+//     n = (W->T[0][0] ? (float)W->T[0][0] : 1.0);
+//     m = (W->T[1][0] ? (float)W->T[1][0] : 1.0);
+//   } else if (W->M[0][0]) {
+//     m = T->vLevel[2]->size;
+//     n = (W->T[0][0] ? (float)W->T[0][0] : 1.0);
+//   } else if (W->M[0][1]) {
+//     n = T->vLevel[1]->size;
+//     m = (W->T[1][0] ? (float)W->T[1][0] : 1.0);
+//   }
+//   return n * m;
+// }
 
-bool needSwitchBuffer(int newRow, SparlayWindow* W) {
-  if (nnz_type == 1) return 0;
-  if (W->T[0][0]) newRow /= W->T[0][0];
-  return (newRow != curRow && nnz_type != 1);
-}
+// bool needSwitchBuffer(int newRow, SparlayWindow* W) {
+//   if (nnz_type == 1) return 0;
+//   if (W->T[0][0]) newRow /= W->T[0][0];
+//   return (newRow != curRow && nnz_type != 1);
+// }
 
-void updateMaxDensity(float &mx, float wsize) {
-  if (nnz_type == 0) {
-    mx = std::max(mx, (float)innz / wsize);
-  } else if (nnz_type == 1) {
-    int max_nnz = 0;
-    for (size_t i = 0; i < vnnz.size(); ++i) {
-      max_nnz = std::max(max_nnz, vnnz[i]);
-    }
-    mx = std::max(mx, (float)max_nnz / wsize);
-  } else {
-    int max_nnz = 0;
-    for (auto iter = mnnz.begin(); iter != mnnz.end(); iter++) {
-      max_nnz = std::max(max_nnz, iter->second);
-    }
-    mx = std::max(mx, (float)max_nnz / wsize);
-  }
-}
+// void updateMaxDensity(float &mx, float wsize) {
+//   if (nnz_type == 0) {
+//     mx = std::max(mx, (float)innz / wsize);
+//   } else if (nnz_type == 1) {
+//     int max_nnz = 0;
+//     for (size_t i = 0; i < vnnz.size(); ++i) {
+//       max_nnz = std::max(max_nnz, vnnz[i]);
+//     }
+//     mx = std::max(mx, (float)max_nnz / wsize);
+//   } else {
+//     int max_nnz = 0;
+//     for (auto iter = mnnz.begin(); iter != mnnz.end(); iter++) {
+//       max_nnz = std::max(max_nnz, iter->second);
+//     }
+//     mx = std::max(mx, (float)max_nnz / wsize);
+//   }
+// }
 
-void pushNewCrd(int i, int j, SparlayWindow* W) {
-  if (W->T[0][0]) i /= W->T[0][0];
-  if (W->T[1][0]) j /= W->T[1][0];
-  if (nnz_type == 0) {
-    assert(i == curRow);
-    innz += 1;
-  } else if (nnz_type == 1) {
-    vnnz[j] += 1;
-  } else {
-    assert(i == curRow);
-    mnnz[j] += 1;
-  }
-}
+// void pushNewCrd(int i, int j, SparlayWindow* W) {
+//   if (W->T[0][0]) i /= W->T[0][0];
+//   if (W->T[1][0]) j /= W->T[1][0];
+//   if (nnz_type == 0) {
+//     assert(i == curRow);
+//     innz += 1;
+//   } else if (nnz_type == 1) {
+//     vnnz[j] += 1;
+//   } else {
+//     assert(i == curRow);
+//     mnnz[j] += 1;
+//   }
+// }
 
-void switchBuffer(int i, SparlayWindow* W) {
-  if (W->T[0][0]) i /= W->T[0][0];
-  #ifdef DEBUG
-  std::cerr << i << ' ' << curRow << std::endl;
-  #endif
-  assert(i > curRow);
-  assert(nnz_type != 1);
-  curRow = i;
-  if (nnz_type == 0) {
-    innz = 0;
-  } else {
-    mnnz.clear();
-  }
-}
+// void switchBuffer(int i, SparlayWindow* W) {
+//   if (W->T[0][0]) i /= W->T[0][0];
+//   #ifdef DEBUG
+//   std::cerr << i << ' ' << curRow << std::endl;
+//   #endif
+//   assert(i > curRow);
+//   assert(nnz_type != 1);
+//   curRow = i;
+//   if (nnz_type == 0) {
+//     innz = 0;
+//   } else {
+//     mnnz.clear();
+//   }
+// }
 
-void clearBuffer() {
-  if (nnz_type == 0) {
-    innz = 0;
-  } else if (nnz_type == 1) {
-    vnnz.clear();
-  } else {
-    mnnz.clear();
-  }
-}
+// void clearBuffer() {
+//   if (nnz_type == 0) {
+//     innz = 0;
+//   } else if (nnz_type == 1) {
+//     vnnz.clear();
+//   } else {
+//     mnnz.clear();
+//   }
+// }
 
-float getMaxDensity(SparlayStorage* T, SparlayWindow* W) {
-  genWindowBuffer(T, W);
-  assert(T->vLevel.size() == (size_t)3);
-  assert(T->vLevel[1]->crd.size() == T->vLevel[2]->crd.size());
-  float wsize = getWindowSize(T, W);
-  std::cerr << wsize << std::endl;
-  float mx_density = 0.0;
-  for (size_t i = 0; i < T->vLevel[1]->crd.size(); ++i) {
-    if (needSwitchBuffer(T->vLevel[1]->crd[i], W)) {
-      updateMaxDensity(mx_density, wsize);
-      switchBuffer(T->vLevel[1]->crd[i], W);
-    }
-    pushNewCrd(T->vLevel[1]->crd[i], T->vLevel[2]->crd[i], W);
-  }
-  updateMaxDensity(mx_density, wsize);
-  clearBuffer();
-  return mx_density;
-}
+// float getMaxDensity(SparlayStorage* T, SparlayWindow* W) {
+//   genWindowBuffer(T, W);
+//   assert(T->vLevel.size() == (size_t)3);
+//   assert(T->vLevel[1]->crd.size() == T->vLevel[2]->crd.size());
+//   float wsize = getWindowSize(T, W);
+//   std::cerr << wsize << std::endl;
+//   float mx_density = 0.0;
+//   for (size_t i = 0; i < T->vLevel[1]->crd.size(); ++i) {
+//     if (needSwitchBuffer(T->vLevel[1]->crd[i], W)) {
+//       updateMaxDensity(mx_density, wsize);
+//       switchBuffer(T->vLevel[1]->crd[i], W);
+//     }
+//     pushNewCrd(T->vLevel[1]->crd[i], T->vLevel[2]->crd[i], W);
+//   }
+//   updateMaxDensity(mx_density, wsize);
+//   clearBuffer();
+//   return mx_density;
+// }
 
-void pushCrd(SparlayStorage* T, int i, int j, float val) {
-  T->vLevel[1]->crd.push_back(i);
-  if (T->vLevel[1]->crd.size() == (size_t)1) T->vLevel[1]->same_path.push_back(0);
-  else T->vLevel[1]->same_path.push_back(i == (*(T->vLevel[1]->crd.end()-2)));
-  T->vLevel[2]->crd.push_back(j);
-  T->vLevel[2]->same_path.push_back(0);
-  T->valueArray.push_back(val);
-}
+// template <typename V>
+// void pushCrd(SparlayStorage<V>* T, int i, int j, V val) {
+//   T->vLevel[1]->crd.push_back(i);
+//   if (T->vLevel[1]->crd.size() == (size_t)1) T->vLevel[1]->same_path.push_back(0);
+//   else T->vLevel[1]->same_path.push_back(i == (*(T->vLevel[1]->crd.end()-2)));
+//   T->vLevel[2]->crd.push_back(j);
+//   T->vLevel[2]->same_path.push_back(0);
+//   T->valueArray.push_back(val);
+// }
 
-void emplaceCrd(SparlayStorage* T, SparlayWindow* W, int L, int R, std::vector<SparlayStorage*>& cand, const std::vector<float>& thres, const float win_size, const float mx_density) {
-  if (L > R) {
-    assert(L == 0 && R == -1);
-    return;
-  }
-  for (int i = L; i <= R; ++i) {
-    int win_i = T->vLevel[1]->crd[i];
-    int win_j = T->vLevel[2]->crd[i];
-    if (W->T[0][0]) win_i /= W->T[0][0];
-    if (W->T[1][0]) win_j /= W->T[1][0];
-    float curDens = -1.0;
-    if (nnz_type == 0) {
-      assert(win_i == curRow);
-      curDens = (float)innz / win_size;
-    } else if (nnz_type == 1) {
-      assert(L == 0 && (size_t)R == T->vLevel[1]->crd.size()-(size_t)1);
-      curDens = (float)vnnz[win_j] / win_size;
-    } else {
-      assert(win_i == curRow);
-      curDens = (float)mnnz[win_j] / win_size;
-    }
-    assert(curDens != -1.0);
-    curDens /= mx_density;
-    size_t target = 0;
-    for (target = 0; target < thres.size(); ++target) {
-      if (curDens < thres[target]) {
-        break;
-      }
-    }
-    pushCrd(cand[target], T->vLevel[1]->crd[i], T->vLevel[2]->crd[i], T->valueArray[i]);
-  }
-}
+// template <typename V>
+// void emplaceCrd(SparlayStorage<V>* T, SparlayWindow* W, int L, int R, std::vector<SparlayStorage<V>*>& cand, const std::vector<float>& thres, const float win_size, const float mx_density) {
+//   if (L > R) {
+//     assert(L == 0 && R == -1);
+//     return;
+//   }
+//   for (int i = L; i <= R; ++i) {
+//     int win_i = T->vLevel[1]->crd[i];
+//     int win_j = T->vLevel[2]->crd[i];
+//     if (W->T[0][0]) win_i /= W->T[0][0];
+//     if (W->T[1][0]) win_j /= W->T[1][0];
+//     float curDens = -1.0;
+//     if (nnz_type == 0) {
+//       assert(win_i == curRow);
+//       curDens = (float)innz / win_size;
+//     } else if (nnz_type == 1) {
+//       assert(L == 0 && (size_t)R == T->vLevel[1]->crd.size()-(size_t)1);
+//       curDens = (float)vnnz[win_j] / win_size;
+//     } else {
+//       assert(win_i == curRow);
+//       curDens = (float)mnnz[win_j] / win_size;
+//     }
+//     assert(curDens != -1.0);
+//     curDens /= mx_density;
+//     size_t target = 0;
+//     for (target = 0; target < thres.size(); ++target) {
+//       if (curDens < thres[target]) {
+//         break;
+//       }
+//     }
+//     pushCrd<V>(cand[target], T->vLevel[1]->crd[i], T->vLevel[2]->crd[i], T->valueArray[i]);
+//   }
+// }
 
-// sortCrd(sparT, swin, thres_data, mx_density, cand)
-void sortCrd(SparlayStorage* T, SparlayWindow* W, const std::vector<float>& thres, const float mx_density, std::vector<SparlayStorage*>& cand) {
-  genWindowBuffer(T, W);
-  assert(T->vLevel.size() == (size_t)3);
-  assert(T->vLevel[1]->crd.size() == T->vLevel[2]->crd.size());
-  int prev_id = 0;
-  float wsize = getWindowSize(T, W);
-  for (size_t i = 0; i < cand.size(); ++i) {
-    cand[i]->initCOO(T->vLevel[1]->size, T->vLevel[2]->size);
-  }
-  for (int i = 0; i < (int)T->vLevel[1]->crd.size(); ++i) {
-    if (needSwitchBuffer(T->vLevel[1]->crd[i], W)) {
-      emplaceCrd(T, W, prev_id, i-1, cand, thres, wsize, mx_density);
-      switchBuffer(T->vLevel[1]->crd[i], W);
-      prev_id = i;
-    }
-    pushNewCrd(T->vLevel[1]->crd[i], T->vLevel[2]->crd[i], W);
-  }
-  emplaceCrd(T, W, prev_id, T->vLevel[1]->crd.size()-1, cand, thres, wsize, mx_density);
-  clearBuffer();
-  //finalize sparT
-  for (size_t i = 0; i < cand.size(); ++i) {
-    cand[i]->finalizeCOO();
-  }
-}
+// // sortCrd(sparT, swin, thres_data, mx_density, cand)
+// void sortCrd(SparlayStorage* T, SparlayWindow* W, const std::vector<float>& thres, const float mx_density, std::vector<SparlayStorage*>& cand) {
+//   genWindowBuffer(T, W);
+//   assert(T->vLevel.size() == (size_t)3);
+//   assert(T->vLevel[1]->crd.size() == T->vLevel[2]->crd.size());
+//   int prev_id = 0;
+//   float wsize = getWindowSize(T, W);
+//   for (size_t i = 0; i < cand.size(); ++i) {
+//     cand[i]->initCOO(T->vLevel[1]->size, T->vLevel[2]->size);
+//   }
+//   for (int i = 0; i < (int)T->vLevel[1]->crd.size(); ++i) {
+//     if (needSwitchBuffer(T->vLevel[1]->crd[i], W)) {
+//       emplaceCrd(T, W, prev_id, i-1, cand, thres, wsize, mx_density);
+//       switchBuffer(T->vLevel[1]->crd[i], W);
+//       prev_id = i;
+//     }
+//     pushNewCrd(T->vLevel[1]->crd[i], T->vLevel[2]->crd[i], W);
+//   }
+//   emplaceCrd(T, W, prev_id, T->vLevel[1]->crd.size()-1, cand, thres, wsize, mx_density);
+//   clearBuffer();
+//   //finalize sparT
+//   for (size_t i = 0; i < cand.size(); ++i) {
+//     cand[i]->finalizeCOO();
+//   }
+// }
 
-}
+// } //end of namespace decompse
+
+enum ValType {
+  vF,
+  vD
+};
 
 extern "C" {
     // refactor into a swiss army knife function in the future
@@ -1524,20 +1550,29 @@ extern "C" {
     return &tensor;
   }
 
-  void* _mlir_ciface_sptFromFile(void* ptr) {
-    std::ios::sync_with_stdio(0);
-    #ifdef DEBUG
-    auto tic = TI;
-    #endif
-    char* fileName = static_cast<char*>(ptr);
-    std::ifstream fin(fileName);
-    void* ret = readFromFile(fin);
-    fin.close();
-    #ifdef DEBUG
-    std::cerr << std::endl << "Read from file done, time = " << TI-tic << "(s)" << std::endl;
-    #endif
-    return ret;
+#define FOREVERY_V(DO)                                                         \
+  DO(F64, double)                                                              \
+  DO(F32, float)                                                              
+  // DO(F16, f16)                                                                 \
+  // DO(BF16, bf16)                                                               \
+  // DO(I64, int64_t)                                                             \
+  // DO(I32, int32_t)                                                             \
+  // DO(I16, int16_t)                                                             \
+  // DO(I8, int8_t)                                                               \
+  // DO(C64, complex64)                                                           \
+  // DO(C32, complex32)
+
+#define IMPL_SPTFROMFILE(VNAME, V)                         \
+  void* _mlir_ciface_sptFromFile##VNAME(void* ptr) {       \
+    std::ios::sync_with_stdio(0);                          \
+    char* fileName = static_cast<char*>(ptr);              \
+    std::ifstream fin(fileName);                           \
+    void* ret = readFromFile<V>(fin);                      \
+    fin.close();                                           \
+    return ret;                                            \
   }
+FOREVERY_V(IMPL_SPTFROMFILE)
+#undef IMPL_SPTFROMFILE
 
   void _mlir_ciface_sptTic() {
     Perf::tic();
@@ -1547,193 +1582,155 @@ extern "C" {
     Perf::toc();
   }
 
-  void _mlir_ciface_sptCheck(void* A, void* B) {
-    SparlayStorage* aa = (SparlayStorage*)(A);
-    SparlayStorage* bb = (SparlayStorage*)(B);
-    if ((*aa) == (*bb)) {
-      std::cerr << "Check Success" << std::endl;
-    } else {
-      std::cerr << "Check Failed" << std::endl;
-      assert(0);
-    }
+#define IMPL_SPTCHECK(VNAME, V) \
+  void _mlir_ciface_sptCheck##VNAME(void* A, void* B) {   \
+    SparlayStorage<V>* aa = (SparlayStorage<V>*)(A);         \
+    SparlayStorage<V>* bb = (SparlayStorage<V>*)(B);            \
+    if ((*aa) == (*bb)) {                                 \
+      std::cerr << "Check Success" << std::endl;          \
+    } else {                                              \
+      std::cerr << "Check Failed" << std::endl;           \
+      assert(0);                                          \
+    }                                                     \
   }
+FOREVERY_V(IMPL_SPTCHECK)
+#undef IMPL_SPTCHECK
 
-  void* _mlir_ciface_sptCopy(void* A) {
-    SparlayStorage* aa = (SparlayStorage*)(A);
-    SparlayStorage* ret = new SparlayStorage();
-    (*ret) = aa->copy();
-    return (void*)ret;
+#define IMPL_SPTCOPY(VNAME, V) \
+  void* _mlir_ciface_sptCopy##VNAME(void* A) { \
+    SparlayStorage<V>* aa = (SparlayStorage<V>*)(A); \
+    SparlayStorage<V>* ret = new SparlayStorage<V>(); \
+    (*ret) = aa->copy(); \
+    return (void*)ret; \
   }
+FOREVERY_V(IMPL_SPTCOPY)
+#undef IMPL_SPTCOPY
 
-  void* _mlir_ciface_sptFuse(void* ptr, int lv) {
-    #ifdef DEBUG
-      auto tic = TI;
-    #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->fuse(lv+1);
-      // sparT->Print(std::cerr, 1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      return (void*)sparT;
+#define IMPL_SPTFUSE(VNAME, V) \
+  void* _mlir_ciface_sptFuse##VNAME(void* ptr, int lv) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->fuse(lv+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTFUSE)
+#undef IMPL_SPTFUSE
 
-  void* _mlir_ciface_sptGrow(void* ptr, int lv) {
-    #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->grow(lv+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      return (void*)sparT;
+#define IMPL_SPTGROW(VNAME, V) \
+  void* _mlir_ciface_sptGrow##VNAME(void* ptr, int lv) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->grow(lv+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTGROW)
+#undef IMPL_SPTGROW
 
-  void* _mlir_ciface_sptTrim(void* ptr, int lv) {
-    #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->trim(lv+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      // sparT->Print(std::cerr);
-      return (void*)sparT;
+#define IMPL_SPTTRIM(VNAME, V) \
+  void* _mlir_ciface_sptTrim##VNAME(void* ptr, int lv) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->trim(lv+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTTRIM)
+#undef IMPL_SPTTRIM
 
-  void* _mlir_ciface_sptSeparate(void* ptr, int lv) {
-    #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->separate(lv+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      // sparT->Print(std::cerr);
-      return (void*)sparT;
+#define IMPL_SPTSEPERATE(VNAME, V) \
+  void* _mlir_ciface_sptSeparate##VNAME(void* ptr, int lv) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->separate(lv+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTSEPERATE)
+#undef IMPL_SPTSEPERATE
 
-  void* _mlir_ciface_sptSwap(void* ptr, int LU, int LD) {
-    #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->swap(LU+1, LD+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      // sparT->Print(std::cerr);
-      return (void*)sparT;
+#define IMPL_SPTSWAP(VNAME, V) \
+  void* _mlir_ciface_sptSwap##VNAME(void* ptr, int LU, int LD) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->swap(LU+1, LD+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTSWAP)
+#undef IMPL_SPTSWAP
 
-  void* _mlir_ciface_sptSub(void* ptr, int Ltarget, int Lsrc) {
-      #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->sub(Ltarget+1, Lsrc+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      // sparT->Print(std::cerr, 1);
-      return (void*)sparT;
+#define IMPL_SPTSUB(VNAME, V) \
+  void* _mlir_ciface_sptSub##VNAME(void* ptr, int Ltarget, int Lsrc) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->sub(Ltarget+1, Lsrc+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTSUB)
+#undef IMPL_SPTSUB
 
-  void* _mlir_ciface_sptAdd(void* ptr, int Ltarget, int Lsrc) {
-      #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->add(Ltarget+1, Lsrc+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      // sparT->Print(std::cerr, 1);
-      return (void*)sparT;
+#define IMPL_SPTADD(VNAME, V) \
+  void* _mlir_ciface_sptAdd##VNAME(void* ptr, int Ltarget, int Lsrc) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->add(Ltarget+1, Lsrc+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTADD)
+#undef IMPL_SPTADD
 
-  void* _mlir_ciface_sptNeg(void* ptr, int lv) {
-    #ifdef DEBUG
-      auto tic = TI;
-      #endif
-      SparlayStorage* sparT = (SparlayStorage*)(ptr);
-      sparT->neg(lv+1);
-      #ifdef DEBUG
-      std::cerr << std::endl << "Neg done, time = " << TI-tic << "(s)" << std::endl;
-      #endif
-      // sparT->Print(std::cerr);
-      return (void*)sparT;
+#define IMPL_SPTNEG(VNAME, V) \
+  void* _mlir_ciface_sptNeg##VNAME(void* ptr, int lv) { \
+      SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+      sparT->neg(lv+1); \
+      return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTNEG)
+#undef IMPL_SPTNEG
 
-  void* _mlir_ciface_sptTileSplit(void* ptr, int lv, int factor) {
-    #ifdef DEBUG
-    auto tic = TI;
-    #endif
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->tile_split(lv+1, factor);
-    // sparT->Print(std::cerr, 1);
-    #ifdef DEBUG
-    std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
-    #endif
-    return (void*)sparT;
+#define IMPL_SPTTILESPLIT(VNAME, V) \
+  void* _mlir_ciface_sptTileSplit##VNAME(void* ptr, int lv, int factor) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    sparT->tile_split(lv+1, factor); \
+    return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTTILESPLIT)
+#undef IMPL_SPTTILESPLIT
 
-  void* _mlir_ciface_sptTileMerge(void* ptr, int lv, int factor) {
-    #ifdef DEBUG
-    auto tic = TI;
-    #endif
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->tile_merge(lv+1, factor);
-    #ifdef DEBUG
-    std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
-    #endif
-    return (void*)sparT;
+#define IMPL_SPTTILEMERGE(VNAME, V) \
+  void* _mlir_ciface_sptTileMerge##VNAME(void* ptr, int lv, int factor) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    sparT->tile_merge(lv+1, factor); \
+    return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTTILEMERGE)
+#undef IMPL_SPTTILEMERGE
 
-  void* _mlir_ciface_sptMove(void* ptr, int srcLv, int dstLv) {
-    #ifdef DEBUG
-    auto tic = TI;
-    #endif
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->moveLv(srcLv+1, dstLv+1);
-    // sparT->Print(std::cerr, 1);
-    #ifdef DEBUG
-    std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
-    #endif
-    return (void*)sparT;
+#define IMPL_SPTMOVE(VNAME, V) \
+  void* _mlir_ciface_sptMove##VNAME(void* ptr, int srcLv, int dstLv) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    sparT->moveLv(srcLv+1, dstLv+1); \
+    return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTMOVE)
+#undef IMPL_SPTMOVE
 
-  void* _mlir_ciface_sptVectorize(void* ptr, int lv) {
-    #ifdef DEBUG
-    auto tic = TI;
-    #endif
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->vectorize(lv+1);
-    #ifdef DEBUG
-    std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
-    #endif
-    return (void*)sparT;
+#define IMPL_SPTVECTORIZE(VNAME, V) \
+  void* _mlir_ciface_sptVectorize##VNAME(void* ptr, int lv) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    sparT->vectorize(lv+1); \
+    return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTVECTORIZE)
+#undef IMPL_SPTVECTORIZE
 
-  void* _mlir_ciface_sptDevectorize(void* ptr) {
-    #ifdef DEBUG
-    auto tic = TI;
-    #endif
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->devectorize();
-    #ifdef DEBUG
-    std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
-    #endif
-    return (void*)sparT;
+#define IMPL_SPTDEVECTORIZE(VNAME, V) \
+  void* _mlir_ciface_sptDevectorize##VNAME(void* ptr) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    sparT->devectorize(); \
+    return (void*)sparT; \
   }
+FOREVERY_V(IMPL_SPTDEVECTORIZE)
+#undef IMPL_SPTDEVECTORIZE
 
-  void _mlir_ciface_sptPrint(void* ptr) {
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->Print(std::cerr, 1);
+#define IMPL_SPTPRINT(VNAME, V) \
+  void _mlir_ciface_sptPrint##VNAME(void* ptr) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    sparT->Print(std::cerr, 1); \
   }
+FOREVERY_V(IMPL_SPTPRINT)
+#undef IMPL_SPTPRINT
+
 
   void* _mlir_ciface_structAccess(void* ptr, uint64_t index) {
     SparlayStruct* SS = (SparlayStruct*)(ptr);
@@ -1751,87 +1748,99 @@ extern "C" {
     return (void*)ret;
   }
 
-  void* _mlir_ciface_spwTile(void* ptr, uint64_t i, uint64_t type, int size) {
-    SparlayWindow* ret = (SparlayWindow*)(ptr);
-    ret->tile(i,type,size);
-    return (void*)ret;
-  }
+  // void* _mlir_ciface_spwTile(void* ptr, uint64_t i, uint64_t type, int size) {
+  //   SparlayWindow* ret = (SparlayWindow*)(ptr);
+  //   ret->tile(i,type,size);
+  //   return (void*)ret;
+  // }
 
-  void* _mlir_ciface_sptSplit(StridedMemRefType<float, 1>* thres, void* ptr, void* win) {
-    std::cerr << "enter split" << std::endl;
-    SparlayStruct* ret = new SparlayStruct;
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    assert(thres->offset == 0);
-    int64_t size = thres->sizes[0];
-    float* _thres_data = thres->data;
-    std::vector<float> thres_data;
-    for (int64_t i = 0; i < size; ++i) { thres_data.push_back(_thres_data[i]); }
-    std::cerr << "size = " << size << std::endl;
-    std::vector<SparlayStorage*> cand;
-    for (int64_t i = 0; i < size + 1; ++i) {
-      cand.push_back(new SparlayStorage);
-      SparlayStorage* newT = new SparlayStorage;
-      (*newT) = sparT->copy();
-      // ret->vec.push_back((void*)newT);
-    }
-    SparlayWindow* swin = (SparlayWindow*)(win);
-    std::cerr << "==============" << std::endl;
-    std::cerr << "window: " << std::endl;
-    std::cerr << "affine: " << std::endl;
-    for (int i = 0; i < 2; ++i) {
-      for (int j = 0; j < 2; ++j) {
-        std::cerr << swin->M[i][j] << ' ';
-      }
-      std::cerr << std::endl;
-    }
-    std::cerr << "tile: " << std::endl;
-    for (int i = 0; i < 2; ++i) {
-      for (int j = 0; j < 2; ++j) {
-        std::cerr << swin->T[i][j] << ' ';
-      }
-      std::cerr << std::endl;
-    }
-    std::cerr << "===============" << std::endl;
-    float mx_density = decompose::getMaxDensity(sparT, swin);
-    std::cerr << "mx_density = " << mx_density << std::endl;
-    decompose::sortCrd(sparT, swin, thres_data, mx_density, cand);
-    for (size_t i = 0; i < cand.size(); ++i) {
-      cand[i]->Print(std::cerr, 1);
-      ret->vec.push_back((void*)cand[i]);
-    }
-    std::cerr << "leave split" << std::endl;
-    return (void*)ret;
-  }
+//   void* _mlir_ciface_sptSplit(StridedMemRefType<float, 1>* thres, void* ptr, void* win) {
+//     std::cerr << "enter split" << std::endl;
+//     SparlayStruct* ret = new SparlayStruct;
+//     SparlayStorage* sparT = (SparlayStorage*)(ptr);
+//     assert(thres->offset == 0);
+//     int64_t size = thres->sizes[0];
+//     float* _thres_data = thres->data;
+//     std::vector<float> thres_data;
+//     for (int64_t i = 0; i < size; ++i) { thres_data.push_back(_thres_data[i]); }
+//     std::cerr << "size = " << size << std::endl;
+//     std::vector<SparlayStorage*> cand;
+//     for (int64_t i = 0; i < size + 1; ++i) {
+//       cand.push_back(new SparlayStorage);
+//       SparlayStorage* newT = new SparlayStorage;
+//       (*newT) = sparT->copy();
+//       // ret->vec.push_back((void*)newT);
+//     }
+//     SparlayWindow* swin = (SparlayWindow*)(win);
+//     std::cerr << "==============" << std::endl;
+//     std::cerr << "window: " << std::endl;
+//     std::cerr << "affine: " << std::endl;
+//     for (int i = 0; i < 2; ++i) {
+//       for (int j = 0; j < 2; ++j) {
+//         std::cerr << swin->M[i][j] << ' ';
+//       }
+//       std::cerr << std::endl;
+//     }
+//     std::cerr << "tile: " << std::endl;
+//     for (int i = 0; i < 2; ++i) {
+//       for (int j = 0; j < 2; ++j) {
+//         std::cerr << swin->T[i][j] << ' ';
+//       }
+//       std::cerr << std::endl;
+//     }
+//     std::cerr << "===============" << std::endl;
+//     float mx_density = decompose::getMaxDensity(sparT, swin);
+//     std::cerr << "mx_density = " << mx_density << std::endl;
+//     decompose::sortCrd(sparT, swin, thres_data, mx_density, cand);
+//     for (size_t i = 0; i < cand.size(); ++i) {
+//       cand[i]->Print(std::cerr, 1);
+//       ret->vec.push_back((void*)cand[i]);
+//     }
+//     std::cerr << "leave split" << std::endl;
+//     return (void*)ret;
+//   }
 
-  void _mlir_ciface_getCrd(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    ref->basePtr = ref->data = sparT->vLevel[dim]->crd.data();
-    ref->offset = 0;
-    ref->sizes[0] = sparT->vLevel[dim]->crd.size();
-    ref->strides[0] = 1;
+#define IMPL_GETCRD(VNAME, V) \
+  void _mlir_ciface_getCrd##VNAME(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    ref->basePtr = ref->data = sparT->vLevel[dim]->crd.data(); \
+    ref->offset = 0; \
+    ref->sizes[0] = sparT->vLevel[dim]->crd.size(); \
+    ref->strides[0] = 1; \
   }
+FOREVERY_V(IMPL_GETCRD)
+#undef IMPL_GETCRD
 
-  void _mlir_ciface_getPtr(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) {
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    ref->basePtr = ref->data = sparT->vLevel[dim]->ptr.data();
-    ref->offset = 0;
-    ref->sizes[0] = sparT->vLevel[dim]->ptr.size();
-    ref->strides[0] = 1;
+#define IMPL_GETPTR(VNAME, V) \
+  void _mlir_ciface_getPtr##VNAME(StridedMemRefType<int, 1>* ref, void* ptr, uint64_t dim) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    ref->basePtr = ref->data = sparT->vLevel[dim]->ptr.data(); \
+    ref->offset = 0; \
+    ref->sizes[0] = sparT->vLevel[dim]->ptr.size(); \
+    ref->strides[0] = 1; \
   }
+FOREVERY_V(IMPL_GETPTR)
+#undef IMPL_GETPTR
 
-  void _mlir_ciface_getValue(StridedMemRefType<float, 1>* ref, void* ptr, uint64_t dim) {
-    assert(dim == (uint64_t)0);
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    ref->basePtr = ref->data = sparT->valueArray.data();
-    ref->offset = 0;
-    ref->sizes[0] = sparT->valueArray.size();
-    ref->strides[0] = 1;
+#define IMPL_GETVALUE(VNAME, V) \
+  void _mlir_ciface_getValue##VNAME(StridedMemRefType<V, 1>* ref, void* ptr, uint64_t dim) { \
+    assert(dim == (uint64_t)0); \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    ref->basePtr = ref->data = sparT->valueArray.data(); \
+    ref->offset = 0; \
+    ref->sizes[0] = sparT->valueArray.size(); \
+    ref->strides[0] = 1; \
   }
+FOREVERY_V(IMPL_GETVALUE)
+#undef IMPL_GETVALUE
 
-  uint64_t _mlir_ciface_getSize(void* ptr, uint64_t dim) {
-    SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    return sparT->vLevel[dim+1]->crd.size();
+#define IMPL_GETSIZE(VNAME, V) \
+  uint64_t _mlir_ciface_getSize##VNAME(void* ptr, uint64_t dim) { \
+    SparlayStorage<V>* sparT = (SparlayStorage<V>*)(ptr); \
+    return sparT->vLevel[dim+1]->crd.size(); \
   }
+FOREVERY_V(IMPL_GETSIZE)
+#undef IMPL_GETSIZE
 
 // #define GETINDICES(TYPE)
   void _mlir_ciface_getTensorIndices(StridedMemRefType<uint64_t, 1> *ref, void *ptr, uint64_t dim) {   
@@ -1857,7 +1866,7 @@ extern "C" {
       // printf("\n");
   }
 
-// #define GETVALUES(TYPE)
+// // #define GETVALUES(TYPE)
   void _mlir_ciface_getTensorValues(StridedMemRefType<double, 1> *ref, void *ptr) {
       SparseCoordinate<uint64_t, double> *tensor = nullptr;
       tensor = static_cast<SparseCoordinate<uint64_t, double> *>(ptr);
@@ -1882,145 +1891,154 @@ extern "C" {
 
   }
 
-  void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, 
-                                      StridedMemRefType<uint64_t, 1> *ptr, 
-                                      StridedMemRefType<uint64_t, 1> *col, 
-                                      StridedMemRefType<double, 1> *value, 
-                                      StridedMemRefType<double, 1> *input) {
-    uint64_t row = ptr->sizes[0] - 1;
-    double *result = new double[row];
-//      printf("row size is: %d\n", row);
-    for(uint64_t i = 0; i < row; i++) {
-      double temp = 0;
-      for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
-      temp += value->data[j] * input->data[col->data[j]];
-  //	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
-      }
-      result[i] = temp;
-//        printf("outdata[%d] is %f\n", i, out->data[i]);
-    }
-    out->data = result;
-    out->basePtr = result;
-    out->offset = 0;  
-    out->strides[0] = 1;
-  }  
+//   void _mlir_ciface_calculateCSRSpMV(StridedMemRefType<double, 1> *out, 
+//                                       StridedMemRefType<uint64_t, 1> *ptr, 
+//                                       StridedMemRefType<uint64_t, 1> *col, 
+//                                       StridedMemRefType<double, 1> *value, 
+//                                       StridedMemRefType<double, 1> *input) {
+//     uint64_t row = ptr->sizes[0] - 1;
+//     double *result = new double[row];
+// //      printf("row size is: %d\n", row);
+//     for(uint64_t i = 0; i < row; i++) {
+//       double temp = 0;
+//       for(uint64_t j = ptr->data[i]; j < ptr->data[i+1]; j++) {
+//       temp += value->data[j] * input->data[col->data[j]];
+//   //	  printf("value->data[%d] is: %f, col->data[%d] is: %d, input->data[%d] is: %f\n", j, value->data[j], j, col->data[j], col->data[j], input->data[col->data[j]]);
+//       }
+//       result[i] = temp;
+// //        printf("outdata[%d] is %f\n", i, out->data[i]);
+//     }
+//     out->data = result;
+//     out->basePtr = result;
+//     out->offset = 0;  
+//     out->strides[0] = 1;
+//   }  
 
-  void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
-                                      StridedMemRefType<uint64_t, 1> *row, 
-                                      StridedMemRefType<uint64_t, 1> *col, 
-                                      StridedMemRefType<double, 1> *value, 
-                                      StridedMemRefType<double, 1> *input,
-                                      uint64_t size_0, uint64_t size_1) {
-    uint64_t nnz = row->sizes[0];
-  //   uint64_t out_size = out->sizes[0];
-  //   printf("out size = %lu \n", out_size);
-  //   printf("nnz is: %lu\n", nnz);
-    double *result = new double[size_0];
-    for (uint64_t i = 0; i < size_0; i++) {
-      // out->data[i] = 0;
-      result[i] = 0;
-    }
+//   void _mlir_ciface_calculateCOOSpMV(StridedMemRefType<double, 1> *out, 
+//                                       StridedMemRefType<uint64_t, 1> *row, 
+//                                       StridedMemRefType<uint64_t, 1> *col, 
+//                                       StridedMemRefType<double, 1> *value, 
+//                                       StridedMemRefType<double, 1> *input,
+//                                       uint64_t size_0, uint64_t size_1) {
+//     uint64_t nnz = row->sizes[0];
+//   //   uint64_t out_size = out->sizes[0];
+//   //   printf("out size = %lu \n", out_size);
+//   //   printf("nnz is: %lu\n", nnz);
+//     double *result = new double[size_0];
+//     for (uint64_t i = 0; i < size_0; i++) {
+//       // out->data[i] = 0;
+//       result[i] = 0;
+//     }
 
-    for(uint64_t i = 0; i < nnz; i++) {
-      // double temp = 0;
-      uint64_t rowInd = row->data[i];
-      uint64_t colInd = col->data[i];
-      result[rowInd] += value->data[i] * input->data[colInd];
-      // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
-      // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
-    }
+//     for(uint64_t i = 0; i < nnz; i++) {
+//       // double temp = 0;
+//       uint64_t rowInd = row->data[i];
+//       uint64_t colInd = col->data[i];
+//       result[rowInd] += value->data[i] * input->data[colInd];
+//       // printf("value->data is: %f, input->data[%lu] is: %f \n", value->data[i], colInd, input->data[colInd]);
+//       // printf("outdata[%lu] is %f\n", rowInd, result[rowInd]);
+//     }
 
-      out->data = result;    
-      out->basePtr = result;
-      out->offset = 0;  
-      out->strides[0] = 1;
+//       out->data = result;    
+//       out->basePtr = result;
+//       out->offset = 0;  
+//       out->strides[0] = 1;
       
-  //     printf("output: (");
-  //   for (uint64_t i = 0; i < size_0; i++) {
-  //     printf("%f ", out->data[i]);
-  //     // out->data[i] = result[i];
-  //   }
-  //   printf(")\n");
-    delete[] result;
-  }
+//   //     printf("output: (");
+//   //   for (uint64_t i = 0; i < size_0; i++) {
+//   //     printf("%f ", out->data[i]);
+//   //     // out->data[i] = result[i];
+//   //   }
+//   //   printf(")\n");
+//     delete[] result;
+//   }
 
-  void delSparlayTensor(void *tensor) {
-    delete static_cast<SparlayStorage *>(tensor);
+#define IMPL_DELSPARLAYTENSOR(VNAME, V) \
+  void delSparlayTensor##VNAME(void *tensor) { \
+    delete static_cast<SparlayStorage<V> *>(tensor); \
   }
+FOREVERY_V(IMPL_DELSPARLAYTENSOR)
+#undef IMPL_DELSPARLAYTENSOR
 
-  uint64_t _mlir_ciface_sparseDimSize(void *tensor, uint64_t d) {
-    return static_cast<SparlayStorage *>(tensor)->getDimSize(d);
+#define IMPL_SPARSEDIMSIZE(VNAME, V) \
+  uint64_t _mlir_ciface_sparseDimSize##VNAME(void *tensor, uint64_t d) { \
+    return static_cast<SparlayStorage<V> *>(tensor)->getDimSize(d); \
   }
+FOREVERY_V(IMPL_SPARSEDIMSIZE)
+#undef IMPL_SPARSEDIMSIZE
 
-  void _mlir_ciface_endInsert(void *tensor) {
-//    std::cout << "Start endInsert " << std::endl;
-    return static_cast<SparlayStorage *>(tensor)->endInsert();
+#define IMPL_ENDINSERT(VNAME, V) \
+  void _mlir_ciface_endInsert##VNAME(void *tensor) { \
+    return static_cast<SparlayStorage<V> *>(tensor)->endInsert(); \
   }
+FOREVERY_V(IMPL_ENDINSERT)
+#undef IMPL_ENDINSERT
 
-  void _mlir_ciface_lexInsert(void *tensor,
-                              StridedMemRefType<uint64_t, 1> *cref, 
-                              StridedMemRefType<float, 0> *vref) {
-//    std::cout << "Start lexInsert " << std::endl;        
-    assert(tensor &&cref &&vref);                                        
-    assert(cref->strides[0] == 1);                               
-    uint64_t *cursor = cref->data + cref->offset;                
-    assert(cursor);                                                       
-    float *value = vref->data + vref->offset;                                    
-    static_cast<SparlayStorage *>(tensor)->lexInsert(cursor, *value);
+#define IMPL_LEXINSERT(VNAME, V) \
+  void _mlir_ciface_lexInsert##VNAME(void *tensor, \
+                              StridedMemRefType<uint64_t, 1> *cref,  \
+                              StridedMemRefType<V, 0> *vref) { \
+    assert(tensor &&cref &&vref);                          \
+    assert(cref->strides[0] == 1);                         \
+    uint64_t *cursor = cref->data + cref->offset;           \
+    assert(cursor);                                      \
+    V *value = vref->data + vref->offset;                 \
+    static_cast<SparlayStorage<V> *>(tensor)->lexInsert(cursor, *value); \
   }
+FOREVERY_V(IMPL_LEXINSERT)
+#undef IMPL_LEXINSERT
 
-  void _mlir_ciface_expInsert(                                          
-        void *tensor, StridedMemRefType<uint64_t, 1> *cref,                   
-        StridedMemRefType<float, 1> *vref, StridedMemRefType<bool, 1> *fref,       
-        StridedMemRefType<uint64_t, 1> *aref, uint64_t count) {  
-//    std::cerr << "Start Expand Insert " << std::endl;           
-    assert(tensor &&cref &&vref &&fref &&aref);                            
-    assert(cref->strides[0] == 1);                                          
-    assert(vref->strides[0] == 1);                                          
-    assert(fref->strides[0] == 1);                                           
-    assert(aref->strides[0] == 1);                                            
-    assert(vref->sizes[0] == fref->sizes[0]);                                 
-    uint64_t *cursor = cref->data + cref->offset;                          
-    float *values = vref->data + vref->offset;                                   
-    bool *filled = fref->data + fref->offset;                                 
-    uint64_t *added = aref->data + aref->offset;
-//    std::cerr << "Enter Expand Insert " << std::endl;                            
-    static_cast<SparlayStorage *>(tensor)->expInsert(               
-        cursor, values, filled, added, count);                          
+#define IMPL_EXPINSERT(VNAME, V) \
+  void _mlir_ciface_expInsert##VNAME(                                         \
+        void *tensor, StridedMemRefType<uint64_t, 1> *cref,                   \
+        StridedMemRefType<V, 1> *vref, StridedMemRefType<bool, 1> *fref,       \
+        StridedMemRefType<uint64_t, 1> *aref, uint64_t count) {           \
+    assert(tensor &&cref &&vref &&fref &&aref);                            \
+    assert(cref->strides[0] == 1);                                          \
+    assert(vref->strides[0] == 1);                                          \
+    assert(fref->strides[0] == 1);                                           \
+    assert(aref->strides[0] == 1);                                            \
+    assert(vref->sizes[0] == fref->sizes[0]);                                 \
+    uint64_t *cursor = cref->data + cref->offset;                          \
+    V *values = vref->data + vref->offset;                                   \
+    bool *filled = fref->data + fref->offset;                                 \
+    uint64_t *added = aref->data + aref->offset;                              \
+    static_cast<SparlayStorage<V> *>(tensor)->expInsert(                      \
+        cursor, values, filled, added, count);                                \
   }
+FOREVERY_V(IMPL_EXPINSERT)
+#undef IMPL_EXPINSERT
 
-  void* _mlir_ciface_newSparlayTensor(StridedMemRefType<SparlayDimLevelType, 1> *aref,
-                               StridedMemRefType<uint64_t, 1> *sref,
-                               StridedMemRefType<uint64_t, 1> *pref, void *ptr ) {
-
-    std::cout << "Start newSparlayTensor " << std::endl;
-    assert(aref && sref && pref);
-    assert(aref->strides[0] == 1 && sref->strides[0] == 1 && pref->strides[0] == 1);
-    assert(aref->sizes[0] == sref->sizes[0] && sref->sizes[0] == pref->sizes[0]);
-    const SparlayDimLevelType *sparsity = aref->data + aref->offset;
-    uint64_t *shape = sref->data + sref->offset;
-    uint64_t *perm = pref->data + pref->offset;
-    uint64_t rank = aref->sizes[0];
-    std::vector<uint64_t> vshape;
-//    std::cerr << "sref->offset " << sref->offset << std::endl;
-//    std::cerr << *shape << std::endl;
-//    std::cerr << *(shape+1) << std::endl;
-//    std::cerr << *(shape+2) << std::endl;
-    for(uint64_t i = 0; i < rank; ++i) {
-      vshape.push_back(shape[i]);
-    }
-//    std::cout << "Create SparlayStorage " << std::endl;
-    auto *tensor = new SparlayStorage(vshape, perm, sparsity);
-    return tensor;
+#define IMPL_NEWSPARLAYTENSOR(VNAME, V) \
+  void* _mlir_ciface_newSparlayTensor##VNAME(StridedMemRefType<SparlayDimLevelType, 1> *aref, \
+                               StridedMemRefType<uint64_t, 1> *sref,                   \
+                               StridedMemRefType<uint64_t, 1> *pref, void *ptr ) {     \
+                                                                                       \
+    std::cout << "Start newSparlayTensor " << std::endl;                               \
+    assert(aref && sref && pref);                                                      \
+    assert(aref->strides[0] == 1 && sref->strides[0] == 1 && pref->strides[0] == 1);   \
+    assert(aref->sizes[0] == sref->sizes[0] && sref->sizes[0] == pref->sizes[0]);      \
+    const SparlayDimLevelType *sparsity = aref->data + aref->offset;                   \
+    uint64_t *shape = sref->data + sref->offset;                                       \
+    uint64_t *perm = pref->data + pref->offset;                                        \
+    uint64_t rank = aref->sizes[0];                                                    \
+    std::vector<uint64_t> vshape;                                                      \
+    for(uint64_t i = 0; i < rank; ++i) {                                               \
+      vshape.push_back(shape[i]);                                                      \
+    }                                                                                  \
+    auto *tensor = new SparlayStorage<V>(vshape, perm, sparsity);                      \
+    return tensor;                                                                     \
   }
+FOREVERY_V(IMPL_NEWSPARLAYTENSOR)
+#undef IMPL_NEWSPARLAYTENSOR
 
     // void _mlir_ciface_release(void *ptr) {
     //     delete []ptr;
     // }
 
-    // void delSparseCoordinate(void *tensor) {
-    //     delete static_cast<SparseCoordinate<uint64_t, double> *>(tensor);
-    // }
+    void delSparseCoordinate(void *tensor) {
+        delete static_cast<SparseCoordinate<uint64_t, double> *>(tensor);
+    }
 
 }
 

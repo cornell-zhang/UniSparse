@@ -1,0 +1,219 @@
+2cubes_sphere_row_major.mtx
+Start newSparlayTensor 
+1.55387
+0.479401
+( 1.43199e+11, -3.24122e+10, -4.79614e+08, -5.06961e+10, -5.80159e+08, 1.08524e+10, 1.27614e+09, -2.92578e+08 )
+8974526
+Start newSparlayTensor 
+Start newSparlayTensor 
+Start newSparlayTensor 
+1.54195
+0.483354
+( 1.43199e+11, -3.24122e+10, -4.79614e+08, -5.06961e+10, -5.80159e+08, 1.08524e+10, 1.27614e+09, -2.92578e+08 )
+8974526
+filter3D_row_major.mtx
+Start newSparlayTensor 
+2.50235
+0.951973
+( 1.23495e-06, -7.85074e-10, -1.37631e-09, 1.7742e-09, 1.89111e-08, 3.31264e-09, -1.83947e-10, -9.36606e-08 )
+20161619
+Start newSparlayTensor 
+Start newSparlayTensor 
+Start newSparlayTensor 
+2.59633
+0.959929
+( 1.23495e-06, -7.85074e-10, -1.37631e-09, 1.7742e-09, 1.89111e-08, 3.31264e-09, -1.83947e-10, -9.36606e-08 )
+20161619
+ca-CondMat_row_major.mtx
+Start newSparlayTensor 
+0.163112
+0.124218
+( 3, 2, 1, 3, 2, 1, 3, 1 )
+2355437
+Start newSparlayTensor 
+0.146227
+51.2944
+( 3, 0, 0, 0, 0, 0, 0, 0 )
+535135689
+Start newSparlayTensor 
+0.166592
+51.0181
+( 3, 0, 0, 0, 0, 0, 0, 0 )
+535135689
+Start newSparlayTensor 
+0.186054
+0.125467
+( 3, 2, 1, 3, 2, 1, 3, 1 )
+2355437
+wiki-Vote_row_major.mtx
+Start newSparlayTensor 
+0.100356
+0.098561
+( 3, 2, 2, 1, 1, 1, 3, 3 )
+1831112
+Start newSparlayTensor 
+0.078275
+5.14105
+( 0, 0, 0, 0, 0, 0, 0, 0 )
+68840209
+Start newSparlayTensor 
+0.099864
+5.18984
+( 0, 0, 0, 0, 0, 0, 0, 0 )
+68840209
+Start newSparlayTensor 
+0.101618
+0.09482
+( 3, 2, 4, 10, 4, 8, 5, 5 )
+1831112
+poisson3Da_row_major.mtx
+Start newSparlayTensor 
+0.326132
+0.156703
+( 0.095804, 7.58133e-07, -0.00296816, -0.000600351, -1.20643e-05, -0.00287486, -9.37965e-06, 0.000330505 )
+2957530
+Start newSparlayTensor 
+0.305206
+49.2784
+( 0.095804, 0, 0, 0, 0, 0, 0, 7.58133e-07 )
+182628196
+Start newSparlayTensor 
+0.32595
+49.0948
+( 0.095804, 0, 0, 0, 0, 0, 0, 3.57337e-07 )
+182628196
+Start newSparlayTensor 
+0.335996
+0.157233
+( 0.095804, 3.57337e-07, -0.00142303, -0.000321354, -6.64109e-06, -0.0013318, -3.86235e-06, 0.000105652 )
+2957530
+CollegeMsg_row_major.mtx
+Start newSparlayTensor 
+0.0193739
+0.024534
+( 3400, 224, 259, 32, 60, 1, 12, 39 )
+407071
+Start newSparlayTensor 
+0.0147159
+0.341449
+( 3400, 224, 259, 32, 0, 60, 1, 12 )
+3606201
+Start newSparlayTensor 
+0.00988603
+0.347141
+( 3400, 0, 291, 0, 0, 6, 0, 8 )
+3606201
+Start newSparlayTensor 
+0.0165679
+0.023885
+( 3400, 291, 6, 8, 70, 182, 3, 4 )
+407071
+email-Eu-core_row_major.mtx
+Start newSparlayTensor 
+0.0291739
+0.0228181
+( 30, 16, 5, 3, 3, 9, 5, 3 )
+331509
+Start newSparlayTensor 
+0.028733
+0.271415
+( 30, 16, 5, 3, 3, 9, 5, 3 )
+1048576
+Start newSparlayTensor 
+0.0275791
+0.257267
+( 30, 0, 4, 1, 3, 10, 5, 3 )
+1048576
+Start newSparlayTensor 
+0.0242631
+0.017343
+( 30, 4, 1, 3, 10, 5, 3, 1 )
+331509
+web-Google_row_major.mtx
+Start newSparlayTensor 
+3.89813
+1.97481
+( 4, 2, 1, 1, 1, 1, 1, 1 )
+29710164
+Start newSparlayTensor 
+4.43185
+1.9802
+( 4, 1, 1, 3, 1, 1, 1, 1 )
+29710164
+mario002_row_major.mtx
+Start newSparlayTensor 
+1.815
+0.245097
+( 1, 0, 0, 0, 0, 0, 0, 0 )
+6449598
+Start newSparlayTensor 
+1.88296
+0.253759
+( 1, 0, 0, 0, 0, 0, 0, 0 )
+6449598
+amazon0312_row_major.mtx
+Start newSparlayTensor 
+2.38821
+0.750425
+( 2, 1, 1, 1, 1, 1, 2, 1 )
+14390544
+Start newSparlayTensor 
+2.56253
+0.77477
+( 2, 1, 1, 1, 1, 3, 1, 1 )
+14390544
+m133-b3_row_major.mtx
+Start newSparlayTensor 
+0.454578
+0.097126
+( -1, 1, -1, 1, -1, -1, 1, -1 )
+3182751
+Start newSparlayTensor 
+0.474252
+0.102956
+( -1, -1, -1, -1, -1, -1, -1, -1 )
+3182751
+scircuit_row_major.mtx
+Start newSparlayTensor 
+0.901772
+0.214153
+( 1.10768, -1.04, 3.58834e-10, 1.13912e-09, 2.19434e-06, 1.15484e-11, 2.45471e-12, 1.13276e-06 )
+5222525
+Start newSparlayTensor 
+0.920807
+0.213406
+( 1.10768, 3.58834e-10, 1.13912e-09, 2.19434e-06, 1.15484e-11, 2.45471e-12, 1.13276e-06, 5.28198e-07 )
+5222525
+p2p-Gnutella31_row_major.mtx
+Start newSparlayTensor 
+0.137575
+0.0252352
+( 1, 1, 1, 1, 1, 1, 1, 1 )
+537601
+Start newSparlayTensor 
+0.119878
+0.021853
+( 1, 1, 1, 1, 1, 1, 1, 1 )
+537601
+offshore_row_major.mtx
+Start newSparlayTensor 
+3.79964
+1.25113
+( 2.35321e+11, 7.52711e+09, -4.91179e+10, -4.8521e+10, 6.15253e+09, 4.47202e+09, 5.51776e+10, 1.27013e+10 )
+23356245
+Start newSparlayTensor 
+4.01897
+1.24225
+( 2.35321e+11, 7.52711e+09, -4.91179e+10, -4.8521e+10, 6.15253e+09, 4.47202e+09, 5.51776e+10, 1.27013e+10 )
+23356245
+cage12_row_major.mtx
+Start newSparlayTensor 
+1.70074
+0.584233
+( 0.843716, 0.0836219, 0.00343773, 0.0690869, 0.081903, 0.00209943, 0.00343773, 0.00343773 )
+15231874
+Start newSparlayTensor 
+1.73746
+0.599693
+( 0.843716, 0.0456425, 0.00152788, 0.0562553, 0.0223522, 0.000312731, 0.00076394, 0.00076394 )
+15231874

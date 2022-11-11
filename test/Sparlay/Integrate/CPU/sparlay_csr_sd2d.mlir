@@ -35,53 +35,53 @@ indexing_maps = [
 module {
   func.func private @getTensorFilename(index) -> (!Filename)
 
-  func.func @csr_sparse_dense_add(%arg0: tensor<?x?xf32, #CSR>, %arg1: tensor<?x?xf32>, %argx: tensor<?x?xf32>) -> tensor<?x?xf32> {
+  func.func @csr_sparse_dense_add(%arg0: tensor<?x?xf64, #CSR>, %arg1: tensor<?x?xf64>, %argx: tensor<?x?xf64>) -> tensor<?x?xf64> {
     %0 = linalg.generic #trait1
-    ins(%arg0, %arg1 : tensor<?x?xf32, #CSR>, tensor<?x?xf32>)
-    outs(%argx: tensor<?x?xf32>) {
-    ^bb0(%a: f32, %b: f32, %x: f32):
-      %0 = arith.addf %a, %b : f32
-      linalg.yield %0 : f32
-    } -> tensor<?x?xf32>
-    return %0 : tensor<?x?xf32>
+    ins(%arg0, %arg1 : tensor<?x?xf64, #CSR>, tensor<?x?xf64>)
+    outs(%argx: tensor<?x?xf64>) {
+    ^bb0(%a: f64, %b: f64, %x: f64):
+      %0 = arith.addf %a, %b : f64
+      linalg.yield %0 : f64
+    } -> tensor<?x?xf64>
+    return %0 : tensor<?x?xf64>
   }
 
   //CHECK-LABEL: func.func @main
   func.func @main() {
-    %i0 = arith.constant 0.0 : f32
+    %i0 = arith.constant 0.0 : f64
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %c256 = arith.constant 259789 : index
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
-    %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-    %A_ori = sparlay.copy (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
-    %a0 = sparlay.convert (%A_ori): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
+    %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf64, #COO>
+    %A_ori = sparlay.copy (%A_1): tensor<?x?xf64, #COO> to tensor<?x?xf64, #COO>
+    %a0 = sparlay.convert (%A_ori): tensor<?x?xf64, #COO> to tensor<?x?xf64, #CSR>
 
     // Initialize dense matrix.
-    %init_4_256 = bufferization.alloc_tensor(%c256, %c256) : tensor<?x?xf32>
-    %b = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %init_4_256) -> tensor<?x?xf32> {
-      %b2 = scf.for %j = %c0 to %c256 step %c1 iter_args(%t2 = %t) -> tensor<?x?xf32> {
+    %init_4_256 = bufferization.alloc_tensor(%c256, %c256) : tensor<?x?xf64>
+    %b = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %init_4_256) -> tensor<?x?xf64> {
+      %b2 = scf.for %j = %c0 to %c256 step %c1 iter_args(%t2 = %t) -> tensor<?x?xf64> {
         %k0 = arith.muli %i, %c1 : index
         %k1 = arith.addi %j, %k0 : index
         %k2 = arith.index_cast %k1 : index to i32
-        %k = arith.sitofp %k2 : i32 to f32
-        %t3 = tensor.insert %k into %t2[%i, %j] : tensor<?x?xf32>
-        scf.yield %t3 : tensor<?x?xf32>
+        %k = arith.sitofp %k2 : i32 to f64
+        %t3 = tensor.insert %k into %t2[%i, %j] : tensor<?x?xf64>
+        scf.yield %t3 : tensor<?x?xf64>
       }
-      scf.yield %b2 : tensor<?x?xf32>
+      scf.yield %b2 : tensor<?x?xf64>
     }
 
-    %o0 = bufferization.alloc_tensor(%c256, %c256) : tensor<?x?xf32>
+    %o0 = bufferization.alloc_tensor(%c256, %c256) : tensor<?x?xf64>
 
-    %0 = call @csr_sparse_dense_add(%a0, %b, %o0) : (tensor<?x?xf32, #CSR>, tensor<?x?xf32>, tensor<?x?xf32>) -> tensor<?x?xf32>
-    %v0 = vector.transfer_read %0[%c0, %c0], %i0: tensor<?x?xf32>, vector<4x4xf32>
-    vector.print %v0 : vector<4x4xf32>
+    %0 = call @csr_sparse_dense_add(%a0, %b, %o0) : (tensor<?x?xf64, #CSR>, tensor<?x?xf64>, tensor<?x?xf64>) -> tensor<?x?xf64>
+    %v0 = vector.transfer_read %0[%c0, %c0], %i0: tensor<?x?xf64>, vector<4x4xf64>
+    vector.print %v0 : vector<4x4xf64>
 
     //Release the resources 
-    bufferization.dealloc_tensor %A_1 : tensor<?x?xf32, #COO>
-//    bufferization.dealloc_tensor %init_4_256 : tensor<?x?xf32>
-//    bufferization.dealloc_tensor %o0 : tensor<?x?xf32>
+    bufferization.dealloc_tensor %A_1 : tensor<?x?xf64, #COO>
+//    bufferization.dealloc_tensor %init_4_256 : tensor<?x?xf64>
+//    bufferization.dealloc_tensor %o0 : tensor<?x?xf64>
     
     return
   }

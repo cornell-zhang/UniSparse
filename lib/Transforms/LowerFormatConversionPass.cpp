@@ -94,7 +94,7 @@ static Value genSparlayDimSizeCall(OpBuilder &builder, Operation *op,
   if (AffineMap p = enc.getCrdMap())
     idx = p.getPermutedPosition(idx);
   // Generate the call.
-  StringRef name = "sparseDimSize";
+  StringRef name = "sparseDimSizeF64";
   SmallVector<Value, 2> params{src, sparse_tensor::constantIndex(builder, op->getLoc(), idx)};
   Type iTp = builder.getIndexType();
   return createFuncCall(builder, op, name, iTp, params, true).getResult(0);
@@ -208,7 +208,7 @@ static void SparlaynewParams(OpBuilder &builder, SmallVector<Value, 8> &params, 
 
 static Value genSparlayNewCall(OpBuilder &builder, Operation *op,
                         ArrayRef<Value> params) {
-  StringRef name = "newSparlayTensor";
+  StringRef name = "newSparlayTensorF64";
   Type pTp = LLVM::LLVMPointerType::get(builder.getI8Type());
   return createFuncCall(builder, op, name, pTp, params, true).getResult(0);
 }
@@ -300,7 +300,7 @@ public:
 
         func::CallOp readOp;
 
-        StringRef funcName =  "sptFromFile";
+        StringRef funcName =  "sptFromFileF64";
 
         SmallVector<Value, 1> readParams;
         readParams.push_back(fileName);
@@ -518,19 +518,19 @@ public:
         auto srcFuse = srcSecond.getFuseIndex();
         auto dstFuse = dstSecond.getFuseIndex();
 
-        StringRef fuseName = "sptFuse";
-        StringRef separateName = "sptSeparate";
-        StringRef trimName = "sptTrim";
-        StringRef growName = "sptGrow";
-        StringRef swapName = "sptSwap";
-        StringRef subName = "sptSub";
-        StringRef addName = "sptAdd";
-        StringRef negName = "sptNeg";
-        StringRef vectorizeName = "sptVectorize";
-        StringRef devectorizeName = "sptDevectorize";
-        StringRef tileMergeName = "sptTileMerge";
-        StringRef tileSplitName = "sptTileSplit";
-        StringRef moveName = "sptMove"; //partial sort
+        StringRef fuseName = "sptFuseF64";
+        StringRef separateName = "sptSeparateF64";
+        StringRef trimName = "sptTrimF64";
+        StringRef growName = "sptGrowF64";
+        StringRef swapName = "sptSwapF64";
+        StringRef subName = "sptSubF64";
+        StringRef addName = "sptAddF64";
+        StringRef negName = "sptNegF64";
+        StringRef vectorizeName = "sptVectorizeF64";
+        StringRef devectorizeName = "sptDevectorizeF64";
+        StringRef tileMergeName = "sptTileMergeF64";
+        StringRef tileSplitName = "sptTileSplitF64";
+        StringRef moveName = "sptMoveF64"; //partial sort
         // StringRef lazySortName = "sptLazySort";
 
         Type prevType = srcType;
@@ -820,7 +820,7 @@ class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageO
         Value candValue = adaptor.getOperands()[0];
         func::CallOp printOp;
 
-        StringRef funcName = "sptPrint";
+        StringRef funcName = "sptPrintF64";
 
         SmallVector<Value, 1> printParams;
         printParams.push_back(candValue);
@@ -839,7 +839,7 @@ class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue = adaptor.getOperands()[0];
         func::CallOp copyOp;
-        StringRef funcName = "sptCopy";
+        StringRef funcName = "sptCopyF64";
         SmallVector<Value, 1> params;
         params.push_back(candValue);
         rewriter.replaceOpWithNewOp<func::CallOp>(op, candValue.getType(), 
@@ -857,7 +857,7 @@ class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
         Value candValue1 = adaptor.getOperands()[0];
         Value candValue2 = adaptor.getOperands()[1];
         func::CallOp checkOp;
-        StringRef funcName = "sptCheck";
+        StringRef funcName = "sptCheckF64";
         SmallVector<Value, 2> params = {candValue1, candValue2};
         rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
@@ -1013,7 +1013,7 @@ public:
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getPtr", outputType, params, true),
+        getFunc(op, "getPtrF64", outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1034,7 +1034,7 @@ public:
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getCrd", outputType, params, true),
+        getFunc(op, "getCrdF64", outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1055,7 +1055,7 @@ public:
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getValue", outputType, params, true),
+        getFunc(op, "getValueF64", outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1076,7 +1076,7 @@ public:
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getSize", outputType, params, true),
+        getFunc(op, "getSizeF64", outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1166,7 +1166,7 @@ public:
     if (!enc) {
       return failure();
     }
-    StringRef name = "delSparlayTensor";
+    StringRef name = "delSparlayTensorF64";
     rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
     return success();
@@ -1200,7 +1200,7 @@ public:
 //    std::cerr << "Enter the lowering LoadOp " << std::endl;
     if (op.hasInserts()) {
       // Finalize any pending insertions.
-      StringRef name = "endInsert";
+      StringRef name = "endInsertF64";
       TypeRange noTp;
       createFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
     }
@@ -1218,7 +1218,7 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
 //    std::cerr << "Enter the lowering InsertOp " << std::endl;
 //    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
-    StringRef name = "lexInsert";
+    StringRef name = "lexInsertF64";
     TypeRange noTp;
     replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
     return success();
@@ -1281,7 +1281,7 @@ public:
     // access pattern.
 //    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
 //    std::cerr << "Enter the lowering CompressOp " << std::endl;
-    StringRef name = "expInsert";
+    StringRef name = "expInsertF64";
     TypeRange noTp;
     replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
     // Deallocate the buffers on exit of the loop nest.

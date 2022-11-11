@@ -36,21 +36,21 @@ module {
   func.func private @rtclock() -> f64
   func.func private @getTensorFilename(index) -> (!Filename)
 
-  func.func @kernel_csc_spmm(%arg0: tensor<?x?xf32, #CSC>, %arg1: tensor<?x?xf32>, %argx: tensor<?x?xf32>) -> tensor<?x?xf32> {
+  func.func @kernel_csc_spmm(%arg0: tensor<?x?xf64, #CSC>, %arg1: tensor<?x?xf64>, %argx: tensor<?x?xf64>) -> tensor<?x?xf64> {
     %0 = linalg.generic #trait1
-    ins(%arg0, %arg1 : tensor<?x?xf32, #CSC>, tensor<?x?xf32>)
-    outs(%argx: tensor<?x?xf32>) {
-    ^bb0(%a: f32, %b: f32, %x: f32):
-      %2 = arith.mulf %a, %b : f32
-      %3 = arith.addf %x, %2 : f32
-      linalg.yield %3 : f32
-    } -> tensor<?x?xf32>
-    return %0 : tensor<?x?xf32>
+    ins(%arg0, %arg1 : tensor<?x?xf64, #CSC>, tensor<?x?xf64>)
+    outs(%argx: tensor<?x?xf64>) {
+    ^bb0(%a: f64, %b: f64, %x: f64):
+      %2 = arith.mulf %a, %b : f64
+      %3 = arith.addf %x, %2 : f64
+      linalg.yield %3 : f64
+    } -> tensor<?x?xf64>
+    return %0 : tensor<?x?xf64>
   }
 
   //CHECK-LABEL: func.func @main
   func.func @main() {
-    %i0 = arith.constant 0.0 : f32
+    %i0 = arith.constant 0.0 : f64
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %c4 = arith.constant 1000 : index
@@ -58,48 +58,48 @@ module {
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %t_start1 = call @rtclock() : () -> f64
-    %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-    %c256 = tensor.dim %A_1, %c1 : tensor<?x?xf32, #COO>
-    %a1 = sparlay.convert (%A_1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSC>
+    %A_1 = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf64, #COO>
+    %c256 = tensor.dim %A_1, %c1 : tensor<?x?xf64, #COO>
+    %a1 = sparlay.convert (%A_1): tensor<?x?xf64, #COO> to tensor<?x?xf64, #CSC>
     %t_end1 = call @rtclock() : () -> f64
     %t_1 = arith.subf %t_end1, %t_start1: f64
     vector.print %t_1 : f64
 
     // Initialize dense matrix.
-    %init_256_4 = bufferization.alloc_tensor(%c256, %c4) : tensor<?x?xf32>
-    %b = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %init_256_4) -> tensor<?x?xf32> {
-      %b2 = scf.for %j = %c0 to %c4 step %c1 iter_args(%t2 = %t) -> tensor<?x?xf32> {
+    %init_256_4 = bufferization.alloc_tensor(%c256, %c4) : tensor<?x?xf64>
+    %b = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %init_256_4) -> tensor<?x?xf64> {
+      %b2 = scf.for %j = %c0 to %c4 step %c1 iter_args(%t2 = %t) -> tensor<?x?xf64> {
         %k0 = arith.muli %i, %c4 : index
         %k1 = arith.addi %j, %k0 : index
         %k2 = arith.index_cast %k1 : index to i32
-        %k = arith.sitofp %k2 : i32 to f32
-        %t3 = tensor.insert %k into %t2[%i, %j] : tensor<?x?xf32>
-        scf.yield %t3 : tensor<?x?xf32>
+        %k = arith.sitofp %k2 : i32 to f64
+        %t3 = tensor.insert %k into %t2[%i, %j] : tensor<?x?xf64>
+        scf.yield %t3 : tensor<?x?xf64>
       }
-      scf.yield %b2 : tensor<?x?xf32>
+      scf.yield %b2 : tensor<?x?xf64>
     }
 
-    %o1_4_4 = bufferization.alloc_tensor(%c256, %c4) : tensor<?x?xf32>
-    %o1 = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %o1_4_4) -> tensor<?x?xf32> {
-      %x2 = scf.for %j = %c0 to %c4 step %c1 iter_args(%t2 = %t) -> tensor<?x?xf32> {
-        %t3 = tensor.insert %i0 into %t2[%i, %j] : tensor<?x?xf32>
-        scf.yield %t3 : tensor<?x?xf32>
+    %o1_4_4 = bufferization.alloc_tensor(%c256, %c4) : tensor<?x?xf64>
+    %o1 = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %o1_4_4) -> tensor<?x?xf64> {
+      %x2 = scf.for %j = %c0 to %c4 step %c1 iter_args(%t2 = %t) -> tensor<?x?xf64> {
+        %t3 = tensor.insert %i0 into %t2[%i, %j] : tensor<?x?xf64>
+        scf.yield %t3 : tensor<?x?xf64>
       }
-      scf.yield %x2 : tensor<?x?xf32>
+      scf.yield %x2 : tensor<?x?xf64>
     }
 
     %t_start5 = call @rtclock() : () -> f64
-    %1 = call @kernel_csc_spmm(%a1, %b, %o1) : (tensor<?x?xf32, #CSC>, tensor<?x?xf32>, tensor<?x?xf32>) -> tensor<?x?xf32>
+    %1 = call @kernel_csc_spmm(%a1, %b, %o1) : (tensor<?x?xf64, #CSC>, tensor<?x?xf64>, tensor<?x?xf64>) -> tensor<?x?xf64>
     %t_end5 = call @rtclock() : () -> f64
     %t_5 = arith.subf %t_end5, %t_start5: f64
     vector.print %t_5 : f64
-    %v1 = vector.transfer_read %1[%c0, %c0], %i0: tensor<?x?xf32>, vector<4x4xf32>
-    vector.print %v1 : vector<4x4xf32>
+    %v1 = vector.transfer_read %1[%c0, %c0], %i0: tensor<?x?xf64>, vector<4x4xf64>
+    vector.print %v1 : vector<4x4xf64>
 
     //Release the resources 
-    bufferization.dealloc_tensor %A_1 : tensor<?x?xf32, #COO>
-//    bufferization.dealloc_tensor %init_256_4 : tensor<?x?xf32>
-//    bufferization.dealloc_tensor %o1_4_4 : tensor<?x?xf32>
+    bufferization.dealloc_tensor %A_1 : tensor<?x?xf64, #COO>
+//    bufferization.dealloc_tensor %init_256_4 : tensor<?x?xf64>
+//    bufferization.dealloc_tensor %o1_4_4 : tensor<?x?xf64>
     return
   }
 }
