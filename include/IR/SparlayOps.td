@@ -375,4 +375,126 @@ def Sparlay_LoadOp : Sparlay_Op<"load", [SameOperandsAndResultType]>,
   let assemblyFormat = "$tensor (`hasInserts` $hasInserts^)? attr-dict `:` type($tensor)";
 }
 
+//===----------------------------------------------------------------------===//
+// Temporary Compute Operators
+//===----------------------------------------------------------------------===//
+def Sparlay_DiaSpmmOp : Sparlay_Op<"dia_spmm", []>,
+    Arguments<(ins AnyTensor:$inA,
+                   AnyStridedMemRefOfRank<2>:$inB,
+                   AnyStridedMemRefOfRank<2>:$inC)>,
+    Results<(outs AnyStridedMemRefOfRank<2>:$outC)> {
+  string summary = "Compressed an access pattern for insertion";
+  string description = [{
+    Finishes a single access pattern expansion by moving inserted elements
+    into the sparse storage scheme. The values and filled array are reset
+    in a *sparse* fashion by only iterating over set elements through an
+    indirection using the added array, so that the operations are kept
+    proportional to the number of nonzeros. See the 'expand' operation
+    for more details.
+
+    Note that this operation is "impure" in the sense that its behavior
+    is solely defined by side-effects and not SSA values. The semantics
+    may be refined over time as our sparse abstractions evolve.
+
+    Example:
+
+    ```mlir
+    sparlay.compress %0, %1, %values, %filled, %added, %2
+        : tensor<4x4xf64, #CSR>, memref<?xindex>, memref<?xf64>,
+	  memref<?xi1>, memref<?xindex>, index
+    ```
+  }];
+  let assemblyFormat = "`(` $inA `,` $inB `,` $inC  `)` attr-dict `:` type($inA) `,`"
+			" type($inB) `,` type($inC) `to` type($outC) ";
+}
+
+def Sparlay_DiaSpmvOp : Sparlay_Op<"dia_spmv", []>,
+    Arguments<(ins AnyTensor:$inA,
+                   AnyStridedMemRefOfRank<1>:$inB,
+                   AnyStridedMemRefOfRank<1>:$inC)>,
+    Results<(outs AnyStridedMemRefOfRank<1>:$outC)> {
+  string summary = "Compressed an access pattern for insertion";
+  string description = [{
+    Finishes a single access pattern expansion by moving inserted elements
+    into the sparse storage scheme. The values and filled array are reset
+    in a *sparse* fashion by only iterating over set elements through an
+    indirection using the added array, so that the operations are kept
+    proportional to the number of nonzeros. See the 'expand' operation
+    for more details.
+
+    Note that this operation is "impure" in the sense that its behavior
+    is solely defined by side-effects and not SSA values. The semantics
+    may be refined over time as our sparse abstractions evolve.
+
+    Example:
+
+    ```mlir
+    sparlay.compress %0, %1, %values, %filled, %added, %2
+        : tensor<4x4xf64, #CSR>, memref<?xindex>, memref<?xf64>,
+	  memref<?xi1>, memref<?xindex>, index
+    ```
+  }];
+  let assemblyFormat = "`(` $inA `,` $inB `,` $inC  `)` attr-dict `:` type($inA) `,`"
+			" type($inB) `,` type($inC) `to` type($outC) ";
+}
+
+def Sparlay_COOSpMVOp: Sparlay_Op<"coo_spmv", [NoSideEffect]> {
+    let summary = "A COO SpMV runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmv %tensor, %vector : <?x?xf32, #COO>, memref<?xf32> to memref<?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor, AnyStridedMemRefOfRank<1>: $vector, AnyStridedMemRefOfRank<1>: $out_vec);
+    let results = (outs AnyStridedMemRefOfRank<1>: $result);
+    let assemblyFormat = [{
+        $tensor `,` $vector `,` $out_vec attr-dict `:` type($tensor) `,` type($vector) `,` type($out_vec) `to` type($result)
+    }];
+}
+
+def Sparlay_COOSpMMOp: Sparlay_Op<"coo_spmm", [NoSideEffect]> {
+    let summary = "A COO SpMM runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor, AnyStridedMemRefOfRank<2>: $matrix, AnyStridedMemRefOfRank<2>: $out_mat);
+    let results = (outs AnyStridedMemRefOfRank<2>: $result);
+    let assemblyFormat = [{
+        $tensor `,` $matrix `,` $out_mat attr-dict `:` type($tensor) `,` type($matrix) `,` type($out_mat) `to` type($result)
+    }];
+}
+
+def Sparlay_DecomposeBDIAOp: Sparlay_Op<"decompose_BDIA", [NoSideEffect]> {
+    let summary = "A COO SpMM runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor, AnyType: $blockSize, AnyType: $thres);
+    let results = (outs Sparlay_StructType: $output);
+    let assemblyFormat = [{
+        $tensor `,` $blockSize `,` $thres  attr-dict `:` type($tensor) `,` type($blockSize) `,` type($thres) `to` type($output)
+    }];
+}
+
+def Sparlay_BDIASpMVOp: Sparlay_Op<"bdia_spmv", [NoSideEffect]> {
+    let summary = "A COO SpMM runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor_CSR, AnyTensor: $tensor_BDIA, AnyTensor: $vector, AnyTensor: $out_vec);
+    let results = (outs AnyStridedMemRefOfRank<1>: $result);
+    let assemblyFormat = [{
+        $tensor_CSR `,` $tensor_BDIA `,` $vector `,` $out_vec attr-dict `:` type($tensor_CSR) `,` type($tensor_BDIA) `,` type($vector) `,` type($out_vec) `to` type($result)
+    }];
+}
+
+def Sparlay_ReleaseOp: Sparlay_Op<"release"> {
+    let summary = "A COO SpMM runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+    }];
+    let arguments = (ins AnyType: $tensor);
+    let assemblyFormat = [{
+        $tensor attr-dict `:` type($tensor)
+    }];
+}
+
 #endif // SPARLAY_OPS
