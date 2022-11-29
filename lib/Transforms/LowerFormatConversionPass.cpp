@@ -751,6 +751,8 @@ public:
         }
         if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
             need_move[dstCrd.getNumResults()-1] = 0;
+            //only applicable for DIA now
+            need_move[dstCrd.getNumResults()-2] = 0;
         }
         for (auto ele: dstFuse) {
             if (!fuse_vis[ele]) {

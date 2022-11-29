@@ -734,7 +734,7 @@ bool SparlayStorage<V>::moveLv(const int srcLv, const int dstLv) {
   }
   this->moveStorage(srcLv, dstLv);
 
-  std::cerr << (TI-tic) << std::endl;
+  std::cerr <<"Move sub1 = " << (TI-tic) << std::endl;
 
   static std::vector< std::vector<int> > new_crd;
   static std::vector< std::vector<bool> > new_same_path;
@@ -769,7 +769,7 @@ bool SparlayStorage<V>::moveLv(const int srcLv, const int dstLv) {
     vLevel[i]->crd = std::move(new_crd[curLv]);
     vLevel[i]->same_path = std::move(new_same_path[curLv]);
   }
-  std::cerr << "dsfjlk " << (TI-tic) << std::endl;
+  std::cerr << "Move sub2 = " << (TI-tic) << std::endl;
   this->applyPerm(perm);
   return 1;
 }
@@ -1169,6 +1169,8 @@ bool SparlayStorage<V>::vectorize(const int lv) {
   int cur_lv_size = vLevel[lv]->size;
   std::cerr << "Cur Level Size: " << cur_lv_size << std::endl;
   if (father_ptr.size()) {
+    std::cerr << "Not supported yet." << std::endl;
+    assert(0);
     int prev_ptr = 0;
     assert(valueArray.size() == vLevel[lv]->crd.size());
     static victor<V> new_value;
@@ -1193,20 +1195,31 @@ bool SparlayStorage<V>::vectorize(const int lv) {
     static std::vector<int> new_crd;
     static std::vector<bool> new_same_path;
     static victor<int> r_father_crd;
+    static victor<bool> vis;
     r_father_crd.clear();
     new_crd.clear();
     new_same_path.clear();
+    new_crd.reserve(vLevel[lv-1]->size);
+    new_same_path.reserve(vLevel[lv-1]->size);
     r_father_crd.resize0(vLevel[lv-1]->size);
-    new_crd.push_back(father_crd[0]);
-    new_same_path.push_back(0);
-    int mn_crd = father_crd[0];
-    for (size_t i = 1; i < father_crd.size(); ++i) {
-      if (father_crd[i] == father_crd[i-1]) continue; //seems like conditional continue if fast
-      new_crd.push_back(father_crd[i]);
-      new_same_path.push_back(0);
-      r_father_crd[father_crd[i]-mn_crd] = new_crd.size()-1;
-    } 
+    vis.resize0(vLevel[lv-1]->size);
+    int mn_crd = 2147483633;
+    for (size_t i = 0; i < father_crd.size(); ++i) {
+      mn_crd = (mn_crd > father_crd[i] ? father_crd[i] : mn_crd);
+    }
+    std::cerr << "mn_crd = " << mn_crd << std::endl;
+    for (size_t i = 0; i < father_crd.size(); ++i) {
+      vis[father_crd[i] - mn_crd] = 1;
+    }
+    for (size_t i = 0; i < vLevel[lv-1]->size; ++i) {
+      if (vis[i]) {
+        new_crd.push_back(i+mn_crd);
+        r_father_crd[i] = new_crd.size()-1;
+        new_same_path.push_back(0);
+      }
+    }
     size_t capacity = new_crd.size() * (size_t)cur_lv_size;
+    std::cerr << "Capacity = " << capacity << std::endl;
     static victor<V> new_value;
     new_value.resize0(capacity);
     int cur_idx = 0;
