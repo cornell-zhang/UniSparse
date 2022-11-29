@@ -7,8 +7,8 @@
 #MKL_INCLUDE_DIR=/work/shared/common/CAD_tool/Intel/mkl/mkl/include
 #MKL_LIBRARY_DIR=/work/shared/common/CAD_tool/Intel/mkl/mkl/lib/intel64
 
-MKL_INCLUDE_DIR=/opt/intel/oneapi/mkl/2022.0.2/include
-MKL_LIBRARY_DIR=/opt/intel/oneapi/mkl/2022.0.2/lib/intel64
+MKL_INCLUDE_DIR=/opt/intel/oneapi/mkl/2022.2.1/include
+MKL_LIBRARY_DIR=/opt/intel/oneapi/mkl/2022.2.1/lib/intel64
 
 # CNPY_INCLUDE_DIR=/work/shared/common/project_build/graphblas/software/cnpy
 # CNPY_LIBRARY_DIR=/work/shared/common/project_build/graphblas/software/cnpy/build
