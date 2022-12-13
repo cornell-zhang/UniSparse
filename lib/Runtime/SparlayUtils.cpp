@@ -2264,6 +2264,114 @@ extern "C" {
 
     }
 
+    void _mlir_ciface_kernel_bdia_spmm_iter(StridedMemRefType<DataType, 2> *outC,
+                                      void* inA_CSR, 
+                                      void* inA_BDIA, 
+                                      StridedMemRefType<DataType, 2> *inB, 
+                                      StridedMemRefType<DataType, 2> *inC) {
+        
+        int ib, i, k, j, diag, is, ie;
+        
+        SparlayStorage* spA_CSR = (SparlayStorage*)inA_CSR;
+        SparlayStorage* spA_BDIA = (SparlayStorage*)inA_BDIA;
+        int32_t* BDIA_dim1_ptr = spA_BDIA->vLevel[1]->ptr.data();
+        int n_blocks = spA_BDIA->vLevel[1]->ptr.size();
+        int32_t* BDIA_dim2_crd = spA_BDIA->vLevel[2]->crd.data();
+        int32_t* CSR_dim1_ptr = spA_CSR->vLevel[1]->ptr.data();
+        int32_t* CSR_dim2_crd = spA_CSR->vLevel[2]->crd.data();
+        DataType* CSR_value = spA_CSR->valueArray.data();
+        
+        // float* inB_data = inB->data;
+        // float* inC_data = inC->data;
+        int blockSize = spA_BDIA->vLevel[3]->size;
+        std::vector<DataType> BDIA_vector = spA_BDIA->vector_1d;
+        int64_t iSize = inC->sizes[0];
+        int64_t jSize = inB->sizes[0];
+        int64_t kSize = inB->sizes[1];
+        assert(kSize == inC->sizes[1]);
+        DataType *sum;
+        double start = omp_get_wtime();
+
+        for (unsigned time = 0; time < 1000; time++) {
+          #pragma omp parallel for private(ib,i,k,j,sum,diag,is,ie) 
+          for (ib = 0; ib < n_blocks-1; ib++) {
+            for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
+              sum=new DataType[kSize]();
+              // sum=0;
+              
+              for (j=0;j<kSize;j++) {
+                #pragma omp simd reduction(+:sum[j])
+                for(k=CSR_dim1_ptr[i]; k<CSR_dim1_ptr[i+1]; k++) {
+                // std::cout << "i="<<i<<", k="<<k<<", CSR_value[k]="<<CSR_value[k]<<
+                //   ", CSR_dim2_crd[k]="<<CSR_dim2_crd[k]<<", inB->data[CSR_dim2_crd[k]]="
+                //   <<inB->data[CSR_dim2_crd[k]]<<std::endl;
+                
+                  sum[j]+=CSR_value[k]*(inB->data[CSR_dim2_crd[k]*kSize+j]);
+                }
+                // if(i==0) {
+                  // std::cout << "i="<<i<<", k="<<k<<", CSR_value="<<CSR_value[k]<<", crd="<<CSR_dim2_crd[k]
+                  // <<", inB->data="<<inB->data[CSR_dim2_crd[k]]<<std::endl;
+                // }
+                inC->data[i*kSize+j] = sum[j];
+              }
+              // for (j=0;j<kSize;j++) {
+              //   inC->data[i*kSize+j] = sum[j];
+              // }
+              delete[] sum;
+              // if(i==0)
+                // std::cout<<"sum="<< sum<<", inC->data["<<i<<"]="<<inC->data[i]<<std::endl;
+            }
+            // std::cout << "tid = " << omp_get_thread_num() << std::endl;
+            for (k = BDIA_dim1_ptr[ib]; k < BDIA_dim1_ptr[ib+1]; k++) {
+              diag = BDIA_dim2_crd[k];
+              is = std::max(ib*blockSize, -diag);
+              ie = std::min({(ib+1)*blockSize, (int)iSize-diag, (int)iSize});
+              // #pragma omp simd
+              for (i = is; i < ie; i++) {
+                #pragma omp simd
+                for(j=0; j<kSize;j++) {
+                
+                  inC->data[i*kSize+j] += BDIA_vector[k*blockSize+i-ib*blockSize] * inB->data[(i+diag)*kSize+j];
+                }
+                // if(i==0) { 
+                //   std::cout << "i="<<i<<", i+diag="<<i+diag<<", BDIA_vector="<<BDIA_vector[k*blockSize+i-ib*blockSize]
+                //     << ", inB->data="<< inB->data[i+diag] << ", inC->data["<<i<<"]="<<inC->data[i]<<std::endl;
+                // }
+              }
+              // for (i = 0; i < blockSize; i++) {
+              //   if ((i+ib*blockSize+diag >=0) && (i+ib*blockSize+diag < jSize))
+              //     inC->data[i+ib*blockSize] += BDIA_vector[k*blockSize+i] * inB->data[i+ib*blockSize+diag];
+              // }
+            }
+            // Robot motion planing
+            // for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
+            //   for(j=0; j<kSize;j++) {
+            //     inB->data[i*kSize+j] = inC->data[i*kSize+j];
+            //   }
+            // }
+          }
+        }
+        
+        double end = omp_get_wtime();
+        std::cout << "omp time = " << end-start << " s"<< std::endl;
+        std::cout << "avg time = " << (end-start)*1000/1000 << " ms"<< std::endl;
+
+        outC->data = inC->data;
+        outC->basePtr = inC->basePtr;
+        outC->offset = inC->offset;  
+        outC->sizes[0] = inC->sizes[0];
+        outC->sizes[1] = inC->sizes[1];
+        outC->strides[0] = inC->strides[0];
+        outC->strides[1] = inC->strides[1];
+        for(unsigned i = 0; i <4; i++ ) {
+          for(unsigned j = 0; j <4; j++ )
+            std::cout <<outC->data[i*kSize+j]<<"  ";
+          std::cout << std::endl;
+        }
+
+    }
+
+
   void _mlir_ciface_kernel_bdia_spmv(StridedMemRefType<DataType, 1> *outC,
                                       void* inA_CSR, 
                                       void* inA_BDIA, 
@@ -2821,7 +2929,7 @@ extern "C" {
     unsigned iter1_i, iter1_pos, iter1_j;
     int iter1_dim2;
     std::vector<int> diag_nnz;
-    for(unsigned time = 0; time < 100; time++) {
+    for(unsigned time = 0; time < 1000; time++) {
     #pragma omp parallel for private(diag_nnz, iter1_i, iter1_pos, iter1_j, iter1_dim2)
     for (iter1_i = 0; iter1_i < ((row_size-1)/blockSize)+1; iter1_i++) {
       diag_nnz.clear();
@@ -2919,7 +3027,7 @@ extern "C" {
     unsigned COO_pos;
     bool is_BDIA;
     double end_3 = omp_get_wtime();
-    for (unsigned time = 0; time < 100; time++) {
+    for (unsigned time = 0; time < 1000; time++) {
     #pragma omp parallel for private(i, pos,iter2_dim1, iter2_dim2, \
           iter2_dim3, start_pos, end_pos, insert_pos, COO_pos, is_BDIA)
     for (i = 0; i < ((row_size-1)/blockSize)+1; i++) {
@@ -2994,7 +3102,7 @@ extern "C" {
     std::cout << "decompose end_3 - end_2 time = " << end_3 - end_2 << " s"<< std::endl;
     std::cout << "decompose end - end_3 time = " << end - end_3 << " s"<< std::endl;
     std::cout << "decompose end_3 - start time = " << end_3-start << " s"<< std::endl;
-    std::cout << "decompose total time = " << (end-end_3)/100+end_3-end_2 + (end_2-end_1)/100+(end_1-start)<< " s"<< std::endl;
+    std::cout << "decompose total time = " << (end-end_3)/1000+end_3-end_2 + (end_2-end_1)/1000+(end_1-start)<< " s"<< std::endl;
     std::cout << "root_ptr[1] = " << sparT->vLevel[0]->ptr[1] <<  std::endl;
     std::cout << "diag_nnz_count = " << diag_nnz_count <<  std::endl;
 

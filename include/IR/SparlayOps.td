@@ -486,6 +486,18 @@ def Sparlay_BDIASpMVOp: Sparlay_Op<"bdia_spmv", [NoSideEffect]> {
     }];
 }
 
+def Sparlay_BDIASpMMOp: Sparlay_Op<"bdia_spmm", [NoSideEffect]> {
+    let summary = "A COO SpMM runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor_CSR, AnyTensor: $tensor_BDIA, AnyTensor: $in_mat, AnyTensor: $out_mat);
+    let results = (outs AnyStridedMemRefOfRank<2>: $result);
+    let assemblyFormat = [{
+        $tensor_CSR `,` $tensor_BDIA `,` $in_mat `,` $out_mat attr-dict `:` type($tensor_CSR) `,` type($tensor_BDIA) `,` type($in_mat) `,` type($out_mat) `to` type($result)
+    }];
+}
+
 def Sparlay_ReleaseOp: Sparlay_Op<"release"> {
     let summary = "A COO SpMM runtime";
     let description = [{
