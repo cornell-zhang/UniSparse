@@ -20,10 +20,10 @@ cusparse_spmm: cusparse_spmm.cu
 		-L${CUSPARSELT_DIR}/lib -lcusparseLt -ldl -I${CUSPARSELT_DIR}/include \
 		-L${CUTENSOR_DIR}/lib/11.0 -lcutensor -I${CUTENSOR_DIR}/include
 
-cusparse_hybrid_spmm: cusparse_hybrid_spmm.cu
+cusparse_hybrid_spmm: cusparse_hybrid_ell_coo_spmm.cu
 	mkdir -p $(BUILD_DIR)
 	nvcc -std=c++11 -O3 -I${CUDA_INCLUDE_DIR} -I${CNPY_INCLUDE_DIR} \
-		cusparse_hybrid_spmm.cu -o ${BUILD_DIR}/cusparse_hybrid_spmm \
+		cusparse_hybrid_ell_coo_spmm.cu -o ${BUILD_DIR}/cusparse_hybrid_spmm \
 		 ${CUDA_CFLAGS} \
 		 -L${CUDA_LIBRARY_DIR} -L${CNPY_LIBRARY_DIR} -lcnpy -lcusparse -lcudart \
 		-L${CUSPARSELT_DIR}/lib -lcusparseLt -ldl -I${CUSPARSELT_DIR}/include \

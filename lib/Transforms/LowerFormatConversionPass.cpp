@@ -352,16 +352,16 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
 }
 
 Matrix2i toIntMatrix(const Matrix2f& M) {
-    Matrix2i ret;
-    for (int i = 0; i < 2; ++i) {
-        for (int j = 0; j < 2; ++j) {
-            int curVal = (int)floor(M(i,j)+1e-4);
-            assert(M(i,j) < curVal + 1e-4);
-            assert(M(i,j) > curVal-1e-4);
-            ret(i,j) = curVal;
-        }
+  Matrix2i ret;
+  for (int i = 0; i < 2; ++i) {
+    for (int j = 0; j < 2; ++j) {
+      int curVal = (int)floor(M(i,j)+1e-4);
+      assert(M(i,j) < curVal + 1e-4);
+      assert(M(i,j) > curVal-1e-4);
+      ret(i,j) = curVal;
     }
-    return ret;
+  }
+  return ret;
 }
 
 enum ConversionOpType {
