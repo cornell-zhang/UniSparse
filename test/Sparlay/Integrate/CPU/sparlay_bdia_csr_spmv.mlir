@@ -97,13 +97,16 @@ module {
     //   scf.yield %t3 : tensor<?xf32>
     // }
     %init_256_4 = bufferization.alloc_tensor(%dim1) : tensor<?xf32>
-    %tensor_B = tensor.insert %f05 into %init_256_4[%c0] : tensor<?xf32>
-    %dim1_1 = arith.subi %dim1, %c1 : index
-    %i_dim1_1 = arith.index_cast %dim1_1 : index to i32
-    %f_dim1_1 = arith.sitofp %i_dim1_1 : i32 to f32
-    %elm = arith.divf %f05, %f_dim1_1 : f32
-    %b = scf.for %i = %c1 to %dim1 step %c1 iter_args(%t = %tensor_B) -> tensor<?xf32> {
-      %t3 = tensor.insert %elm into %t[%i] : tensor<?xf32>
+    // %tensor_B = tensor.insert %f05 into %init_256_4[%c0] : tensor<?xf32>
+    // %dim1_1 = arith.subi %dim1, %c1 : index
+    // %i_dim1_1 = arith.index_cast %dim1_1 : index to i32
+    // %f_dim1_1 = arith.sitofp %i_dim1_1 : i32 to f32
+    // %elm = arith.divf %f05, %f_dim1_1 : f32
+    // %b = scf.for %i = %c1 to %dim1 step %c1 iter_args(%t = %tensor_B) -> tensor<?xf32> {
+    %b = scf.for %i = %c0 to %dim1 step %c1 iter_args(%t = %init_256_4) -> tensor<?xf32> {
+      %k1 = arith.index_cast %i : index to i32
+      %k = arith.sitofp %k1 : i32 to f32
+      %t3 = tensor.insert %k into %t[%i] : tensor<?xf32>
       scf.yield %t3 : tensor<?xf32>
     }
     
