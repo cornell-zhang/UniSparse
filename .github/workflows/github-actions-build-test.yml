@@ -11,7 +11,7 @@ jobs:
           - { name: "Ubuntu-clang", os: ubuntu-latest, cc: "clang", cxx: "clang++" }
     
     container: 
-      image: sibylau/mlir-llvm
+      image: sibylau/mlir-llvm:omp
 
     steps:   
       - name: Check out repository code
