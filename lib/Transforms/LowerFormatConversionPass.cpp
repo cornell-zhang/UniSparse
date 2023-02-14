@@ -1415,7 +1415,7 @@ public:
     std::vector<Value> params = {inputTensor_CSR, inputTensor_BDIA, mem_input_B, mem_input_C};
     // auto out_tp = MemRefType::get(outputType.getShape(), outputType.getElementType());
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "kernel_bdia_spmv_iter", outputType, params, true),
+        getFunc(op, "kernel_hetero_bdia_spmv_iter", outputType, params, true),
         params
     );
     rewriter.replaceOp(op, callOp.getResult(0));

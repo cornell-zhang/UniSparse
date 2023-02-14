@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <numeric>
 #include <vector>
 #include <map>
@@ -34,8 +35,30 @@
 #include <memory>
 #include <iomanip>
 #include <chrono>
+#include <cuda_runtime.h>
+#include <cusparse.h>
 #include "Eigen/Dense"
 #define DataType float
+
+#define CHECK_CUDA(func)                                                       \
+{                                                                              \
+    cudaError_t status = (func);                                               \
+    if (status != cudaSuccess) {                                               \
+        printf("CUDA API failed at line %d with error: %s (%d)\n",             \
+               __LINE__, cudaGetErrorString(status), status);                  \
+        return EXIT_FAILURE;                                                   \
+    }                                                                          \
+}
+
+#define CHECK_CUSPARSE(func)                                                   \
+{                                                                              \
+    cusparseStatus_t status = (func);                                          \
+    if (status != CUSPARSE_STATUS_SUCCESS) {                                   \
+        printf("CUSPARSE API failed at line %d with error: %s (%d)\n",         \
+               __LINE__, cusparseGetErrorString(status), status);              \
+        return EXIT_FAILURE;                                                   \
+    }                                                                          \
+}
 
 using namespace mlir;
 extern "C" {
@@ -1161,7 +1184,7 @@ bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
 }
 
 bool SparlayStorage::vectorize(const int lv) {
-  assert(lv == 2);
+//  assert(lv == 2);
   assert((size_t)lv == vLevel.size()-1);
   bool mark = !(vLevel[lv]->type&LVFUSE);
   fuse(lv-1);
@@ -2181,6 +2204,161 @@ extern "C" {
     out->strides[1] = 1;
   }
 
+  #pragma omp declare simd uniform(x, y) linear(i : 1) aligned(x, y : 32) notinbranch
+  void xpy(float* x, float* y, int i) {
+    y[i] = x[i] + y[i];
+  }
+
+  void _mlir_ciface_kernel_hetero_bdia_spmv_iter(StridedMemRefType<DataType, 1> *outC,
+                                      void* inA_CSR, 
+                                      void* inA_BDIA, 
+                                      StridedMemRefType<DataType, 1> *inB, 
+                                      StridedMemRefType<DataType, 1> *inC) {
+    
+    int ib, i, k, diag, is, ie;
+    SparlayStorage* spA_CSR = (SparlayStorage*)inA_CSR;
+    SparlayStorage* spA_BDIA = (SparlayStorage*)inA_BDIA;
+    int32_t* BDIA_dim1_ptr = spA_BDIA->vLevel[1]->ptr.data();
+    int n_blocks = spA_BDIA->vLevel[1]->ptr.size();
+    int32_t* BDIA_dim2_crd = spA_BDIA->vLevel[2]->crd.data();
+    int32_t* CSR_dim1_ptr = spA_CSR->vLevel[1]->ptr.data();
+    int32_t* CSR_dim2_crd = spA_CSR->vLevel[2]->crd.data();
+    int32_t csr_nnz = spA_CSR->vLevel[2]->crd.size();
+//    std::cout << "CSR NNZ is " << csr_nnz << std::endl;
+    DataType* CSR_value = spA_CSR->valueArray.data();
+
+    int blockSize = spA_BDIA->vLevel[3]->size;
+    std::vector<DataType> BDIA_vector = spA_BDIA->vector_1d;
+    int32_t num_rows = (int32_t)inC->sizes[0];
+    int32_t num_cols = (int32_t)inB->sizes[0];
+    int runs = 50;
+    float alpha = 1.0;
+    float beta = 0.0;
+    DataType* out = inC->data;
+    
+    int32_t vec_block = 256;
+    int32_t vec_num_blocks = std::ceil((float)num_rows / (float)vec_block);
+    DataType* csr_out = (float*)std::malloc(num_rows * sizeof(DataType));
+
+    cudaError_t cudaStat1, cudaStat2, cudaStat3, cudaStat4, cudaStat5;
+    // device malloc
+    float* cu_csrVal=0;
+    cudaStat1 = cudaMalloc((void**)&cu_csrVal, csr_nnz * sizeof(DataType));
+    int* cu_csrRowPtr=0;
+    cudaStat2 = cudaMalloc((void**)&cu_csrRowPtr, (num_rows + 1) * sizeof(int));
+    int* cu_csrColInd=0;
+    cudaStat3 = cudaMalloc((void**)&cu_csrColInd, csr_nnz * sizeof(int));
+    if ((cudaStat1 != cudaSuccess) ||
+        (cudaStat2 != cudaSuccess) ||
+        (cudaStat3 != cudaSuccess)) {
+        printf("Device malloc failed");
+        exit(-1);
+    }
+    cudaStat1 = cudaMemcpy(cu_csrVal, CSR_value, csr_nnz * sizeof(DataType), cudaMemcpyHostToDevice);
+//    std::cout << "CSR_value: " << CSR_value[0] << " " << CSR_value[1] << " " << CSR_value[2] << " " << CSR_value[3] << std::endl;
+    cudaStat2 = cudaMemcpy(cu_csrRowPtr, CSR_dim1_ptr, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+//    std::cout << "CSR_dim1_ptr: " << CSR_dim1_ptr[0] << " " << CSR_dim1_ptr[1] << " " << CSR_dim1_ptr[2] << " " << CSR_dim1_ptr[3] << std::endl;
+    cudaStat3 = cudaMemcpy(cu_csrColInd, CSR_dim2_crd, csr_nnz * sizeof(int), cudaMemcpyHostToDevice);
+//    std::cout << "CSR_dim2_crd: " << CSR_dim2_crd[0] << " " << CSR_dim2_crd[1] << " " << CSR_dim2_crd[2] << " " << CSR_dim2_crd[3] << std::endl;
+    if ((cudaStat1 != cudaSuccess) ||
+        (cudaStat2 != cudaSuccess) ||
+        (cudaStat3 != cudaSuccess)) {
+        printf("Memcpy from Host to Device failed");
+        exit(-1);
+    }
+
+    float* cu_InVec=0;
+    cudaStat4 = cudaMalloc((void**)&cu_InVec, num_cols * sizeof(DataType));
+    float* cu_OutVec=0;
+    cudaStat5 = cudaMalloc((void**)&cu_OutVec, num_rows * sizeof(DataType));
+    if ((cudaStat4 != cudaSuccess) || (cudaStat5 != cudaSuccess)) {
+        printf("Device malloc failed");
+        exit(-1);
+    }
+    cudaStat4 = cudaMemcpy(cu_InVec, inB->data, num_cols * sizeof(DataType), cudaMemcpyHostToDevice);
+//    std::cout << inB->data[0] << " " << inB->data[1] << " " << inB->data[2] << " " << inB->data[3] << std::endl;
+    cudaStat5 = cudaMemcpy(cu_OutVec, inC->data, num_rows * sizeof(DataType), cudaMemcpyHostToDevice);
+//    std::cout << inC->data[0] << " " << inC->data[1] << " " << inC->data[2] << " " << inC->data[3] << std::endl;
+    if ((cudaStat4 != cudaSuccess) || (cudaStat5 != cudaSuccess)) {
+        printf("Memcpy from Host to Device failed");
+        exit(-1);
+    }
+
+    cusparseHandle_t handle = NULL;
+    cusparseSpMatDescr_t gpu_csr_matA;
+    cusparseDnVecDescr_t vecX, vecY;
+    void* dBuffer = NULL;
+    size_t bufferSize = 0;
+    cusparseCreate(&handle);
+    // Create sparse matrix
+    cusparseCreateCsr(&gpu_csr_matA, num_rows, num_cols, csr_nnz,
+                      cu_csrRowPtr, cu_csrColInd, cu_csrVal,
+                      CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                      CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F); 
+    cusparseCreateDnVec(&vecX, num_cols, cu_InVec, CUDA_R_32F);
+    cusparseCreateDnVec(&vecY, num_rows, cu_OutVec, CUDA_R_32F);
+    cusparseSpMV_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                            &alpha, gpu_csr_matA, vecX, &beta, vecY, CUDA_R_32F,
+                            CUSPARSE_MV_ALG_DEFAULT, &bufferSize);
+    cudaMalloc(&dBuffer, bufferSize);
+    cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                &alpha, gpu_csr_matA, vecX, &beta, vecY, CUDA_R_32F,
+                CUSPARSE_MV_ALG_DEFAULT, dBuffer);
+    cudaDeviceSynchronize();
+    double start0 = omp_get_wtime();
+    for (int i = 0; i < runs; i++) {
+      cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                    &alpha, gpu_csr_matA, vecX, &beta, vecY, CUDA_R_32F,
+                    CUSPARSE_MV_ALG_DEFAULT, dBuffer);
+//      if(cudaStat6 != CUSPARSE_STATUS_SUCCESS) {
+//        printf("Fail compute CSR SpMV on GPU\n");
+//        exit(-1);
+//      }
+//      cudaDeviceSynchronize();
+      #pragma omp parallel for private(ib,k,diag,is,ie)
+      for (ib = 0; ib < n_blocks-1; ib++) {
+        for (k = BDIA_dim1_ptr[ib]; k < BDIA_dim1_ptr[ib+1]; k++) {
+          diag = BDIA_dim2_crd[k];
+          is = std::max(ib*blockSize, -diag);
+          ie = std::min({(ib+1)*blockSize, (int)num_rows-diag, (int)num_rows});
+          #pragma omp simd
+          for (i = is; i < ie; i++) {
+            inC->data[i] += BDIA_vector[k*blockSize+i-ib*blockSize] * inB->data[i+diag];
+          }
+        }
+      }
+      cudaDeviceSynchronize();
+//      std::cout << inC->data[0] << " " << inC->data[1] << " " << inC->data[2] << " " << inC->data[3] << std::endl;
+    }
+    double end0 = omp_get_wtime();
+    std::cout << "bdia on CPU and csr on GPU total time = " << end0-start0 << " s"<< std::endl;
+    std::cout << "Heterogeneous avg time = " << (end0-start0)*1000/runs << " ms"<< std::endl;
+    
+    double start1 = omp_get_wtime();
+    cudaStat5 = cudaMemcpy(csr_out, cu_OutVec, num_rows * sizeof(DataType), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+//    std::cout << csr_out[0] << " " << csr_out[1] << " " << csr_out[2] << " " << csr_out[3] << std::endl;
+//    for(int i = 0; i < num_rows; i++) {
+//      inC->data[i] = inC->data[i] + csr_out[i];
+//    }
+    #pragma omp parallel for private(ib,i) 
+    for (ib = 0; ib < vec_num_blocks; ib++) {
+      # pragma omp simd aligned (csr_out, out : 32)
+      for (i = ib*vec_block; i < std::min((ib+1)*vec_block, (int)num_rows); i++) {
+        xpy(csr_out, out, i);
+      }
+    }
+
+    double end1 = omp_get_wtime();
+    std::cout << "Merge time = " << end1-start1 << " s"<< std::endl;
+    std::cout << "Merge avg time = " << (end1-start1)*1000/runs << " ms"<< std::endl;
+    outC->data = inC->data;
+    outC->basePtr = inC->basePtr;
+    outC->offset = inC->offset;  
+    outC->sizes[0] = inC->sizes[0];
+    outC->strides[0] = inC->strides[0];
+  }
+
   void _mlir_ciface_kernel_bdia_spmv_iter(StridedMemRefType<DataType, 1> *outC,
                                       void* inA_CSR, 
                                       void* inA_BDIA, 
@@ -2204,18 +2382,22 @@ extern "C" {
         std::vector<DataType> BDIA_vector = spA_BDIA->vector_1d;
         int64_t iSize = inC->sizes[0];
         int64_t jSize = inB->sizes[0];
-        double start = omp_get_wtime();
+        double csr_time = 0.0;
+        double bdia_time = 0.0;
+        unsigned runs = 50;
+        std::cout << inC->data[0] << " " << inC->data[1] << " " << inC->data[2] << " " << inC->data[3] << std::endl;
 
-        for (unsigned time = 0; time < 10000; time++) {
+        double start0 = omp_get_wtime();
+        for (unsigned time = 0; time < runs; time++) {
           #pragma omp parallel for private(ib,i,k,sum,diag,is,ie) 
           for (ib = 0; ib < n_blocks-1; ib++) {
             for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
               sum=0;
               #pragma omp simd reduction(+:sum)
               for(k=CSR_dim1_ptr[i]; k<CSR_dim1_ptr[i+1]; k++) {
-                // std::cout << "i="<<i<<", k="<<k<<", CSR_value[k]="<<CSR_value[k]<<
-                //   ", CSR_dim2_crd[k]="<<CSR_dim2_crd[k]<<", inB->data[CSR_dim2_crd[k]]="
-                //   <<inB->data[CSR_dim2_crd[k]]<<std::endl;
+//                 std::cout << "i="<<i<<", k="<<k<<", CSR_value[k]="<<CSR_value[k]<<
+//                   ", CSR_dim2_crd[k]="<<CSR_dim2_crd[k]<<", inB->data[CSR_dim2_crd[k]]="
+//                   <<inB->data[CSR_dim2_crd[k]]<<std::endl;
                 sum+=CSR_value[k]*(inB->data[CSR_dim2_crd[k]]);
                 // if(i==0) {
                   // std::cout << "i="<<i<<", k="<<k<<", CSR_value="<<CSR_value[k]<<", crd="<<CSR_dim2_crd[k]
@@ -2226,6 +2408,8 @@ extern "C" {
               // if(i==0)
                 // std::cout<<"sum="<< sum<<", inC->data["<<i<<"]="<<inC->data[i]<<std::endl;
             }
+//            csr_time += end0-start0;
+//            double start1 = omp_get_wtime(); 
             // std::cout << "tid = " << omp_get_thread_num() << std::endl;
             for (k = BDIA_dim1_ptr[ib]; k < BDIA_dim1_ptr[ib+1]; k++) {
               diag = BDIA_dim2_crd[k];
@@ -2244,15 +2428,19 @@ extern "C" {
               //     inC->data[i+ib*blockSize] += BDIA_vector[k*blockSize+i] * inB->data[i+ib*blockSize+diag];
               // }
             }
-            for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
-              inB->data[i] = inC->data[i];
-            }
+//            for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
+//              inB->data[i] = inC->data[i];
+//            }
+//            double end1 = omp_get_wtime();
+//            bdia_time += end1-start1;
           }
         }
-        
-        double end = omp_get_wtime();
-        std::cout << "omp time = " << end-start << " s"<< std::endl;
-        std::cout << "avg time = " << (end-start)*1000/10000 << " ms"<< std::endl;
+        double end0 = omp_get_wtime();
+        std::cout << "Hybrid total time = " << (end0-start0) << " s"<< std::endl;
+        std::cout << "Hybrid avg time = " << (end0-start0)*1000/runs << " ms"<< std::endl;
+
+//        std::cout << "bDIA total time = " << bdia_time << " s"<< std::endl;
+//        std::cout << "bDIA avg time = " << bdia_time*1000/runs << " ms"<< std::endl;
 
         outC->data = inC->data;
         outC->basePtr = inC->basePtr;
@@ -2929,7 +3117,7 @@ extern "C" {
     unsigned iter1_i, iter1_pos, iter1_j;
     int iter1_dim2;
     std::vector<int> diag_nnz;
-    for(unsigned time = 0; time < 1000; time++) {
+    for(unsigned time = 0; time < 1; time++) {
     #pragma omp parallel for private(diag_nnz, iter1_i, iter1_pos, iter1_j, iter1_dim2)
     for (iter1_i = 0; iter1_i < ((row_size-1)/blockSize)+1; iter1_i++) {
       diag_nnz.clear();
@@ -3027,7 +3215,7 @@ extern "C" {
     unsigned COO_pos;
     bool is_BDIA;
     double end_3 = omp_get_wtime();
-    for (unsigned time = 0; time < 1000; time++) {
+    for (unsigned time = 0; time < 1; time++) {
     #pragma omp parallel for private(i, pos,iter2_dim1, iter2_dim2, \
           iter2_dim3, start_pos, end_pos, insert_pos, COO_pos, is_BDIA)
     for (i = 0; i < ((row_size-1)/blockSize)+1; i++) {
