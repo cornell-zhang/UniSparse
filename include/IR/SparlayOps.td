@@ -474,6 +474,18 @@ def Sparlay_DecomposeBDIAOp: Sparlay_Op<"decompose_BDIA", [NoSideEffect]> {
     }];
 }
 
+def Sparlay_DecomposeBELLOp: Sparlay_Op<"decompose_BELL", [NoSideEffect]> {
+    let summary = "A COO SpMM runtime";
+    let description = [{
+        Example: %0 = sparlay.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+    }];
+    let arguments = (ins AnyTensor: $tensor, AnyType: $blockSize, AnyType: $block_thres, AnyType: $col_thres);
+    let results = (outs Sparlay_StructType: $output);
+    let assemblyFormat = [{
+        $tensor `,` $blockSize `,` $block_thres `,` $col_thres attr-dict `:` type($tensor) `,` type($blockSize) `,` type($block_thres) `,` type($col_thres) `to` type($output)
+    }];
+}
+
 def Sparlay_BDIASpMVOp: Sparlay_Op<"bdia_spmv", [NoSideEffect]> {
     let summary = "A COO SpMM runtime";
     let description = [{

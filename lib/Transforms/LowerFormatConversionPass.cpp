@@ -1481,6 +1481,29 @@ public:
   }
 };
 
+class DecomposeBELLOpLowering: public OpConversionPattern<sparlay::DecomposeBELLOp> {
+public:
+  using OpConversionPattern<sparlay::DecomposeBELLOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(sparlay::DecomposeBELLOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value blockSize = adaptor.getOperands()[1];
+    Value block_thres = adaptor.getOperands()[2];
+    Value col_thres = adaptor.getOperands()[3];
+    Type outputType = inputTensor.getType();
+    std::vector<Value> params = {inputTensor, blockSize, block_thres, col_thres};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "decompose_BELL_COO", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
 class ReleaseOpLowering: public OpConversionPattern<sparlay::ReleaseOp> {
 public:
   using OpConversionPattern<sparlay::ReleaseOp>::OpConversionPattern;
@@ -1585,7 +1608,7 @@ void LowerFormatConversionPass::runOnOperation() {
                  SparlayLoadConverter, SparlayInsertConverter, SparlayReturnConverter,
                  SparlayExpandConverter, SparlayCompressConverter, 
                  DiaSpmvOpLowering, DiaSpmmOpLowering, COOSpMVOpLowering, COOSpMMOpLowering,
-                 DecomposeBDIAOpLowering, BDIASpMVOpLowering, BDIASpMMOpLowering, ReleaseOpLowering>(&getContext());
+                 DecomposeBDIAOpLowering, DecomposeBELLOpLowering, BDIASpMVOpLowering, BDIASpMMOpLowering, ReleaseOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
