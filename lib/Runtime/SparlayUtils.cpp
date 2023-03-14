@@ -247,8 +247,7 @@ public:
     for (size_t i = 0; i < ptr.size(); ++i) if (ptr[i] != A.ptr[i]) return 0;
     for (size_t i = 0; i < same_path.size(); ++i) if (same_path[i] != A.same_path[i]) return 0;
     return 1;
-  }
-  
+  }  
 };
 
 /*!
@@ -332,7 +331,7 @@ public:
   bool add(const int Ltarget, const int Lsrc);
   bool sub(const int Ltarget, const int Lsrc);
   bool vectorize(const int lv);
-  bool devectorize();
+  bool devectorize(const int level);
   bool neg(const int level);
   bool moveLv(const int srcLevel, const int targetLevel);
   bool tile_merge(const int lv, const int factor);
@@ -341,11 +340,13 @@ public:
   void getSize(size_t lv) {
     assert(lv < exprs.size());
     // assert(dimSizes.size() == 3);
-    
+    std::cerr << "dimSizes[0] is " << dimSizes[0] << ", and dimSizes[1] is " << dimSizes[1] << std::endl; 
     Vector2i t0(0,0), t1(0,dimSizes[1]), t2(dimSizes[0],0), t3(dimSizes[0],dimSizes[1]);
     const auto& expr = exprs[lv];
+    std::cerr << "midstage expr[" << lv << "] is " << *exprs[lv] << std::endl;
     int mn = std::min(0, std::min(expr->dot(t1), std::min(expr->dot(t2), expr->dot(t3))));
     int mx = std::max(0, std::max(expr->dot(t1), std::max(expr->dot(t2), expr->dot(t3))));
+    std::cerr << "max is " << mx << ", and mn is " << mn << std::endl;
     vLevel[lv]->size = (mx - mn);
   }
 
@@ -362,10 +363,13 @@ public:
   void moveStorage(int srcLv, int dstLv) {
     assert(dstLv <= srcLv);
     auto svLS = vLevel[srcLv];
+    auto expLS = exprs[srcLv];
     for (int i = srcLv; i >= dstLv+1; --i) {
       vLevel[i] = vLevel[i-1];
+      exprs[i] = exprs[i-1];
     }
     vLevel[dstLv] = svLS;
+    exprs[dstLv] = expLS;
   }
 
   void newStorage(int lv, std::shared_ptr<LevelStorage> LS, std::shared_ptr<Vector2i> expr) {
@@ -582,23 +586,25 @@ SparlayStorage* readFromFile(std::istream& fin);
 void SparlayStorage::Print(std::ostream& fout, bool verbose) {
   fout << "==============================================" << std::endl;
   for (size_t i = 0; i < vLevel.size(); ++i) {
-    fout << "crd: ";
+    fout << "crd[" << i << "]: ";
     for (const auto ele: vLevel[i]->crd) {
       fout << std::setw(8) << ele;
     }
     fout << "      (Type:" << vLevel[i]->type << ")";
     fout << " [Size:" << vLevel[i]->size << "]";
     fout << std::endl;
+    fout << "expr[" << i << "]: ";
+    fout << *exprs[i] << std::endl; 
     if (verbose && vLevel[i]->same_path.size()) {
       assert(vLevel[i]->same_path.size() == vLevel[i]->crd.size());
-      fout << "smp: ";
+      fout << "smp[" << i << "]: ";
       for (const auto ele: vLevel[i]->same_path) {
         fout << std::setw(8) << ele;
       }
       fout << std::endl;
     }
     if (vLevel[i]->ptr.size()) {
-      fout << "ptr: ";
+      fout << "ptr[" << i << "]: ";
       for (const auto ele: vLevel[i]->ptr) {
         fout << std::setw(8) << ele;
       }
@@ -606,7 +612,7 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
     }
   }
   if (valueArray.size()) {
-    fout << "val: ";
+    fout << "values: ";
     for (size_t i = 0; i < valueArray.size(); ++i) {
       fout << std::setw(8) << valueArray[i];
     }
@@ -614,7 +620,7 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
   } else if (vectorArray.size()) {
     size_t Size = vectorArray[0].size();
     for (size_t j = 0; j < Size; ++j) {
-      fout << "val: ";
+      fout << "values: ";
       for (size_t i = 0; i < vectorArray.size(); ++i) {
         assert(vectorArray[i].size() == Size);
         fout << std::setw(8) << vectorArray[i][j];
@@ -835,10 +841,12 @@ bool SparlayStorage::tile_split(int lv, int factor) {
   }
   vLevel[lv]->size = ceil((float)vLevel[lv]->size/factor);
   std::vector<int> empty_ptr = {};
+  std::shared_ptr<Vector2i> ptr = std::make_shared<Vector2i>(0,0);
+  *ptr = *exprs[lv];
   this->newStorage(
     lv+1, 
     std::shared_ptr<LevelStorage>(new LevelStorage(LVTRIM, factor, new_crd, empty_ptr, new_same_path)), 
-    std::make_shared<Vector2i>(0,0)
+    ptr
   );
   return 1;
 }
@@ -986,7 +994,7 @@ bool SparlayStorage::trim(const int lv) {
     } else {
       for (size_t i = 0; i < cur_ptr.size()-1; ++i) {
         for (auto j = cur_ptr[i]; j < cur_ptr[i+1]; ++j) {
-          vLevel[cur_lv]->crd.push_back(i);
+          vLevel[cur_lv]->crd.push_back(i % cur_lv_size);
           vLevel[cur_lv]->same_path.push_back((j!=cur_ptr[i]));
         }
       }
@@ -1021,10 +1029,10 @@ bool SparlayStorage::trim(const int lv) {
 }
 
 bool SparlayStorage::fuse(const int lv) {
-  if (vLevel[lv]->type & 2) return 1;
-  if (vLevel[lv]->type & 1) {
+  if (vLevel[lv]->type & LVFUSE) return 1;
+  if (vLevel[lv]->type & LVTRIM) {
     int upper_lv = lv;
-    while (upper_lv!=0 && (vLevel[upper_lv-1]->type&1) && !(vLevel[upper_lv-1]->type&2)) upper_lv--;
+    while (upper_lv!=0 && (vLevel[upper_lv-1]->type&LVTRIM) && !(vLevel[upper_lv-1]->type&LVFUSE)) upper_lv--;
     //Note: crd_deleted == same_path
     auto crd_deleted = vLevel[lv]->same_path;
     bool no_work = 0;
@@ -1037,18 +1045,18 @@ bool SparlayStorage::fuse(const int lv) {
       for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
         vLevel[lv]->ptr.push_back(i+1);
       }
-      vLevel[lv]->type |= 2;
+      vLevel[lv]->type |= LVFUSE;
       return 1;
     }
     //update possibly the ptr of a fused level
-    if (upper_lv!=0) {
-      assert(vLevel[upper_lv-1]->type&2); //it must be a fused level
+    if (upper_lv != 0) {
+      assert(vLevel[upper_lv-1]->type & LVFUSE); //it must be a fused level
       int cur_lv = upper_lv-1;
-      if (!(vLevel[cur_lv]->type&LVINFO)) assert(vLevel[cur_lv]->ptr.size() == vLevel[cur_lv]->crd.size()+1);
+      if (!(vLevel[cur_lv]->type & LVINFO)) assert(vLevel[cur_lv]->ptr.size() == vLevel[cur_lv]->crd.size()+1);
       int saved_st_point = 0;
       assert(vLevel[cur_lv]->ptr[0] == 0);
       for (size_t i = 0; i < vLevel[cur_lv]->ptr.size()-1; ++i) {
-        int cnt = vLevel[cur_lv]->ptr[i+1] - vLevel[cur_lv]->ptr[i];
+        int cnt = vLevel[cur_lv]->ptr[i+1] - saved_st_point;
         for (int j = saved_st_point; j < vLevel[cur_lv]->ptr[i+1]; ++j) {
           if (crd_deleted[j]) cnt--;
         }
@@ -1106,7 +1114,7 @@ bool SparlayStorage::separate(const int lv) {
   if (!(vLevel[lv]->type & LVFUSE)) return 1;
   if (vLevel[lv]->type & LVTRIM) {
     int upper_lv = lv;
-    while (upper_lv!=0 && (vLevel[upper_lv-1]->type&1) && !(vLevel[upper_lv-1]->type&2)) upper_lv--;
+    while (upper_lv!=0 && (vLevel[upper_lv-1]->type&LVTRIM) && !(vLevel[upper_lv-1]->type&LVFUSE)) upper_lv--;
     //update possibly the ptr of a fused level
     if (upper_lv != 0) {
       int cur_lv = upper_lv-1;
@@ -1164,6 +1172,7 @@ bool SparlayStorage::add(const int Ltarget, const int Lsrc) {
   }
   (*exprs[Ltarget]) += (*exprs[Lsrc]);
   getSize(Ltarget);
+  std::cerr << "Size of Level " << Ltarget << " is " << vLevel[Ltarget]->size << std::endl;
   return 1;
 }
 
@@ -1178,31 +1187,56 @@ bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
   for (size_t i = 0; i < vLevel[Lsrc]->crd.size(); ++i) {
     vLevel[Ltarget]->crd[i] -= vLevel[Lsrc]->crd[i];
   }
+  std::cerr << "Ltarget exprs[" << Ltarget << "] is " << std::endl << *exprs[Ltarget] << std::endl << "Lsrc exprs[" << Lsrc << "] is " << std::endl << *exprs[Lsrc] << std::endl;
   (*exprs[Ltarget]) -= (*exprs[Lsrc]);
   getSize(Ltarget);
+  std::cerr << "Size of Level " << Ltarget << " is " << vLevel[Ltarget]->size << std::endl;
   return 1;
 }
 
+//All the levels above lv will be converted to dense type.
 bool SparlayStorage::vectorize(const int lv) {
 //  assert(lv == 2);
-  assert((size_t)lv == vLevel.size()-1);
-  bool mark = !(vLevel[lv]->type&LVFUSE);
+//  assert((size_t)lv == vLevel.size()-1);
+//  bool mark = !(vLevel[lv-1]->type&LVFUSE);
+//  std::cerr << "mark info: " << vLevel[lv]->type << ", " << LVFUSE << ", " << !(vLevel[lv]->type&LVFUSE) << std::endl;
+  std::cerr << "Enter vectorize, vLevel.size() is " << vLevel.size() << ", and lv is " << lv << std::endl;
+  int strides[vLevel.size()];
+  strides[vLevel.size()-1] = 1;
+  for(int i = 0; i < vLevel.size()-1; i++) {
+    strides[i] = 1;
+    for(int j = i+1; j <= vLevel.size()-1; j++){
+      strides[i] *= vLevel[j]->size;
+    } 
+  }
   fuse(lv-1);
+  std::cerr << "After fuse inside vectorize " << std::endl;
+  this->Print(std::cerr, 1);
   auto& father_ptr = vLevel[lv-1]->ptr;
   auto& father_crd = vLevel[lv-1]->crd;
-  int cur_lv_size = vLevel[lv]->size;
+  int cur_lv_size = 1;
+  for(int i = lv; i < vLevel.size(); i++) {
+    cur_lv_size *= vLevel[i]->size;
+  }
   if (father_ptr.size()) {
     int prev_ptr = 0;
     assert(vectorArray.size() == 0);
     vectorArray.resize(father_crd.size(),{});
+    std::cerr << "level[" << lv-1 << "] crd size is " << father_crd.size() << std::endl;
+    std::cerr << "level[" << lv-1 << "] ptr size is " << father_ptr.size() << std::endl; 
     assert(valueArray.size() == vLevel[lv]->crd.size());
     static std::vector<float> V;
     for (size_t i = 0; i < father_crd.size(); ++i) {
+      std::cerr << "i = " << i << std::endl;
       V.clear();
       V.resize(cur_lv_size, 0.0);
       assert(father_ptr[i+1] > prev_ptr);
       for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
-        V[vLevel[lv]->crd[j]] = std::move(valueArray[j]);
+        int offset = 0;
+        for(int k = lv; k < vLevel.size(); k++){
+          offset += vLevel[k]->crd[j] * strides[k];
+        }
+        V[offset] = std::move(valueArray[j]);
       }
       vectorArray[i] = std::move(V);
       int add_one = (father_ptr[i+1]>prev_ptr);
@@ -1212,24 +1246,42 @@ bool SparlayStorage::vectorize(const int lv) {
     }
     this->singleVectorSize = cur_lv_size;
     valueArray.clear();
-    vLevel.pop_back();
+    for(int i = lv; i < vLevel.size(); i++) {
+      vLevel[i]->crd.clear();
+      vLevel[i]->ptr.clear();
+      vLevel[i]->same_path.clear();
+      vLevel[i]->type = LVINFO; 
+    }
+//    vLevel.pop_back();
   } else {
     std::cerr << "should not happen" << std::endl;
     assert(0);
   }
-  if (mark) separate(lv-1);
+  //The father level of the vectorized level must be separated, since it is the last level next to value, which cannot be merged.
+  separate(lv-1);
+  
   return 1;
 }
 
-bool SparlayStorage::devectorize() {
-  int lv = vLevel.size()-1;
+//Devectorize is the process of coverting the dense tensor slice that start from dimension level lv to COO representation of the corresponding tensor slice.
+bool SparlayStorage::devectorize(const int level) {
+  int lv = level - 1;
   bool mark = !(vLevel[lv]->type&LVFUSE);
   fuse(lv);
   auto& father_ptr = vLevel[lv]->ptr;
   auto& father_crd = vLevel[lv]->crd;
+  int strides[vLevel.size()];
+  strides[vLevel.size()-1] = 1;
+  for(int i = 0; i < vLevel.size()-1; i++) {
+    strides[i] = 1;
+    for(int j = i+1; j <= vLevel.size()-1; j++){
+      strides[i] *= vLevel[j]->size;
+    } 
+  }
   if (father_ptr.size()) {
     int prev_ptr = 0;
     assert(vLevel[lv]->crd.size() == vectorArray.size());
+//    for(int i = level; i < )
     std::vector<int> new_crd;
     std::vector<bool> new_same_path;
     static std::vector<float> new_value;
@@ -1242,9 +1294,18 @@ bool SparlayStorage::devectorize() {
         for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
           for (size_t k = 0; k < vectorArray[j].size(); ++k) {
             if (vectorArray[j][k]) {
+              int remain = k;
+              for(int l = level; l < vLevel.size(); l++) {
+                int coord = remain / strides[l];
+                remain = remain % strides[l];
+                if(vLevel[l]->crd.empty()){ 
+                  vLevel[l]->same_path.push_back(0);
+                } else {
+                  vLevel[l]->same_path.push_back(coord == vLevel[l]->crd.back());
+                }
+                vLevel[l]->crd.push_back(coord);
+              }
               cnt++;
-              new_crd.push_back(k);
-              new_same_path.push_back(0);
               new_value.push_back(vectorArray[j][k]);
             }
           }
@@ -1254,8 +1315,11 @@ bool SparlayStorage::devectorize() {
         father_ptr[i+1] = new_ptr;
       }
     }
-    std::vector<int> empty_ptr = {};
-    vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage(1, Size, new_crd, empty_ptr, new_same_path)));
+    for(int i = level; i < vLevel.size(); i++) {
+      vLevel[i]->type = LVTRIM; 
+    }
+//    std::vector<int> empty_ptr = {};
+//    vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage(1, Size, new_crd, empty_ptr, new_same_path)));
     valueArray = std::move(new_value);
     this->clearVector();
   } else {
@@ -1271,6 +1335,7 @@ bool SparlayStorage::neg(int lv) {
   for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
     vLevel[lv]->crd[i] = -vLevel[lv]->crd[i];
   }
+  (*exprs[lv]) = -(*exprs[lv]);
   return 1;
 }
 
@@ -1597,10 +1662,11 @@ extern "C" {
     #endif
       SparlayStorage* sparT = (SparlayStorage*)(ptr);
       sparT->fuse(lv+1);
-      // sparT->Print(std::cerr, 1);
       #ifdef DEBUG
       std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      std::cerr << "Print after Fuse" << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1613,6 +1679,8 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      std::cerr << "Print after grow" << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1625,7 +1693,8 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      // sparT->Print(std::cerr);
+      std::cerr << "Print after trim" << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1638,7 +1707,8 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      // sparT->Print(std::cerr);
+      std::cerr << "Print after separate" << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1651,7 +1721,8 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      // sparT->Print(std::cerr);
+      std::cerr << "Print after swap" << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1664,7 +1735,8 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      // sparT->Print(std::cerr, 1);
+      std::cerr << "Print after sub" << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1677,7 +1749,8 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      // sparT->Print(std::cerr, 1);
+      std::cerr << "Print after add " << std::endl;
+      sparT->Print(std::cerr, 1);
       return (void*)sparT;
   }
 
@@ -1704,6 +1777,8 @@ extern "C" {
     #ifdef DEBUG
     std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    std::cerr << "Print tile split" << std::endl;
+    sparT->Print(std::cerr, 1);
     return (void*)sparT;
   }
 
@@ -1716,6 +1791,8 @@ extern "C" {
     #ifdef DEBUG
     std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    std::cerr << "Print after Tile Merge" << std::endl;
+    sparT->Print(std::cerr, 1);
     return (void*)sparT;
   }
 
@@ -1725,10 +1802,11 @@ extern "C" {
     #endif
     SparlayStorage* sparT = (SparlayStorage*)(ptr);
     sparT->moveLv(srcLv+1, dstLv+1);
-    // sparT->Print(std::cerr, 1);
     #ifdef DEBUG
     std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
     #endif
+    std::cerr << "Print after move(" << srcLv << ", " << dstLv << ")" << std::endl;
+    sparT->Print(std::cerr, 1);
     return (void*)sparT;
   }
 
@@ -1741,18 +1819,22 @@ extern "C" {
     #ifdef DEBUG
     std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
     #endif
+    std::cerr << "Print after vectorize" << std::endl;
+    sparT->Print(std::cerr, 1);
     return (void*)sparT;
   }
 
-  void* _mlir_ciface_sptDevectorize(void* ptr) {
+  void* _mlir_ciface_sptDevectorize(void* ptr, int lv) {
     #ifdef DEBUG
     auto tic = TI;
     #endif
     SparlayStorage* sparT = (SparlayStorage*)(ptr);
-    sparT->devectorize();
+    sparT->devectorize(lv+1);
     #ifdef DEBUG
     std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    std::cerr << "Print after devectorize" << std::endl;
+    sparT->Print(std::cerr, 1);
     return (void*)sparT;
   }
 

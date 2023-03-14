@@ -603,10 +603,8 @@ public:
         
         //devectorize first, could be optimized.
         if ((unsigned)src_mx_trim < (srcCrd.getNumResults()-1)) {
-            int delta = srcCrd.getNumResults()-1-src_mx_trim;
-            assert(delta <= 2);
-            //TODO: FIXME: change devectorize to support matrix devectorization
-            genFunc1R(devectorizeName, {prevRes});
+            assert(src_mx_trim < srcCrd.getNumResults());
+            genFunc1R(devectorizeName, {prevRes, Const[src_mx_trim+1]});
         }
 
         bool need_move[10] = {0};
@@ -649,6 +647,8 @@ public:
 
             // trivial Gaussian Elimination with functiion generation
             // Calculate M: (range(dstM)->range(srcM))
+            std::cerr << "dstM " << dstM << std::endl;
+            std::cerr << "srcM " << srcM << std::endl;
             Matrix2f inverse_dstM = dstM.inverse();
             std::cerr << "inverse destination coordinate map = " << std::endl;
             std::cerr << inverse_dstM << std::endl;
@@ -656,6 +656,7 @@ public:
             Matrix2i crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
             auto genOpFromAffineMap = [&](Matrix2i& M) {
+                std::cerr << "Enter genOpFromAffineMap" << std::endl;
                 std::cerr << M << std::endl;
                 for (int i = 0; i < 2; ++i) {
                     if (M(i,i) == 0) {
@@ -785,17 +786,15 @@ public:
             genFunc1R(growName, {prevRes, Const[dst_mn_trim-1]});
         }
         if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
-            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
+//            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
             for (unsigned i = 0; i < dstCrd.getNumResults()-1; ++i) {
                 if (need_move[i]) {
                     genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                     need_move[i] = 0;
                 }
             }
-        }
-        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
-            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
-            genFunc1R(vectorizeName, {prevRes, Const[dstCrd.getNumResults()-1]});
+            std::cerr << "dst_mx_trim is " << dst_mx_trim << std::endl;
+            genFunc1R(vectorizeName, {prevRes, Const[dst_mx_trim+1]});
         }
         for (unsigned i = 0; i < dstCrd.getNumResults(); ++i) {
             if (need_move[i]) {
