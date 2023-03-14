@@ -2395,9 +2395,6 @@ extern "C" {
               sum=0;
               #pragma omp simd reduction(+:sum)
               for(k=CSR_dim1_ptr[i]; k<CSR_dim1_ptr[i+1]; k++) {
-//                 std::cout << "i="<<i<<", k="<<k<<", CSR_value[k]="<<CSR_value[k]<<
-//                   ", CSR_dim2_crd[k]="<<CSR_dim2_crd[k]<<", inB->data[CSR_dim2_crd[k]]="
-//                   <<inB->data[CSR_dim2_crd[k]]<<std::endl;
                 sum+=CSR_value[k]*(inB->data[CSR_dim2_crd[k]]);
                 // if(i==0) {
                   // std::cout << "i="<<i<<", k="<<k<<", CSR_value="<<CSR_value[k]<<", crd="<<CSR_dim2_crd[k]
@@ -2408,8 +2405,6 @@ extern "C" {
               // if(i==0)
                 // std::cout<<"sum="<< sum<<", inC->data["<<i<<"]="<<inC->data[i]<<std::endl;
             }
-//            csr_time += end0-start0;
-//            double start1 = omp_get_wtime(); 
             // std::cout << "tid = " << omp_get_thread_num() << std::endl;
             for (k = BDIA_dim1_ptr[ib]; k < BDIA_dim1_ptr[ib+1]; k++) {
               diag = BDIA_dim2_crd[k];
@@ -2428,19 +2423,12 @@ extern "C" {
               //     inC->data[i+ib*blockSize] += BDIA_vector[k*blockSize+i] * inB->data[i+ib*blockSize+diag];
               // }
             }
-//            for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
-//              inB->data[i] = inC->data[i];
-//            }
-//            double end1 = omp_get_wtime();
-//            bdia_time += end1-start1;
           }
         }
         double end0 = omp_get_wtime();
         std::cout << "Hybrid total time = " << (end0-start0) << " s"<< std::endl;
         std::cout << "Hybrid avg time = " << (end0-start0)*1000/runs << " ms"<< std::endl;
 
-//        std::cout << "bDIA total time = " << bdia_time << " s"<< std::endl;
-//        std::cout << "bDIA avg time = " << bdia_time*1000/runs << " ms"<< std::endl;
 
         outC->data = inC->data;
         outC->basePtr = inC->basePtr;
@@ -3297,6 +3285,232 @@ extern "C" {
     SparlayStruct* ret = new SparlayStruct;
     ret->vec.push_back((void*)sparT);
     ret->vec.push_back((void*)T_BDIA);
+    return (void*) ret;
+  }
+
+  void* _mlir_ciface_decompose_BELL_COO(void* ptr, int32_t blockSize, float block_thres, float col_thres) {
+    SparlayStorage* sparT = (SparlayStorage*)ptr;
+    uint64_t row_size = sparT->dimSizes.data()[0];
+    uint64_t col_size = sparT->dimSizes.data()[1];
+    uint64_t nnz = sparT->vLevel[2]->crd.size();
+    std::vector<int> row_crd(sparT->vLevel[1]->crd);
+    std::vector<int> col_crd(sparT->vLevel[2]->crd);
+    std::vector<DataType> values(sparT->valueArray);
+    sparT->vLevel[0]->ptr.pop_back();
+    sparT->vLevel[1]->crd.clear();
+    sparT->vLevel[1]->same_path.clear();
+    sparT->vLevel[2]->crd.clear();
+    sparT->vLevel[2]->same_path.clear();
+    sparT->valueArray.clear();
+    std::cout << "blockSize = " << blockSize << ", block_thres = " << block_thres << ", col_thres = " << col_thres << std::endl;
+    
+    // step 1: initialize vectorArray
+    auto T_BELL = new SparlayStorage();
+    for (unsigned i = 0; i <= 5; i++) 
+      T_BELL->vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage));
+    // T_BELL->vLevel[0]->type = LVTRIM ; // how to add FUSE in the same level?
+    T_BELL->vLevel[1]->type = LVFUSE | LVTRIM ;
+    T_BELL->vLevel[2]->size = ((row_size-1)/blockSize)+1;
+    T_BELL->vLevel[2]->type = LVFUSE ;
+    T_BELL->vLevel[3]->type = LVFUSE ;
+    T_BELL->vLevel[4]->size = blockSize;
+    T_BELL->vLevel[5]->size = blockSize;
+    T_BELL->dimSizes.push_back(row_size);
+    T_BELL->dimSizes.push_back(col_size);
+    
+    // step 2: assume read-in data is in row-major order
+    std::vector<unsigned> row_block_ptr(((row_size-1)/blockSize)+2, 0);
+    int prev_dim0, new_dim0, init_j;
+    unsigned init_i;
+    #pragma omp parallel for private(prev_dim0, new_dim0, init_j, init_i)
+    for (init_i = 1; init_i < nnz; init_i++) {
+      prev_dim0 = row_crd[init_i-1]/blockSize;
+      new_dim0 = row_crd[init_i]/blockSize;
+      if (new_dim0 != prev_dim0) {
+        for (init_j = prev_dim0; init_j < new_dim0; init_j++)
+          row_block_ptr[init_j+1]=init_i;
+      } 
+    }
+    for (unsigned m = row_crd[nnz-1]/blockSize; m < ((row_size-1)/blockSize)+1; m++)
+      row_block_ptr[m+1] = nnz;
+    // std::cout << "row_block_ptr = ";
+    // for (unsigned n = 0; n < row_block_ptr.size(); n++) {
+    //   std::cout << row_block_ptr[n] << "  ";
+    // }
+    // std::cout << "\n";
+
+    // step 2: compute level 1 crd - the max
+    unsigned iter1_i, iter1_pos, iter1_j;
+    int col_block_id;
+    std::vector<unsigned> col_blocks(((row_size-1)/blockSize)+1, 0); 
+    // std::vector<unsigned> col_block_nnz(((col_size-1)/blockSize)+1, 0);
+    std::vector<std::vector<unsigned>> col_block_crd(((row_size-1)/blockSize)+1);
+    #pragma omp parallel for private(iter1_i, iter1_pos, iter1_j, col_block_id)  
+    for (iter1_i = 0; iter1_i < ((row_size-1)/blockSize)+1; iter1_i++) {
+      std::vector<unsigned> col_block_nnz(((col_size-1)/blockSize)+1, 0);
+      for (iter1_pos = row_block_ptr[iter1_i]; iter1_pos < row_block_ptr[iter1_i+1]; iter1_pos++) {
+        col_block_id = col_crd[iter1_pos]/blockSize;
+        col_block_nnz[col_block_id] += 1;
+      }
+      // std::cout << "col_block_nnz = ";
+      // for (unsigned n = 0; n < col_block_nnz.size(); n++) {
+      //   std::cout << col_block_nnz[n] << "  ";
+      // }
+      // std::cout << "\n";
+      for (iter1_j = 0; iter1_j < ((col_size-1)/blockSize)+1; iter1_j++) {
+        if (col_block_nnz[iter1_j] > blockSize*blockSize*block_thres) {
+          col_blocks[iter1_i] += 1;
+          col_block_crd[iter1_i].push_back(iter1_j);
+        }
+      }
+    }
+    unsigned max_nnz = *std::max_element(col_blocks.begin(), col_blocks.end());
+    unsigned level1_size = unsigned(std::ceil(max_nnz * col_thres));
+    for (unsigned i = 0; i < level1_size; i++)
+      T_BELL->vLevel[1]->crd.push_back(i);
+    // std::cout << "col_blocks = ";
+    // for (unsigned n = 0; n < col_blocks.size(); n++) {
+    //   std::cout << col_blocks[n] << "  ";
+    // }
+    // std::cout << "\n";
+    // std::cout << "col_block_crd = ";
+    // for (unsigned n = 0; n < col_block_crd.size(); n++) {
+    //   std::cout << "\n";
+    //   for (unsigned m = 0; m < col_block_crd[n].size(); m++) 
+    //     std::cout << col_block_crd[n][m] << "  ";
+    // }
+    // std::cout << "\n";
+
+    // step 3: compute level 3 crd. Only after the crd order is determined can values be dispatched
+    T_BELL->vLevel[3]->crd.resize(T_BELL->vLevel[2]->size * level1_size, 0);
+    unsigned iter2_i, iter2_j, pad_val;
+    #pragma omp parallel for private(iter2_i, iter2_j, pad_val)  
+    for (iter2_i = 0; iter2_i < ((row_size-1)/blockSize)+1; iter2_i++) {
+      for (iter2_j = 0; iter2_j < std::min(level1_size, (unsigned)col_block_crd[iter2_i].size()); iter2_j++) {
+        T_BELL->vLevel[3]->crd[iter2_i*level1_size + iter2_j] = col_block_crd[iter2_i][iter2_j];
+      }
+      pad_val = 0;
+      while(iter2_j < level1_size) {
+        if (std::count(col_block_crd[iter2_i].begin(), col_block_crd[iter2_i].end(), pad_val)) {
+          pad_val += 1;
+          continue;
+        } else {
+          T_BELL->vLevel[3]->crd[iter2_i*level1_size + iter2_j] = pad_val;
+          pad_val += 1;
+          iter2_j += 1;
+        }
+      }
+    }
+    // std::cout << "level3_crd = ";
+    // for (unsigned n = 0; n < T_BELL->vLevel[3]->crd.size(); n++) {
+    //   std::cout << T_BELL->vLevel[3]->crd[n] << "  ";
+    // }
+    // std::cout << "\n";
+
+    // step 4: compute nnz, and row insert boundaries
+    unsigned iter3_i, iter3_pos;
+    unsigned inner_row_id, inner_col_id;
+    bool is_BELL;
+    unsigned find_val_id;
+    std::vector<std::vector<unsigned>> COO_row_crd(((row_size-1)/blockSize)+1);
+    std::vector<std::vector<unsigned>> COO_col_crd(((row_size-1)/blockSize)+1);
+    std::vector<std::vector<float>> COO_val(((row_size-1)/blockSize)+1);
+    T_BELL->vectorArray.resize(T_BELL->vLevel[2]->size * level1_size, std::vector<float>(blockSize*blockSize, 0));
+    #pragma omp parallel for private(iter3_i, iter3_pos, col_block_id, inner_row_id, inner_col_id, is_BELL)
+    for (iter3_i = 0; iter3_i < ((row_size-1)/blockSize)+1; iter3_i++) {
+      for (iter3_pos = row_block_ptr[iter3_i]; iter3_pos < row_block_ptr[iter3_i+1]; iter3_pos++) {
+        col_block_id = col_crd[iter3_pos]/blockSize;
+        inner_row_id = row_crd[iter3_pos]%blockSize;
+        inner_col_id = col_crd[iter3_pos]%blockSize;
+        // check if col_block_id is in BELL
+        is_BELL = false;
+        for (find_val_id = iter3_i*level1_size;
+             find_val_id < (iter3_i + 1)*level1_size;
+             find_val_id ++) {
+          if (T_BELL->vLevel[3]->crd[find_val_id] == col_block_id) {
+            is_BELL = true;
+            break;
+          }
+        }
+        if (is_BELL) {
+          unsigned correct_col_id = find_val_id%level1_size;
+          // std::cout << "correct_col_id = " << correct_col_id << "\n";
+          T_BELL->vectorArray[iter3_i*level1_size+correct_col_id][inner_row_id*blockSize+inner_col_id] = values[iter3_pos];
+        } else {
+          COO_row_crd[iter3_i].push_back(row_crd[iter3_pos]);
+          COO_col_crd[iter3_i].push_back(col_crd[iter3_pos]);
+          COO_val[iter3_i].push_back(values[iter3_pos]);
+        }
+      }
+    }
+    // std::cout << "vectorArray = ";
+    // for (unsigned n = 0; n < T_BELL->vectorArray.size(); n++) {
+    //   std::cout << "\n";
+    //   for (unsigned m = 0; m < T_BELL->vectorArray[n].size(); m++) 
+    //     std::cout << T_BELL->vectorArray[n][m] << "  ";
+    // }
+    // std::cout << "\n";
+    // std::cout << "COO_row_crd, size = " << COO_row_crd.size();
+    // for (unsigned n = 0; n < COO_row_crd.size(); n++) {
+    //   std::cout << "\n";
+    //   for (unsigned m = 0; m < COO_row_crd[n].size(); m++) 
+    //     std::cout << COO_row_crd[n][m] << "  ";
+    // }
+    // std::cout << "\n";
+    // std::cout << "COO_col_crd, size = " << COO_col_crd.size();
+    // for (unsigned n = 0; n < COO_col_crd.size(); n++) {
+    //   std::cout << "\n";
+    //   for (unsigned m = 0; m < COO_col_crd[n].size(); m++) 
+    //     std::cout << COO_col_crd[n][m] << "  ";
+    // }
+    // std::cout << "\n";
+    // std::cout << "COO_val, size = " << COO_val.size();
+    // for (unsigned n = 0; n < COO_val.size(); n++) {
+    //   std::cout << "\n";
+    //   for (unsigned m = 0; m < COO_val[n].size(); m++) 
+    //     std::cout << COO_val[n][m] << "  ";
+    // }
+    // std::cout << "\n";
+
+    // step 5: compute valueArray. Dispatch the values to COO and BELL.
+    unsigned COO_nnz = 0;
+    unsigned iter4_i, iter4_j;
+    sparT->vLevel[1]->same_path.push_back(0);
+    sparT->vLevel[2]->same_path.push_back(0);
+    for (iter4_i = 0; iter4_i < ((row_size-1)/blockSize)+1; iter4_i++) {
+      for (iter4_j = 0; iter4_j < COO_row_crd[iter4_i].size(); iter4_j++) {
+        sparT->vLevel[1]->crd.push_back(COO_row_crd[iter4_i][iter4_j]);
+        sparT->vLevel[2]->crd.push_back(COO_col_crd[iter4_i][iter4_j]);
+        sparT->valueArray.push_back(COO_val[iter4_i][iter4_j]);
+        if (COO_nnz > 0) {
+          bool same_row = (sparT->vLevel[1]->crd[COO_nnz] == sparT->vLevel[1]->crd[COO_nnz-1]);
+          bool same_col = (sparT->vLevel[2]->crd[COO_nnz] == sparT->vLevel[2]->crd[COO_nnz-1]);
+          sparT->vLevel[1]->same_path.push_back(same_row);
+          sparT->vLevel[2]->same_path.push_back(same_row && same_col);
+        }
+        COO_nnz += 1;
+      }
+    }    
+    sparT->vLevel[1]->ptr.push_back(COO_nnz);
+    // std::cout << "COO level1 crd = ";
+    // for (unsigned n = 0; n < sparT->vLevel[1]->crd.size(); n++) {
+    //   std::cout << sparT->vLevel[1]->crd[n] << "  ";
+    // }
+    // std::cout << "\n";
+    // std::cout << "COO level2 crd = ";
+    // for (unsigned n = 0; n < sparT->vLevel[2]->crd.size(); n++) {
+    //   std::cout << sparT->vLevel[2]->crd[n] << "  ";
+    // }
+    // std::cout << "\n";
+    // std::cout << "COO value = ";
+    // for (unsigned n = 0; n < sparT->valueArray.size(); n++) {
+    //   std::cout << sparT->valueArray[n] << "  ";
+    // }
+    // std::cout << "\n";
+
+    SparlayStruct* ret = new SparlayStruct;
+    ret->vec.push_back((void*)sparT);
+    ret->vec.push_back((void*)T_BELL);
     return (void*) ret;
   }
   
