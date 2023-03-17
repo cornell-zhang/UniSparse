@@ -235,7 +235,10 @@ AffineExpr parseAffineExpr(AsmParser& parser) {
 }
 
 //parse affine map in the form (*)[*]->(*)
-AffineMap parseAffineMapWithKeyword(AsmParser& parser, const ArrayRef<StringRef>& opTokens, std::vector< std::vector<bool> >& vis) {
+AffineMap parseAffineMapWithKeyword(AsmParser& parser, const ArrayRef<StringRef>& opTokens, 
+                                    std::vector< std::vector<bool> >& vis,
+                                    std::vector< std::vector<AffineExpr> >& indirectExpr
+                                    ) {
 
   mapDimtoID.clear();
   mapSymtoID.clear();
@@ -277,18 +280,45 @@ AffineMap parseAffineMapWithKeyword(AsmParser& parser, const ArrayRef<StringRef>
     for (size_t i = 0; i < opTokens.size(); ++i) {
       vis[id][i] = 0;
     }
-    while (suc(parser.parseOptionalKeyword(&opKeyRef, ArrayRef<StringRef>(opTokens)))) {
+    // bool indirectLevel = false;
+    if (suc(parser.parseOptionalKeyword(&opKeyRef, ArrayRef<StringRef>(opTokens)))) {
       for (size_t i = 0; i < opTokens.size(); ++i) {
         if (opTokens[i] == opKeyRef && !vis[id][i]) {
           vis[id][i] = 1;
         }
       }
+      std::vector<AffineExpr> indirectParams;
+      indirectParams.clear();
+      if (failed(parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, [&]() -> ParseResult {
+          // assert(curMap != nullptr);
+          // StringRef key;
+          auto param = parseAffineExpr(parser);
+          if (param == nullptr) {
+            return failure();
+          }
+          indirectParams.push_back(param);
+          return success();
+        }))) {
+        return parser.emitError(parser.getNameLoc(), "Expected indirect levels");
+      }
+      indirectExpr.push_back(std::vector<AffineExpr>(indirectParams.size()));
+      size_t indirectExpr_last = indirectExpr.size()-1;
+      for (size_t i = 0; i < indirectParams.size(); ++i) {
+        indirectExpr[indirectExpr_last][i] = indirectParams[i];
+      }
+      // results cannot skip a dimension with empty AffineExpr. ------------------
+      // A dirty solution here. Just put the first indirect AffineExpr in results.
+      assert(indirectParams.size()>=1);
+      results.push_back(indirectParams[0]);
+      // -------------------------------------------------------------------------
+    } else {
+      auto expr = parseAffineExpr(parser);
+      if (expr == nullptr) {
+        return failure();
+      }
+      indirectExpr.push_back(std::vector<AffineExpr>({}));
+      results.push_back(expr);
     }
-    auto expr = parseAffineExpr(parser);
-    if (expr == nullptr) {
-      return failure();
-    }
-    results.push_back(expr);
     return success();
   };
   assert(vis.size() == (size_t)0);

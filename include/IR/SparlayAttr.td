@@ -29,6 +29,12 @@ def SparlayCrdAttr : Sparlay_Attr<"SparlayCrd", []> {
   let parameters = (ins "CrdMap": $value);
 }
 
+// def SparlayIndirectAttr : Sparlay_Attr<"SparlayIndirect", []> {
+//   let mnemonic = "indirect";
+//   let hasCustomAssemblyFormat = 1;
+//   let parameters = (ins "std::string": $value);
+// }
+
 // Sparse tensor encoding attribute.
 def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding", 
               [DeclareAttrInterfaceMethods<VerifiableTensorEncoding>]> {
@@ -57,7 +63,7 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
     "CrdMap":$crdMap,
     "CompressMap":$compressMap,
     "unsigned":$bitWidth,
-    "std::string": $sched
+    "std::string": $indirectFunc
   );
 
   let genVerifyDecl = 1;

@@ -42,7 +42,7 @@ Attribute SparlayCompressAttr::parse(AsmParser &parser, Type type) {
   auto fuseIndex = std::vector<int>{};
   auto trimIndex = std::vector<int>{};
   std::vector<int>* curIndex = nullptr;
-  SmallVector<AffineExpr> secondaryExprs;
+  // SmallVector<AffineExpr> secondaryExprs;
   std::string tok_trim = "trim", tok_fuse = "fuse";
   SmallVector<StringRef, 2> op_token{tok_trim, tok_fuse};
   auto parseInteger = [&]() -> ParseResult {
@@ -107,18 +107,21 @@ Attribute SparlayCompressAttr::parse(AsmParser &parser, Type type) {
 Attribute SparlayCrdAttr::parse(AsmParser &parser, Type type) {
   auto isIndirect = std::vector<bool>{};
   std::vector< std::vector<bool> > vis;
+  std::vector< std::vector<AffineExpr> > indirectExpr;
   if (failed(parser.parseLess())) {
     return {};
   }
   StringRef indirectTok = "indirect";
   std::vector<StringRef> opTokens = {indirectTok};
-  auto amap = sparlay::parser::parseAffineMapWithKeyword(parser, opTokens, vis);
-  assert(vis[0].size() == (size_t)1);
-  isIndirect = vis[0];
+  auto amap = sparlay::parser::parseAffineMapWithKeyword(parser, opTokens, vis, indirectExpr);
+  for (size_t i = 0; i < vis.size(); i++) {
+    assert(vis[i].size() == (size_t)1);
+    isIndirect.push_back(vis[i][0]);
+  }
   if (failed(parser.parseGreater())) {
     return {};
   }
-  return SparlayCrdAttr::get(parser.getContext(), CrdMap(amap, isIndirect));
+  return SparlayCrdAttr::get(parser.getContext(), CrdMap(amap, isIndirect, indirectExpr));
 }
 
 Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
@@ -152,7 +155,7 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
       auto intAttr = attr.getValue().dyn_cast<IntegerAttr>();
       if (!intAttr) return {};
       bitWidth = intAttr.getInt();
-    }  else if (attr.getName() == "sched") {
+    }  else if (attr.getName() == "indirectFunc") {
       auto schedAttr = attr.getValue().dyn_cast<StringAttr>();
       sched_name = schedAttr.getValue();
     } else {
@@ -167,12 +170,57 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   const CrdMap& crdMap = getCrdMap();
   printer << " crdMap: { ";
   const auto& isIndirect = crdMap.getIsIndirect();
-  printer << (AffineMap)(crdMap) << "; ";
+  const auto& indirectExpr = crdMap.getIndirectExpr();
+  // printer << (AffineMap)(crdMap) << "; ";
+  // print AffineMap with indirect maps
+  // Dimension identifiers.
+  printer << '(';
+  for (int i = 0; i < (int)crdMap.getNumDims() - 1; ++i)
+    printer << 'd' << i << ", ";
+  if (crdMap.getNumDims() >= 1)
+    printer << 'd' << crdMap.getNumDims() - 1;
+  printer << ')';
+
+  // Symbolic identifiers.
+  if (crdMap.getNumSymbols() != 0) {
+    printer << '[';
+    for (unsigned i = 0; i < crdMap.getNumSymbols() - 1; ++i)
+      printer << 's' << i << ", ";
+    if (crdMap.getNumSymbols() >= 1)
+      printer << 's' << crdMap.getNumSymbols() - 1;
+    printer << ']';
+  }
+
+  // Result affine expressions.
+  printer << " -> (";
+  // interleaveComma(map.getResults(),
+  //                 [&](AffineExpr expr) { printAffineExpr(expr); });
+  bool first_level = true;
+  for (size_t i = 0; i < crdMap.getResults().size(); i++) {
+    if (!first_level) printer << ", ";
+    if (isIndirect[i]) {
+      printer << "indirect (";
+      bool first_indirect_level = true;
+      for (size_t j = 0; j < indirectExpr[i].size(); j++) {
+        if (!first_indirect_level) printer << ',';
+        printer << (AffineExpr)(indirectExpr[i][j]);
+        first_indirect_level = false;
+      }
+      printer << ")";
+    } else {
+      printer << (AffineExpr)(crdMap.getResults()[i]);
+    }
+    first_level = false;
+  }
+  printer << "); ";
+
   printer << "indirect_level(";
+  bool first_indirect_level = true;
   for (size_t i = 0; i < isIndirect.size(); ++i) {
     if (isIndirect[i]) {
+      if (!first_indirect_level) printer << ',';
       printer << i;
-      if (i != isIndirect.size()-1) printer << ',';
+      first_indirect_level = false;
     }
   }
   printer << ") }, ";
@@ -191,7 +239,7 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   }
   printer << "), ";
   printer << "bitWidth: " << getBitWidth();
-  printer << ", schedule: " << getSched();
+  printer << ", indirectFunc: " << getIndirectFunc();
 }
 
 void SparlayCompressAttr::print(AsmPrinter &printer) const {
@@ -206,7 +254,7 @@ void SparlayCrdAttr::print(AsmPrinter &printer) const {
 
 LogicalResult SparlayEncodingAttr::verify(
     function_ref<InFlightDiagnostic()> emitError,
-    CrdMap primaryMap, CompressMap secondaryMap, unsigned bitWidth, std::string sched
+    CrdMap primaryMap, CompressMap secondaryMap, unsigned bitWidth, std::string indirectFunc
 ) {
   return success();
 }

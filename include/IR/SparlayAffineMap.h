@@ -55,22 +55,31 @@ private:
 class CrdMap: public AffineMap {
   public:
 
-  CrdMap(): AffineMap(), isIndirect({}) {}
+  CrdMap(): AffineMap(), isIndirect({}), indirectExpr({}) {}
 
-  explicit CrdMap(const AffineMap& amap, const std::vector<bool>& _isIndirect): 
-    AffineMap(amap), isIndirect(_isIndirect) {}
+  explicit CrdMap(const AffineMap& amap, 
+                  const std::vector<bool>& _isIndirect,
+                  const std::vector< std::vector<AffineExpr> >& _indirectExpr): 
+    AffineMap(amap), isIndirect(_isIndirect), indirectExpr(_indirectExpr) {}
   
   bool operator == (const CrdMap& A) const {
     if ((AffineMap)(*this) != (AffineMap)(A)) return 0;
     auto dstIndirect = A.getIsIndirect();
+    auto dstIndirectExpr = A.getIndirectExpr();
     if (isIndirect.size() != dstIndirect.size()) return 0;
+    if (indirectExpr.size() != dstIndirectExpr.size()) return 0;
     for (size_t i = 0; i < isIndirect.size(); ++i) {
       if (isIndirect[i] != dstIndirect[i]) return 0;
+    }
+    for (size_t i = 0; i < indirectExpr.size(); i++) {
+      for (size_t j = 0; j < indirectExpr[i].size(); j++)
+        if (indirectExpr[i][j] != dstIndirectExpr[i][j]) return 0;
     }
     return 1;
   }
 
   std::vector<bool> getIsIndirect() const { return this->isIndirect; }
+  std::vector< std::vector<AffineExpr> > getIndirectExpr() const { return this->indirectExpr; }
 
   void Print() {
     this->dump();
@@ -83,6 +92,7 @@ class CrdMap: public AffineMap {
 
 private:
   std::vector<bool> isIndirect;
+  std::vector< std::vector<AffineExpr> > indirectExpr;
 };
 
 } //endof sparlay
