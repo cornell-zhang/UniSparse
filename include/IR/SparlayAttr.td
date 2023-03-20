@@ -29,11 +29,41 @@ def SparlayCrdAttr : Sparlay_Attr<"SparlayCrd", []> {
   let parameters = (ins "CrdMap": $value);
 }
 
-// def SparlayIndirectAttr : Sparlay_Attr<"SparlayIndirect", []> {
-//   let mnemonic = "indirect";
-//   let hasCustomAssemblyFormat = 1;
-//   let parameters = (ins "std::string": $value);
-// }
+def SparlaySumAttr : Sparlay_Attr<"SparlaySum", []> {
+  let mnemonic = "sum";
+  let hasCustomAssemblyFormat = 1;
+  let parameters = (ins "SumPrim": $value);
+}
+
+def SparlayEnumerateAttr : Sparlay_Attr<"SparlayEnumerate", []> {
+  let mnemonic = "enumerate";
+  let hasCustomAssemblyFormat = 1;
+  let parameters = (ins "EnumeratePrim": $value);
+}
+
+def SparlayScheduleAttr : Sparlay_Attr<"SparlaySchedule", []> {
+  let mnemonic = "schedule";
+  let hasCustomAssemblyFormat = 1;
+  let parameters = (ins "SchedulePrim": $value);
+}
+
+def SparlayReorderAttr : Sparlay_Attr<"SparlayReorder", []> {
+  let mnemonic = "reorder";
+  let hasCustomAssemblyFormat = 1;
+  let parameters = (ins "ReorderPrim": $value);
+}
+
+def SparlayIndirectAttr : Sparlay_Attr<"SparlayIndirect", []> {
+  let mnemonic = "indirect";
+  let hasCustomAssemblyFormat = 1;
+  let parameters = (
+    ins 
+    "SumPrim": $sumVal,
+    "EnumeratePrim": $enumVal,
+    "SchedulePrim": $schedVal,
+    "ReorderPrim": $reorderVal
+    );
+}
 
 // Sparse tensor encoding attribute.
 def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding", 
@@ -63,7 +93,7 @@ def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding",
     "CrdMap":$crdMap,
     "CompressMap":$compressMap,
     "unsigned":$bitWidth,
-    "std::string": $indirectFunc
+    "IndirectFunc": $indirectFunc
   );
 
   let genVerifyDecl = 1;

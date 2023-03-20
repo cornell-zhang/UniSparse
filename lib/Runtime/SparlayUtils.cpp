@@ -1203,9 +1203,9 @@ bool SparlayStorage::vectorize(const int lv) {
   std::cerr << "Enter vectorize, vLevel.size() is " << vLevel.size() << ", and lv is " << lv << std::endl;
   int strides[vLevel.size()];
   strides[vLevel.size()-1] = 1;
-  for(int i = 0; i < vLevel.size()-1; i++) {
+  for(unsigned i = 0; i < vLevel.size()-1; i++) {
     strides[i] = 1;
-    for(int j = i+1; j <= vLevel.size()-1; j++){
+    for(unsigned j = i+1; j <= vLevel.size()-1; j++){
       strides[i] *= vLevel[j]->size;
     } 
   }
@@ -1215,7 +1215,7 @@ bool SparlayStorage::vectorize(const int lv) {
   auto& father_ptr = vLevel[lv-1]->ptr;
   auto& father_crd = vLevel[lv-1]->crd;
   int cur_lv_size = 1;
-  for(int i = lv; i < vLevel.size(); i++) {
+  for(size_t i = lv; i < vLevel.size(); i++) {
     cur_lv_size *= vLevel[i]->size;
   }
   if (father_ptr.size()) {
@@ -1233,7 +1233,7 @@ bool SparlayStorage::vectorize(const int lv) {
       assert(father_ptr[i+1] > prev_ptr);
       for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
         int offset = 0;
-        for(int k = lv; k < vLevel.size(); k++){
+        for(size_t k = lv; k < vLevel.size(); k++){
           offset += vLevel[k]->crd[j] * strides[k];
         }
         V[offset] = std::move(valueArray[j]);
@@ -1246,7 +1246,7 @@ bool SparlayStorage::vectorize(const int lv) {
     }
     this->singleVectorSize = cur_lv_size;
     valueArray.clear();
-    for(int i = lv; i < vLevel.size(); i++) {
+    for(size_t i = lv; i < vLevel.size(); i++) {
       vLevel[i]->crd.clear();
       vLevel[i]->ptr.clear();
       vLevel[i]->same_path.clear();
@@ -1272,9 +1272,9 @@ bool SparlayStorage::devectorize(const int level) {
   auto& father_crd = vLevel[lv]->crd;
   int strides[vLevel.size()];
   strides[vLevel.size()-1] = 1;
-  for(int i = 0; i < vLevel.size()-1; i++) {
+  for(unsigned i = 0; i < vLevel.size()-1; i++) {
     strides[i] = 1;
-    for(int j = i+1; j <= vLevel.size()-1; j++){
+    for(unsigned j = i+1; j <= vLevel.size()-1; j++){
       strides[i] *= vLevel[j]->size;
     } 
   }
@@ -1286,7 +1286,7 @@ bool SparlayStorage::devectorize(const int level) {
     std::vector<bool> new_same_path;
     static std::vector<float> new_value;
     new_value.clear();
-    size_t Size = this->singleVectorSize;
+    // size_t Size = this->singleVectorSize;
     if (vectorArray.size() != 0) {
       for (size_t i = 0; i < father_crd.size(); ++i) {
         assert(father_ptr[i+1] == prev_ptr+1);
@@ -1295,7 +1295,7 @@ bool SparlayStorage::devectorize(const int level) {
           for (size_t k = 0; k < vectorArray[j].size(); ++k) {
             if (vectorArray[j][k]) {
               int remain = k;
-              for(int l = level; l < vLevel.size(); l++) {
+              for(size_t l = level; l < vLevel.size(); l++) {
                 int coord = remain / strides[l];
                 remain = remain % strides[l];
                 if(vLevel[l]->crd.empty()){ 
@@ -1315,7 +1315,7 @@ bool SparlayStorage::devectorize(const int level) {
         father_ptr[i+1] = new_ptr;
       }
     }
-    for(int i = level; i < vLevel.size(); i++) {
+    for(size_t i = level; i < vLevel.size(); i++) {
       vLevel[i]->type = LVTRIM; 
     }
 //    std::vector<int> empty_ptr = {};
@@ -2463,9 +2463,9 @@ extern "C" {
         int blockSize = spA_BDIA->vLevel[3]->size;
         std::vector<DataType> BDIA_vector = spA_BDIA->vector_1d;
         int64_t iSize = inC->sizes[0];
-        int64_t jSize = inB->sizes[0];
-        double csr_time = 0.0;
-        double bdia_time = 0.0;
+        // int64_t jSize = inB->sizes[0];
+        // double csr_time = 0.0;
+        // double bdia_time = 0.0;
         unsigned runs = 50;
         std::cout << inC->data[0] << " " << inC->data[1] << " " << inC->data[2] << " " << inC->data[3] << std::endl;
 
@@ -2544,7 +2544,7 @@ extern "C" {
         int blockSize = spA_BDIA->vLevel[3]->size;
         std::vector<DataType> BDIA_vector = spA_BDIA->vector_1d;
         int64_t iSize = inC->sizes[0];
-        int64_t jSize = inB->sizes[0];
+        // int64_t jSize = inB->sizes[0];
         int64_t kSize = inB->sizes[1];
         assert(kSize == inC->sizes[1]);
         DataType *sum;
@@ -2668,7 +2668,7 @@ extern "C" {
         int blockSize = spA_BDIA->vLevel[3]->size;
         std::vector<DataType> BDIA_vector = spA_BDIA->vector_1d;
         int64_t iSize = inC->sizes[0];
-        int64_t jSize = inB->sizes[0];
+        // int64_t jSize = inB->sizes[0];
         double start = omp_get_wtime();
         // std::cout << "n_blocks = " <<  n_blocks << std::endl;
         // // std::cout << "BDIA_dim1_ptr_size = " << BDIA_dim1_ptr_size << std::endl;

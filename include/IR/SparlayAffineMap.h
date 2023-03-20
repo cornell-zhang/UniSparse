@@ -95,6 +95,164 @@ private:
   std::vector< std::vector<AffineExpr> > indirectExpr;
 };
 
+class SumPrim: public AffineMap {
+public:
+
+  SumPrim(): AffineMap(), groupBy({}), valMap({}), is_empty(true) {}
+
+  explicit SumPrim(const std::vector<unsigned>& _groupBy, const std::map<std::string, int>& _valMap): 
+    AffineMap(), groupBy(_groupBy), valMap(_valMap) {
+      is_empty = false;
+    }
+
+  std::vector<unsigned> getGroupBy() const { return groupBy; }
+  std::map<std::string, int> getValMap() const { return valMap; }
+  bool getIsEmpty() const { return is_empty; }
+  void setSumPrim(const std::vector<unsigned>& _groupBy, 
+                  const std::map<std::string, int>& _valMap,
+                  const bool& _isEmpty ) {
+    this->groupBy = _groupBy;
+    this->valMap = _valMap;
+    this->is_empty = _isEmpty;
+  }
+
+private:
+  std::vector<unsigned> groupBy;
+  std::map<std::string, int> valMap;
+  bool is_empty;
+};
+
+class EnumeratePrim: public AffineMap {
+public:
+
+  EnumeratePrim(): AffineMap(), groupBy({}), traverseBy({}), valMap({}), is_empty(true) {}
+
+  explicit EnumeratePrim(const std::vector<unsigned>& _groupBy, const std::vector<unsigned>& _traverseBy, const std::map<std::string, int>& _valMap): 
+    AffineMap(), groupBy(_groupBy), traverseBy(_traverseBy), valMap(_valMap) {
+      is_empty = false;
+    }
+
+  std::vector<unsigned> getGroupBy() const { return groupBy; }
+  std::vector<unsigned> getTraverseBy() const { return traverseBy; }
+  std::map<std::string, int> getValMap() const { return valMap; }
+  bool getIsEmpty() const { return is_empty; }
+  void setEnumPrim(const std::vector<unsigned>& _groupBy, 
+                  const std::vector<unsigned>& _traverseBy, 
+                  const std::map<std::string, int>& _valMap,
+                  const bool& _isEmpty ) {
+    this->groupBy = _groupBy;
+    this->traverseBy = _traverseBy;
+    this->valMap = _valMap;
+    this->is_empty = _isEmpty;
+  }
+
+private:
+  std::vector<unsigned> groupBy;
+  std::vector<unsigned> traverseBy;
+  std::map<std::string, int> valMap;
+  bool is_empty;
+};
+
+class SchedulePrim: public AffineMap {
+public:
+
+  SchedulePrim(): AffineMap(), traverseBy({}), workload({}), bucket(), is_empty(true) {}
+
+  explicit SchedulePrim(const std::vector<unsigned>& _traverseBy, const std::string& _workload, const unsigned& _bucket): 
+    AffineMap(), traverseBy(_traverseBy), workload(_workload), bucket(_bucket) {
+      is_empty = false;
+    }
+
+  std::vector<unsigned> getTraverseBy() const { return traverseBy; }
+  std::string getWorkload() const { return workload; }
+  unsigned getBucket() const { return bucket; }
+  bool getIsEmpty() const { return is_empty; }
+  void setSchedPrim(
+                  const std::vector<unsigned>& _traverseBy, 
+                  const std::string& _workload,
+                  const unsigned& _bucket,
+                  const bool& _isEmpty ) {
+    this->traverseBy = _traverseBy;
+    this->workload = _workload;
+    this->bucket = _bucket;
+    this->is_empty = _isEmpty;
+  }
+
+private:
+  std::vector<unsigned> traverseBy;
+  std::string workload;
+  unsigned bucket;
+  bool is_empty;
+};
+
+class ReorderPrim: public AffineMap {
+public:
+
+  ReorderPrim(): AffineMap(), traverseBy(), workload({}), order(), is_empty(true) {}
+
+  explicit ReorderPrim(const std::vector<unsigned>& _traverseBy, const std::string& _workload, const bool& _order): 
+    AffineMap(), traverseBy(_traverseBy), workload(_workload), order(_order) {
+      is_empty = false;
+    }
+
+  std::vector<unsigned> getTraverseBy() const { return traverseBy; }
+  std::string getWorkload() const { return workload; }
+  bool getOrder() const { return order; }
+  bool getIsEmpty() const { return is_empty; }
+  void setReorderPrim(
+                  const std::vector<unsigned>& _traverseBy, 
+                  const std::string& _workload,
+                  const unsigned& _order,
+                  const bool& _isEmpty ) {
+    this->traverseBy = _traverseBy;
+    this->workload = _workload;
+    this->order = _order;
+    this->is_empty = _isEmpty;
+  }
+
+private:
+  std::vector<unsigned> traverseBy;
+  std::string workload;
+  bool order;
+  bool is_empty;
+};
+
+class IndirectFunc: public AffineMap {
+  public:
+
+  IndirectFunc(): AffineMap(), sumPrim({}), enumeratePrim({}), schedulePrim({}), reorderPrim({}) {}
+
+  explicit IndirectFunc(const AffineMap& amap, 
+                  const SumPrim& _sumPrim,
+                  const EnumeratePrim& _enumeratePrim,
+                  const SchedulePrim& _schedulePrim,
+                  const ReorderPrim& _reorderPrim
+                  ): 
+    AffineMap(amap), sumPrim(_sumPrim), enumeratePrim(_enumeratePrim), 
+    schedulePrim(_schedulePrim), reorderPrim(_reorderPrim) {}
+
+  void setIndirectFunc(SumPrim _sumPrim, EnumeratePrim _enumeratePrim, SchedulePrim _schedulePrim, ReorderPrim _reorderPrim) {
+    sumPrim.setSumPrim(_sumPrim.getGroupBy(), _sumPrim.getValMap(), _sumPrim.getIsEmpty());
+    enumeratePrim.setEnumPrim(_enumeratePrim.getGroupBy(), _enumeratePrim.getTraverseBy(), 
+                              _enumeratePrim.getValMap(), _enumeratePrim.getIsEmpty());
+    schedulePrim.setSchedPrim(_schedulePrim.getTraverseBy(), _schedulePrim.getWorkload(),
+                              _schedulePrim.getBucket(), _schedulePrim.getIsEmpty());
+    reorderPrim.setReorderPrim(_reorderPrim.getTraverseBy(), _reorderPrim.getWorkload(),
+                               _reorderPrim.getOrder(), _reorderPrim.getIsEmpty());
+  }
+  SumPrim getSumPrim() const { return this->sumPrim; }
+  EnumeratePrim getEnumeratePrim() const { return this->enumeratePrim; }
+  SchedulePrim getSchedulePrim() const { return this->schedulePrim; }
+  ReorderPrim getReorderPrim() const { return this->reorderPrim; }
+
+private:
+  SumPrim sumPrim;
+  EnumeratePrim enumeratePrim;
+  SchedulePrim schedulePrim;
+  ReorderPrim reorderPrim;
+};
+
+
 } //endof sparlay
 } //endof mlir
 

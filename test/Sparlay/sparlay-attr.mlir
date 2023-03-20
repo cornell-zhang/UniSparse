@@ -7,13 +7,14 @@
 
 #2 = #sparlay.encoding<{
   compressMap = #sparlay.compress<fuse(1,1), trim(1,2)>,
-  crdMap = #sparlay.crd<(i,j)->(j,i)>,
-  indirectFunc = "ASAP"
+  crdMap = #sparlay.crd<(i,j)->(j,i)>
 }>
 
 #3 = #sparlay.encoding<{
   compressMap = #sparlay.compress<fuse(0,1), trim(0)>,
-  crdMap = #sparlay.crd<(i,j,k)[s0,s1]->(indirect(i,j), indirect (j), (k + (minus i)) floordiv s1)>
+  crdMap = #sparlay.crd<(i,j,k)[s0,s1]->(indirect(i,j), indirect (j), (k + (minus i)) floordiv s1)>,
+  indirectFunc = #sparlay.indirect<{
+  }>
 }>
 
 //CHECK-LABEL: func.func private @F
