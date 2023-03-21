@@ -14,6 +14,10 @@
   compressMap = #sparlay.compress<fuse(0,1), trim(0)>,
   crdMap = #sparlay.crd<(i,j,k)[s0,s1]->(indirect(i,j), indirect (j), (k + (minus i)) floordiv s1)>,
   indirectFunc = #sparlay.indirect<{
+    sumVal = #sparlay.sum<groupBy (0), with val ne 0 -> 1 | otherwise -> 0>,
+    enumVal = #sparlay.enumerate<groupBy (0), traverseBy (1), with val eq 0 -> sumVal | otherwise -> 0>,
+    reorderVal = #sparlay.reorder<traverseBy (0), sumVal, descend>, // map: original matrix A -> output A' [0, 1]
+    schedVal = #sparlay.schedule<traverseBy (0), sumVal, 2> //list[[]] -> list[]
   }>
 }>
 

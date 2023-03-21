@@ -127,18 +127,18 @@ public:
 
   EnumeratePrim(): AffineMap(), groupBy({}), traverseBy({}), valMap({}), is_empty(true) {}
 
-  explicit EnumeratePrim(const std::vector<unsigned>& _groupBy, const std::vector<unsigned>& _traverseBy, const std::map<std::string, int>& _valMap): 
+  explicit EnumeratePrim(const std::vector<unsigned>& _groupBy, const std::vector<unsigned>& _traverseBy, const std::map<std::string, std::string>& _valMap): 
     AffineMap(), groupBy(_groupBy), traverseBy(_traverseBy), valMap(_valMap) {
       is_empty = false;
     }
 
   std::vector<unsigned> getGroupBy() const { return groupBy; }
   std::vector<unsigned> getTraverseBy() const { return traverseBy; }
-  std::map<std::string, int> getValMap() const { return valMap; }
+  std::map<std::string, std::string> getValMap() const { return valMap; }
   bool getIsEmpty() const { return is_empty; }
   void setEnumPrim(const std::vector<unsigned>& _groupBy, 
                   const std::vector<unsigned>& _traverseBy, 
-                  const std::map<std::string, int>& _valMap,
+                  const std::map<std::string, std::string>& _valMap,
                   const bool& _isEmpty ) {
     this->groupBy = _groupBy;
     this->traverseBy = _traverseBy;
@@ -149,7 +149,7 @@ public:
 private:
   std::vector<unsigned> groupBy;
   std::vector<unsigned> traverseBy;
-  std::map<std::string, int> valMap;
+  std::map<std::string, std::string> valMap;
   bool is_empty;
 };
 

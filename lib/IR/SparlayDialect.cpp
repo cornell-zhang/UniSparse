@@ -174,7 +174,6 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
 }
 
 Attribute SparlayIndirectAttr::parse(AsmParser &parser, Type type) {
-  std::cout << "in SparlayIndirectAttr::parse\n";
   if (failed(parser.parseLess()))
     return {};
   // Parse the data as a dictionary.
@@ -209,19 +208,273 @@ Attribute SparlayIndirectAttr::parse(AsmParser &parser, Type type) {
 }
 
 Attribute SparlaySumAttr::parse(AsmParser &parser, Type type) {
-  return SparlaySumAttr::get(parser.getContext(), {});
+  auto groupBy = std::vector<unsigned>{};
+  auto valMap = std::map<std::string, int>{};
+  std::vector<unsigned>* curIndex = nullptr;
+  // SmallVector<AffineExpr> secondaryExprs;
+  std::string tok_group_by = "groupBy", tok_with = "with";
+  std::string tok_val = "val", tok_otherwise = "otherwise", tok_neq = "ne", tok_eq = "eq";
+  SmallVector<StringRef, 2> op_token{tok_group_by, tok_with};
+  SmallVector<StringRef, 2> op_token_eq{tok_neq, tok_eq};
+  SmallVector<StringRef, 2> op_token_val{tok_val, tok_otherwise};
+  auto parseInteger = [&]() -> ParseResult {
+    int64_t val;
+    assert(curIndex != nullptr);
+    if (parser.parseOptionalInteger<int64_t>(val).hasValue()) {
+      curIndex->push_back(val);
+      return ParseResult(success());
+    } else {
+      return ParseResult(failure());
+    }
+  };
+  if (failed(parser.parseLess())) {
+    return {};
+  }
+  StringRef op_key_ref;
+  auto parseSingleSum = [&]() -> ParseResult {
+    // auto ret = parser.parseOptionalKeyword(&op_key_ref, ArrayRef<StringRef>(op_token));
+    auto ret = parser.parseOptionalKeyword(&op_key_ref);
+    if (succeeded(ret)) {
+      if (std::string(op_key_ref.str()) == tok_group_by) {
+        curIndex = &groupBy;
+        ret = parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, parseInteger);
+        if (failed(ret)) {
+          return ret;
+        } else {
+          std::sort(groupBy.begin(), groupBy.end());
+        }
+      } else if (std::string(op_key_ref.str()) == tok_with) {
+        StringRef op_key_val, op_eq;
+        int64_t s_num, t_num;
+        if (failed(parser.parseOptionalKeyword(&op_key_val, ArrayRef<StringRef>(op_token_val))))
+          return parser.emitError(parser.getNameLoc(), "Expected value"), failure();
+        while(std::string(op_key_val.str()) != tok_otherwise) {
+          if (failed(parser.parseOptionalKeyword(&op_eq, ArrayRef<StringRef>(op_token_eq))))
+            return parser.emitError(parser.getNameLoc(), "Expected equal or not equal"), failure();
+          if (failed(parser.parseInteger(s_num)))
+            return parser.emitError(parser.getNameLoc(), "Expected number"), failure(); // only supports integer currently
+          if (failed(parser.parseArrow())) 
+            return parser.emitError(parser.getNameLoc(), "Expected ->"), failure();
+          if (failed(parser.parseInteger(t_num)))
+            return parser.emitError(parser.getNameLoc(), "Expected number"), failure();
+          valMap.insert({op_eq.str() +" "+ std::to_string(s_num), t_num});
+          if (failed(parser.parseOptionalVerticalBar()))
+            return parser.emitError(parser.getNameLoc(), "Expected |"), failure(); 
+          if (failed(parser.parseOptionalKeyword(&op_key_val, ArrayRef<StringRef>(op_token_val))))
+            return parser.emitError(parser.getNameLoc(), "Expected value"), failure();
+        }
+        if (failed(parser.parseArrow())) 
+          return parser.emitError(parser.getNameLoc(), "Expected ->"), failure();
+        if (failed(parser.parseInteger(t_num)))
+          return parser.emitError(parser.getNameLoc(), "Expected number"), failure();
+        valMap.insert({"otherwise", t_num});
+      } else {
+        return parser.emitError(parser.getNameLoc(), "Expected \"group-by\" or \"with\""), failure();
+      }
+      return success();
+    }
+    return failure();
+  };
+  if (failed(parser.parseCommaSeparatedList(parseSingleSum))) {
+    return {};
+  }
+  if (failed(parser.parseGreater())) {
+    return {};
+  }
+
+  return SparlaySumAttr::get(parser.getContext(), SumPrim(groupBy, valMap));
 }
 
 Attribute SparlayEnumerateAttr::parse(AsmParser &parser, Type type) {
-  return SparlayEnumerateAttr::get(parser.getContext(), {});
+  auto groupBy = std::vector<unsigned>{};
+  auto traverseBy = std::vector<unsigned>{};
+  auto valMap = std::map<std::string, std::string>{};
+  std::vector<unsigned>* curIndex = nullptr;
+  // SmallVector<AffineExpr> secondaryExprs;
+  std::string tok_group_by = "groupBy", tok_traverse_by = "traverseBy", tok_with = "with";
+  std::string tok_val = "val", tok_otherwise = "otherwise", tok_neq = "ne", tok_eq = "eq";
+  SmallVector<StringRef, 2> op_token{tok_group_by, tok_traverse_by, tok_with};
+  SmallVector<StringRef, 2> op_token_eq{tok_neq, tok_eq};
+  SmallVector<StringRef, 2> op_token_val{tok_val, tok_otherwise};
+  auto parseInteger = [&]() -> ParseResult {
+    int64_t val;
+    assert(curIndex != nullptr);
+    if (parser.parseOptionalInteger<int64_t>(val).hasValue()) {
+      curIndex->push_back(val);
+      return ParseResult(success());
+    } else {
+      return ParseResult(failure());
+    }
+  };
+  if (failed(parser.parseLess())) {
+    return {};
+  }
+  StringRef op_key_ref;
+  auto parseSingleSum = [&]() -> ParseResult {
+    auto ret = parser.parseOptionalKeyword(&op_key_ref, ArrayRef<StringRef>(op_token));
+    if (succeeded(ret)) {
+      if (std::string(op_key_ref.str()) == tok_group_by) {
+        curIndex = &groupBy;
+        ret = parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, parseInteger);
+        if (failed(ret)) {
+          return ret;
+        } else {
+          std::sort(groupBy.begin(), groupBy.end());
+        }
+      } else if (std::string(op_key_ref.str()) == tok_traverse_by) {
+        curIndex = &traverseBy;
+        ret = parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, parseInteger);
+        if (failed(ret)) {
+          return ret;
+        } else {
+          std::sort(traverseBy.begin(), traverseBy.end());
+        }
+      } else if (std::string(op_key_ref.str()) == tok_with) {
+        StringRef op_key_val, op_eq, t_val;
+        int64_t s_num, t_num;
+        auto ret = parser.parseOptionalKeyword(&op_key_val, ArrayRef<StringRef>(op_token_val));
+        if (failed(ret))
+          return parser.emitError(parser.getNameLoc(), "Expected value"), failure();
+        while(std::string(op_key_val.str()) != tok_otherwise) {
+          auto ret = parser.parseOptionalKeyword(&op_eq, ArrayRef<StringRef>(op_token_eq));
+          if (failed(ret))
+            return parser.emitError(parser.getNameLoc(), "Expected equal or not equal"), failure();
+          if (failed(*parser.parseOptionalInteger(s_num)))
+            return parser.emitError(parser.getNameLoc(), "Expected number"), failure(); // only supports integer currently
+          if (failed(parser.parseArrow())) 
+            return parser.emitError(parser.getNameLoc(), "Expected ->"), failure();
+          if (succeeded(parser.parseOptionalKeyword(&t_val)))
+            valMap.insert({op_eq.str() +" "+ std::to_string(s_num), t_val.str()});
+          else if (succeeded(*parser.parseOptionalInteger(t_num)))
+            valMap.insert({op_eq.str() +" "+ std::to_string(s_num), std::to_string(t_num)});
+          else return parser.emitError(parser.getNameLoc(), "Expected number"), failure();
+          if (failed(parser.parseOptionalVerticalBar()))
+            return parser.emitError(parser.getNameLoc(), "Expected |"), failure(); 
+          if (failed(parser.parseOptionalKeyword(&op_key_val, ArrayRef<StringRef>(op_token_val))))
+            return parser.emitError(parser.getNameLoc(), "Expected value"), failure();
+        }
+        if (failed(parser.parseArrow())) 
+          return parser.emitError(parser.getNameLoc(), "Expected ->"), failure();
+        if (succeeded(*parser.parseOptionalInteger(t_num)))
+          valMap.insert({"otherwise", std::to_string(t_num)});
+        else if (succeeded(parser.parseOptionalKeyword(&t_val)))
+          valMap.insert({"otherwise", t_val.str()});
+        else  return parser.emitError(parser.getNameLoc(), "Expected number"), failure();
+      } else {
+        return parser.emitError(parser.getNameLoc(), "Expected \"group-by\", \"traverse-by\" or \"with\""), failure();
+      }
+      return success();
+    }
+    return failure();
+  };
+  if (failed(parser.parseCommaSeparatedList(parseSingleSum))) {
+    return {};
+  }
+  if (failed(parser.parseGreater())) {
+    return {};
+  }
+
+  return SparlayEnumerateAttr::get(parser.getContext(), EnumeratePrim(groupBy, traverseBy, valMap));
 }
 
 Attribute SparlayScheduleAttr::parse(AsmParser &parser, Type type) {
-  return SparlayScheduleAttr::get(parser.getContext(), {});
+  auto traverseBy = std::vector<unsigned>{};
+  std::string workload;
+  int64_t bucket;
+  std::vector<unsigned>* curIndex = nullptr;
+  StringRef op_key_ref;
+  std::string tok_traverse_by = "traverseBy";
+  std::string tok_sum = "sumVal", tok_enum = "enumVal", tok_reorder = "reorderVal", tok_sched = "schedVal";
+  SmallVector<StringRef, 2> op_token{tok_traverse_by, tok_sum, tok_enum, tok_reorder, tok_sched};
+  auto parseInteger = [&]() -> ParseResult {
+    int64_t val;
+    assert(curIndex != nullptr);
+    if (parser.parseOptionalInteger<int64_t>(val).hasValue()) {
+      curIndex->push_back(val);
+      return ParseResult(success());
+    } else {
+      return ParseResult(failure());
+    }
+  };
+  if (failed(parser.parseLess())) {
+    return {};
+  }
+  auto parseSingleSum = [&]() -> ParseResult {
+    auto ret = parser.parseOptionalKeyword(&op_key_ref, ArrayRef<StringRef>(op_token));
+    if (succeeded(ret)) {
+      if (std::string(op_key_ref.str()) == tok_traverse_by) {
+        curIndex = &traverseBy;
+        if (succeeded(parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, parseInteger))) {
+          std::sort(traverseBy.begin(), traverseBy.end());
+        } else 
+          return ParseResult(failure());
+      } else {
+        workload = op_key_ref.str();
+      }
+      return success();
+    } else if (parser.parseOptionalInteger<int64_t>(bucket).hasValue()) {
+      return success();
+    } else 
+      return parser.emitError(parser.getNameLoc(), "Expected \"traverse-by\" or val."), failure();
+  };
+  if (failed(parser.parseCommaSeparatedList(parseSingleSum))) {
+    return {};
+  }
+  if (failed(parser.parseGreater())) {
+    return {};
+  }
+  return SparlayScheduleAttr::get(parser.getContext(), SchedulePrim(traverseBy, workload, bucket));
 }
 
 Attribute SparlayReorderAttr::parse(AsmParser &parser, Type type) {
-  return SparlayReorderAttr::get(parser.getContext(), {});
+  auto traverseBy = std::vector<unsigned>{};
+  std::string workload;
+  bool order;
+  std::vector<unsigned>* curIndex = nullptr;
+  StringRef op_key_ref;
+  std::string tok_traverse_by = "traverseBy";
+  std::string tok_descend = "descend", tok_ascend = "ascend";
+  std::string tok_sum = "sumVal", tok_enum = "enumVal", tok_reorder = "reorderVal", tok_sched = "schedVal";
+  SmallVector<StringRef, 2> op_token{tok_traverse_by, tok_sum, tok_enum, tok_reorder, tok_sched, tok_descend, tok_ascend};
+  auto parseInteger = [&]() -> ParseResult {
+    int64_t val;
+    assert(curIndex != nullptr);
+    if (parser.parseOptionalInteger<int64_t>(val).hasValue()) {
+      curIndex->push_back(val);
+      return ParseResult(success());
+    } else {
+      return ParseResult(failure());
+    }
+  };
+  if (failed(parser.parseLess())) {
+    return {};
+  }
+  auto parseSingleSum = [&]() -> ParseResult {
+    if (succeeded(parser.parseOptionalKeyword(&op_key_ref, ArrayRef<StringRef>(op_token)))) {
+      if (std::string(op_key_ref.str()) == tok_traverse_by) {
+        curIndex = &traverseBy;
+        if (succeeded(parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, parseInteger))) {
+          std::sort(traverseBy.begin(), traverseBy.end());
+        } else 
+          return ParseResult(failure());
+      } else if (std::string(op_key_ref.str()) == tok_descend) {
+        order = false;
+      } else if (std::string(op_key_ref.str()) == tok_ascend) {
+        order = true;
+      } else {
+        workload = op_key_ref.str();
+      }
+      return success();
+    } else 
+      return parser.emitError(parser.getNameLoc(), "Expected \"traverse-by\" or val."), failure();
+  };
+  if (failed(parser.parseCommaSeparatedList(parseSingleSum))) {
+    return {};
+  }
+  if (failed(parser.parseGreater())) {
+    return {};
+  }
+  return SparlayReorderAttr::get(parser.getContext(), ReorderPrim(traverseBy, workload, order));
 }
 
 void SparlayEncodingAttr::print(AsmPrinter &printer) const {
@@ -271,18 +524,8 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
     }
     first_level = false;
   }
-  printer << "); ";
-
-  printer << "indirect_level(";
-  bool first_indirect_level = true;
-  for (size_t i = 0; i < isIndirect.size(); ++i) {
-    if (isIndirect[i]) {
-      if (!first_indirect_level) printer << ',';
-      printer << i;
-      first_indirect_level = false;
-    }
-  }
   printer << ") }, ";
+
   printer << "trim_level(";
   const auto& trimIndex = compressMap.getTrimIndex();
   for (size_t i = 0; i < trimIndex.size(); ++i) {
@@ -298,7 +541,86 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   }
   printer << "), ";
   printer << "bitWidth: " << getBitWidth();
-  printer << ", indirectFunc: " << getIndirectFunc();
+
+  // indirectFunc
+  const IndirectFunc& indFunc = getIndirectFunc();
+  // printer << ", indirectFunc: " << getIndirectFunc();
+  const SumPrim& sumPrim = indFunc.getSumPrim();
+  const EnumeratePrim& enumPrim = indFunc.getEnumeratePrim();
+  const SchedulePrim& schedulePrim = indFunc.getSchedulePrim();
+  const ReorderPrim& reorderPrim = indFunc.getReorderPrim();
+  printer << ", indirectFunc: { ";
+  if (!sumPrim.getIsEmpty()) {
+    printer << "sum< ";
+    auto sumGroupBy = sumPrim.getGroupBy();
+    auto sumValMap = sumPrim.getValMap();
+    printer << "group-by (";
+    for (size_t i = 0; i < sumGroupBy.size()-1; i++) {
+      printer << sumGroupBy[i] << ", ";
+    }
+    printer << sumGroupBy[sumGroupBy.size()-1]<<"), ";
+    printer << "valMap (";
+    for (auto i = sumValMap.begin(); i != --sumValMap.end(); i++) {
+      printer << i->first << " -> " << i->second << "; ";
+    }
+    printer << (--sumValMap.end())->first << " -> ";
+    printer << (--sumValMap.end())->second << ")";
+    printer << " > ";
+  }
+  if (!enumPrim.getIsEmpty()) {
+    printer << "enumerate< ";
+    const auto& enumGroupBy = enumPrim.getGroupBy();
+    const auto& enumTraverseBy = enumPrim.getTraverseBy();
+    const auto& enumValMap = enumPrim.getValMap();
+    printer << "group-by (";
+    for (size_t i = 0; i < enumGroupBy.size()-1; i++) {
+      printer << enumGroupBy[i] << ", ";
+    }
+    printer << enumGroupBy[enumGroupBy.size()-1]<<"), ";
+    printer << "traverse-by (";
+    for (size_t i = 0; i < enumTraverseBy.size()-1; i++) {
+      printer << enumTraverseBy[i] << ", ";
+    }
+    printer << enumTraverseBy[enumTraverseBy.size()-1]<<"), ";
+    printer << "valMap (";
+    for (auto i = enumValMap.begin(); i != --enumValMap.end(); i++) {
+      printer << i->first << " -> " << i->second << "; ";
+    }
+    printer << (--enumValMap.end())->first << " -> ";
+    printer << (--enumValMap.end())->second << ")";
+    printer << " > ";
+  }
+  if (!reorderPrim.getIsEmpty()) {
+    printer << "reorder< ";
+    const auto& reorderTraverseBy = reorderPrim.getTraverseBy();
+    const auto& reorderWorkload = reorderPrim.getWorkload();
+    const auto& reorderOrder = reorderPrim.getOrder();
+    printer << "traverse-by (";
+    for (size_t i = 0; i < reorderTraverseBy.size()-1; i++) {
+      printer << reorderTraverseBy[i] << ", ";
+    }
+    printer << reorderTraverseBy[reorderTraverseBy.size()-1]<<"), ";
+    printer << reorderWorkload << ", ";
+    if (reorderOrder)
+      printer << "order = ascend";
+    else
+      printer << "order = descend";
+    printer << " > ";
+  }
+  if (!schedulePrim.getIsEmpty()) {
+    printer << "sched< ";
+    const auto& schedTraverseBy = schedulePrim.getTraverseBy();
+    const auto& schedWorkload = schedulePrim.getWorkload();
+    const auto& schedBucket = schedulePrim.getBucket();
+    printer << "traverse-by (";
+    for (size_t i = 0; i < schedTraverseBy.size()-1; i++) {
+      printer << schedTraverseBy[i] << ", ";
+    }
+    printer << schedTraverseBy[schedTraverseBy.size()-1]<<"), ";
+    printer << schedWorkload << ", " << schedBucket;
+    printer << " > ";
+  }
+  printer << "} ";
 }
 
 void SparlayCompressAttr::print(AsmPrinter &printer) const {
