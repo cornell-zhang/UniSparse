@@ -125,11 +125,11 @@ Attribute SparlayCrdAttr::parse(AsmParser &parser, Type type) {
 }
 
 Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
+  // std::cout << "in SparlayEncodingAttr::parse\n";
   if (failed(parser.parseLess()))
     return {};
   // Parse the data as a dictionary.
   DictionaryAttr dict;
-  // std::cerr << "Enter Encoding Parse" << std::endl;
   if (failed(parser.parseAttribute(dict)))
     return {};
   if (failed(parser.parseGreater()))
@@ -137,10 +137,7 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
   CrdMap crdMap = {};
   CompressMap compressMap = {};
   unsigned bitWidth = 8;
-  SumPrim sumVal = {};
-  EnumeratePrim enumVal = {};
-  SchedulePrim schedVal = {};
-  ReorderPrim reorderVal = {};
+
   IndirectFunc sched_name = {};
   for (const auto& attr: dict) {
     if (attr.getName() == "crdMap") {
@@ -161,10 +158,20 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
       bitWidth = intAttr.getInt();
     }  else if (attr.getName() == "indirectFunc") {
       auto schedAttr = attr.getValue().dyn_cast<SparlayIndirectAttr>();
-      sumVal = schedAttr.getSumVal();
-      enumVal = schedAttr.getEnumVal();
-      schedVal = schedAttr.getSchedVal();
-      reorderVal = schedAttr.getReorderVal();
+      // auto schedAttr = attr.getValue().dyn_cast<IndirectFunc>();
+      if (!schedAttr) {
+        return {};
+      }
+      SumPrim sumVal = schedAttr.getSumVal();
+      EnumeratePrim enumVal = schedAttr.getEnumVal();
+      SchedulePrim schedVal = schedAttr.getSchedVal();
+      ReorderPrim reorderVal = schedAttr.getReorderVal();
+      // crdMap.Print();
+      // compressMap.Print();
+      // sumVal.Print();
+      // enumVal.Print();
+      // schedVal.Print();
+      // reorderVal.Print();
       sched_name.setIndirectFunc(sumVal, enumVal, schedVal, reorderVal);
     } else {
       return {};
@@ -544,7 +551,6 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
 
   // indirectFunc
   const IndirectFunc& indFunc = getIndirectFunc();
-  // printer << ", indirectFunc: " << getIndirectFunc();
   const SumPrim& sumPrim = indFunc.getSumPrim();
   const EnumeratePrim& enumPrim = indFunc.getEnumeratePrim();
   const SchedulePrim& schedulePrim = indFunc.getSchedulePrim();

@@ -531,6 +531,10 @@ public:
         StringRef tileMergeName = "sptTileMerge";
         StringRef tileSplitName = "sptTileSplit";
         StringRef moveName = "sptMove"; //partial sort
+        StringRef sumName = "sptSum";
+        StringRef enumName = "sptEnum";
+        StringRef reorderName = "sptReorder";
+        StringRef schedName = "sptSched";
         // StringRef lazySortName = "sptLazySort";
 
         Type prevType = srcType;

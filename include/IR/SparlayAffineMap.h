@@ -35,16 +35,16 @@ public:
   std::vector<int> getFuseIndex() const { return fuseIndex; }
 
   void Print() {
-    std::cerr << "TrimLevel: ";
+    std::cout << "TrimLevel: ";
     for (auto ele: trimIndex) {
-      std::cerr << ele << ' ';
+      std::cout << ele << ' ';
     }
-    std::cerr << std::endl;
-    std::cerr << "FuseLevel: ";
+    std::cout << std::endl;
+    std::cout << "FuseLevel: ";
     for (auto ele: fuseIndex) {
-      std::cerr << ele << ' ';
+      std::cout << ele << ' ';
     }
-    std::cerr << std::endl;
+    std::cout << std::endl;
   }
 
 private:
@@ -83,11 +83,11 @@ class CrdMap: public AffineMap {
 
   void Print() {
     this->dump();
-    std::cerr << "isIndirect: (";
+    std::cout << "isIndirect: (";
     for (auto ele: isIndirect) {
-      std::cerr << ele << ',';
+      std::cout << ele << ',';
     }
-    std::cerr << ')' << std::endl;
+    std::cout << ')' << std::endl;
   }
 
 private:
@@ -104,6 +104,29 @@ public:
     AffineMap(), groupBy(_groupBy), valMap(_valMap) {
       is_empty = false;
     }
+  ~SumPrim() {
+    this->groupBy.clear();
+    this->valMap.clear();
+    this->is_empty = true;
+  }
+
+  bool operator == (const SumPrim& A) const {
+    auto dstGroupBy = A.getGroupBy();
+    auto dstValMap = A.getValMap();
+    auto dstIsEmpty = A.getIsEmpty();
+    if (this->is_empty != dstIsEmpty) return 0;
+    if (this->groupBy.size() != dstGroupBy.size()) return 0;
+    if (this->valMap.size() != dstValMap.size()) return 0;
+    for (size_t i = 0; i < this->groupBy.size(); ++i) {
+      if (this->groupBy[i] != dstGroupBy[i]) return 0;
+    }
+    auto valMapStart = dstValMap.begin();
+    for (auto i = this->valMap.begin(); i != this->valMap.end(); i++) {
+      if (i->first != valMapStart->first || i->second != valMapStart->second) return 0;
+      valMapStart++;
+    }
+    return 1;
+  }
 
   std::vector<unsigned> getGroupBy() const { return groupBy; }
   std::map<std::string, int> getValMap() const { return valMap; }
@@ -114,6 +137,20 @@ public:
     this->groupBy = _groupBy;
     this->valMap = _valMap;
     this->is_empty = _isEmpty;
+  }
+  void Print() {
+    std::cout << "SumPrim GroupBy: (";
+    for (size_t i = 0; i < this->groupBy.size()-1; i++) {
+      std::cout << this->groupBy[i] << ", ";
+    }
+    std::cout << this->groupBy[this->groupBy.size()-1]<<")\n";
+    std::cout << "SumPrim valMap: (";
+    for (auto i = this->valMap.begin(); i != --(this->valMap.end()); i++) {
+      std::cout << i->first << " -> " << i->second << "; ";
+    }
+    std::cout << (--this->valMap.end())->first << " -> ";
+    std::cout << (--this->valMap.end())->second << ")\n";
+    std::cout << "SumPrim is_empty = " << this->is_empty << "\n";
   }
 
 private:
@@ -131,6 +168,35 @@ public:
     AffineMap(), groupBy(_groupBy), traverseBy(_traverseBy), valMap(_valMap) {
       is_empty = false;
     }
+  ~EnumeratePrim() {
+    this->groupBy.clear();
+    this->traverseBy.clear();
+    this->valMap.clear();
+    this->is_empty = true;
+  }
+
+  bool operator == (const EnumeratePrim& A) const {
+    auto dstGroupBy = A.getGroupBy();
+    auto dstTraverseBy = A.getTraverseBy();
+    auto dstValMap = A.getValMap();
+    auto dstIsEmpty = A.getIsEmpty();
+    if (this->groupBy.size() != dstGroupBy.size()) return 0;
+    if (this->is_empty != dstIsEmpty) return 0;
+    if (this->traverseBy.size() != dstTraverseBy.size()) return 0;
+    if (this->valMap.size() != dstValMap.size()) return 0;
+    for (size_t i = 0; i < this->groupBy.size(); ++i) {
+      if (this->groupBy[i] != dstGroupBy[i]) return 0;
+    }
+    for (size_t i = 0; i < this->traverseBy.size(); ++i) {
+      if (this->traverseBy[i] != dstTraverseBy[i]) return 0;
+    }
+    auto valMapStart = dstValMap.begin();
+    for (auto i = this->valMap.begin(); i != this->valMap.end(); i++) {
+      if (i->first != valMapStart->first || i->second != valMapStart->second) return 0;
+      valMapStart++;
+    }
+    return 1;
+  }
 
   std::vector<unsigned> getGroupBy() const { return groupBy; }
   std::vector<unsigned> getTraverseBy() const { return traverseBy; }
@@ -144,6 +210,31 @@ public:
     this->traverseBy = _traverseBy;
     this->valMap = _valMap;
     this->is_empty = _isEmpty;
+  }
+  void Print() {
+    if (!this->is_empty && this->groupBy.size() > 0) {
+      std::cout << "EnumeratePrim GroupBy: (";
+      for (size_t i = 0; i < this->groupBy.size()-1; i++) {
+        std::cout << this->groupBy[i] << ", ";
+      }
+      std::cout << this->groupBy[this->groupBy.size()-1]<<")\n";
+    }
+    if (!this->is_empty && this->traverseBy.size() > 0) {
+      std::cout << "EnumeratePrim traverseBy: (";
+      for (size_t i = 0; i < this->traverseBy.size()-1; i++) {
+        std::cout << this->traverseBy[i] << ", ";
+      }
+      std::cout << this->traverseBy[this->traverseBy.size()-1]<<")\n";
+    }
+    if (!this->is_empty && this->valMap.size() > 0) {
+      std::cout << "EnumeratePrim valMap: (";
+      for (auto i = this->valMap.begin(); i != --(this->valMap.end()); i++) {
+        std::cout << i->first << " -> " << i->second << "; ";
+      }
+      std::cout << (--this->valMap.end())->first << " -> ";
+      std::cout << (--this->valMap.end())->second << ")\n";
+    }
+    std::cout << "EnumeratePrim is_empty = " << this->is_empty << "\n";
   }
 
 private:
@@ -162,6 +253,26 @@ public:
     AffineMap(), traverseBy(_traverseBy), workload(_workload), bucket(_bucket) {
       is_empty = false;
     }
+  ~SchedulePrim() {
+    this->traverseBy.clear();
+    this->workload.clear();
+    this->is_empty = true;
+  }
+  
+  bool operator == (const SchedulePrim& A) const {
+    auto dstTraverseBy = A.getTraverseBy();
+    auto dstWorkload = A.getWorkload();
+    auto dstBucket = A.getBucket();
+    auto dstIsEmpty = A.getIsEmpty();
+    if (this->is_empty != dstIsEmpty) return 0;
+    if (this->traverseBy.size() != dstTraverseBy.size()) return 0;
+    if (this->workload != dstWorkload) return 0;
+    if (this->bucket != dstBucket) return 0;
+    for (size_t i = 0; i < this->traverseBy.size(); ++i) {
+      if (this->traverseBy[i] != dstTraverseBy[i]) return 0;
+    }
+    return 1;
+  }
 
   std::vector<unsigned> getTraverseBy() const { return traverseBy; }
   std::string getWorkload() const { return workload; }
@@ -176,6 +287,18 @@ public:
     this->workload = _workload;
     this->bucket = _bucket;
     this->is_empty = _isEmpty;
+  }
+  void Print() {
+    if (!this->is_empty && this->traverseBy.size() > 0) {
+      std::cout << "SchedulePrim traverseBy: (";
+      for (size_t i = 0; i < this->traverseBy.size()-1; i++) {
+        std::cout << this->traverseBy[i] << ", ";
+      }
+      std::cout << this->traverseBy[this->traverseBy.size()-1]<<")\n";
+    }
+    std::cout << "SchedulePrim workload = " << this->workload << "\n";
+    std::cout << "SchedulePrim bucket = " << this->bucket << "\n";
+    std::cout << "SchedulePrim is_empty = " << this->is_empty << "\n";
   }
 
 private:
@@ -194,6 +317,26 @@ public:
     AffineMap(), traverseBy(_traverseBy), workload(_workload), order(_order) {
       is_empty = false;
     }
+  ~ReorderPrim() {
+    this->traverseBy.clear();
+    this->workload.clear();
+    this->is_empty = true;
+  }
+
+  bool operator == (const ReorderPrim& A) const {
+    auto dstTraverseBy = A.getTraverseBy();
+    auto dstWorkload = A.getWorkload();
+    auto dstOrder = A.getOrder();
+    auto dstIsEmpty = A.getIsEmpty();
+    if (this->is_empty != dstIsEmpty) return 0;
+    if (this->traverseBy.size() != dstTraverseBy.size()) return 0;
+    if (this->workload != dstWorkload) return 0;
+    if (this->order != dstOrder) return 0;
+    for (size_t i = 0; i < this->traverseBy.size(); ++i) {
+      if (this->traverseBy[i] != dstTraverseBy[i]) return 0;
+    }
+    return 1;
+  }
 
   std::vector<unsigned> getTraverseBy() const { return traverseBy; }
   std::string getWorkload() const { return workload; }
@@ -208,6 +351,18 @@ public:
     this->workload = _workload;
     this->order = _order;
     this->is_empty = _isEmpty;
+  }
+  void Print() {
+    if (!this->is_empty && this->traverseBy.size() > 0) {
+      std::cout << "ReorderPrim traverseBy: (";
+      for (size_t i = 0; i < this->traverseBy.size()-1; i++) {
+        std::cout << this->traverseBy[i] << ", ";
+      }
+      std::cout << this->traverseBy[this->traverseBy.size()-1]<<")\n";
+    }
+    std::cout << "ReorderPrim workload = " << this->workload << "\n";
+    std::cout << "ReorderPrim order = " << this->order << "\n";
+    std::cout << "ReorderPrim is_empty = " << this->is_empty << "\n";
   }
 
 private:
@@ -231,6 +386,18 @@ class IndirectFunc: public AffineMap {
     AffineMap(amap), sumPrim(_sumPrim), enumeratePrim(_enumeratePrim), 
     schedulePrim(_schedulePrim), reorderPrim(_reorderPrim) {}
 
+  bool operator == (const IndirectFunc& A) const {
+    auto dstSumPrim = A.getSumPrim();
+    auto dstEnumPrim = A.getEnumeratePrim();
+    auto dstSchedPrim = A.getSchedulePrim();
+    auto dstReorderPrim = A.getReorderPrim();
+    if (!(this->sumPrim == dstSumPrim)) return 0;
+    if (!(this->enumeratePrim == dstEnumPrim)) return 0;
+    if (!(this->schedulePrim == dstSchedPrim)) return 0;
+    if (!(this->reorderPrim == dstReorderPrim)) return 0;
+    return 1;
+  }
+
   void setIndirectFunc(SumPrim _sumPrim, EnumeratePrim _enumeratePrim, SchedulePrim _schedulePrim, ReorderPrim _reorderPrim) {
     sumPrim.setSumPrim(_sumPrim.getGroupBy(), _sumPrim.getValMap(), _sumPrim.getIsEmpty());
     enumeratePrim.setEnumPrim(_enumeratePrim.getGroupBy(), _enumeratePrim.getTraverseBy(), 
@@ -252,6 +419,48 @@ private:
   ReorderPrim reorderPrim;
 };
 
+// class LayoutPrim: public AffineMap {
+// public:
+
+//   LayoutPrim(): AffineMap(), packIndex({}), partitionIndex({}) {}
+
+//   explicit LayoutPrim(const std::vector<int>& _packIndex, const std::vector<int>& _partitionIndex): 
+//     AffineMap(), packIndex(_packIndex), partitionIndex(_partitionIndex) {}
+  
+//   bool operator == (const LayoutPrim& A) const {
+//     auto dstPack = A.getPackIndex();
+//     auto dstPartition = A.getPartitionIndex();
+//     if (packIndex.size() != dstPack.size()) return 0;
+//     if (partitionIndex.size() != dstPartition.size()) return 0;
+//     for (size_t i = 0; i < packIndex.size(); ++i) {
+//       if (packIndex[i] != dstPack[i]) return 0;
+//     }
+//     for (size_t i = 0; i < partitionIndex.size(); ++i) {
+//       if (partitionIndex[i] != dstPartition[i]) return 0;
+//     }
+//     return 1;
+//   }
+
+//   std::vector<int> getPackIndex() const { return packIndex; }
+//   std::vector<int> getPartitionIndex() const { return partitionIndex; }
+
+//   void Print() {
+//     std::cout << "PackLevel: ";
+//     for (auto ele: packIndex) {
+//       std::cout << ele << ' ';
+//     }
+//     std::cout << std::endl;
+//     std::cout << "PartitionLevel: ";
+//     for (auto ele: partitionIndex) {
+//       std::cout << ele << ' ';
+//     }
+//     std::cout << std::endl;
+//   }
+
+// private:
+//   std::vector<int> packIndex;
+//   std::vector<int> partitionIndex;
+// };
 
 } //endof sparlay
 } //endof mlir

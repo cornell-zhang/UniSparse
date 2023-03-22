@@ -65,6 +65,12 @@ def SparlayIndirectAttr : Sparlay_Attr<"SparlayIndirect", []> {
     );
 }
 
+// def SparlayLayoutAttr : Sparlay_Attr<"SparlayLayout", []> {
+//   let mnemonic = "layout";
+//   let hasCustomAssemblyFormat = 1;
+//   let parameters = (ins "LayoutPrim":$value);
+// }
+
 // Sparse tensor encoding attribute.
 def SparlayEncodingAttr : Sparlay_Attr<"SparlayEncoding", 
               [DeclareAttrInterfaceMethods<VerifiableTensorEncoding>]> {

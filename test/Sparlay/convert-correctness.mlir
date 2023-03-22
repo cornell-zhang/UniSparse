@@ -43,6 +43,40 @@
   compressMap = #sparlay.compress<trim(0,0)>
 }>
 
+#CISR = #sparlay.encoding<{
+  crdMap = #sparlay.crd<(i,j)->(indirect(i), i, j)>,
+  compressMap = #sparlay.compress<fuse(0,1), trim(1,2)>,
+  indirectFunc = #sparlay.indirect<{
+    sumVal = #sparlay.sum<groupBy (0), with val ne 0 -> 1 | otherwise -> 0>, // map: original matrix A -> output A' [0, 1]
+    schedVal = #sparlay.schedule<traverseBy (0), sumVal, 2> //list[[]] -> list[]
+    // sum(level = 1)
+    // schedule(level = 1, sum, buckets = 2)
+  }>
+}>
+
+#CISR_plus = #sparlay.encoding<{
+  crdMap = #sparlay.crd<(i,j)->(indirect(j), i, j)>,
+  compressMap = #sparlay.compress<fuse(0), trim(0,0)>,
+  indirectFunc = #sparlay.indirect<{
+    sumVal = #sparlay.sum<groupBy (0), with val ne 0 -> 1 | otherwise -> 0>,
+    reorderVal = #sparlay.reorder<traverseBy (0), sumVal, descend>, // map: original matrix A -> output A' [0, 1]
+    schedVal = #sparlay.schedule<traverseBy (0), sumVal, 2> //list[[]] -> list[]
+    // sum(level = 1)
+    // enumerate(level = 1, sum)
+  }>
+}>
+
+#ELL = #sparlay.encoding<{
+  crdMap = #sparlay.crd<(i,j)->(indirect(j), i, j)>,
+  compressMap = #sparlay.compress<fuse(0), trim(0,0)>,
+  indirectFunc = #sparlay.indirect<{
+    sumVal = #sparlay.sum<groupBy (0), with val ne 0 -> 1 | otherwise -> 0>,
+    enumVal = #sparlay.enumerate<groupBy (0), traverseBy (1), with val eq 0 -> sumVal | otherwise -> 0>
+    // sum(level = 1)
+    // enumerate(level = 1, sum)
+  }>
+}>
+
 module {
   func.func private @getTensorFilename(index) -> (!Filename)
   //CHECK-LABEL: func.func @main
@@ -72,6 +106,12 @@ module {
 
     %A_COO_1 = sparlay.convert (%A_DCSR): tensor<?x?xf32, #DCSR> to tensor<?x?xf32, #COO>
     // sparlay.printStorage (%A_COO_1): tensor<?x?xf32, #COO>
+
+    %A_CISR = sparlay.convert (%A_COO): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CISR>
+
+    %A_CISR_plus = sparlay.convert (%A_COO): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CISR_plus>
+
+    %A_ELL = sparlay.convert (%A_COO): tensor<?x?xf32, #COO> to tensor<?x?xf32, #ELL>
 
     sparlay.check (%A_COO_1, %A_SV): tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>
 
