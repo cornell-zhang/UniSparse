@@ -419,48 +419,48 @@ private:
   ReorderPrim reorderPrim;
 };
 
-// class LayoutPrim: public AffineMap {
-// public:
+class LayoutPrim: public AffineMap {
+public:
 
-//   LayoutPrim(): AffineMap(), packIndex({}), partitionIndex({}) {}
+  LayoutPrim(): AffineMap(), packIndex({}), partitionIndex({}) {}
 
-//   explicit LayoutPrim(const std::vector<int>& _packIndex, const std::vector<int>& _partitionIndex): 
-//     AffineMap(), packIndex(_packIndex), partitionIndex(_partitionIndex) {}
+  explicit LayoutPrim(const std::vector<int>& _packIndex, const std::vector<int>& _partitionIndex): 
+    AffineMap(), packIndex(_packIndex), partitionIndex(_partitionIndex) {}
   
-//   bool operator == (const LayoutPrim& A) const {
-//     auto dstPack = A.getPackIndex();
-//     auto dstPartition = A.getPartitionIndex();
-//     if (packIndex.size() != dstPack.size()) return 0;
-//     if (partitionIndex.size() != dstPartition.size()) return 0;
-//     for (size_t i = 0; i < packIndex.size(); ++i) {
-//       if (packIndex[i] != dstPack[i]) return 0;
-//     }
-//     for (size_t i = 0; i < partitionIndex.size(); ++i) {
-//       if (partitionIndex[i] != dstPartition[i]) return 0;
-//     }
-//     return 1;
-//   }
+  bool operator == (const LayoutPrim& A) const {
+    auto dstPack = A.getPackIndex();
+    auto dstPartition = A.getPartitionIndex();
+    if (packIndex.size() != dstPack.size()) return 0;
+    if (partitionIndex.size() != dstPartition.size()) return 0;
+    for (size_t i = 0; i < packIndex.size(); ++i) {
+      if (packIndex[i] != dstPack[i]) return 0;
+    }
+    for (size_t i = 0; i < partitionIndex.size(); ++i) {
+      if (partitionIndex[i] != dstPartition[i]) return 0;
+    }
+    return 1;
+  }
 
-//   std::vector<int> getPackIndex() const { return packIndex; }
-//   std::vector<int> getPartitionIndex() const { return partitionIndex; }
+  std::vector<int> getPackIndex() const { return packIndex; }
+  std::vector<int> getPartitionIndex() const { return partitionIndex; }
 
-//   void Print() {
-//     std::cout << "PackLevel: ";
-//     for (auto ele: packIndex) {
-//       std::cout << ele << ' ';
-//     }
-//     std::cout << std::endl;
-//     std::cout << "PartitionLevel: ";
-//     for (auto ele: partitionIndex) {
-//       std::cout << ele << ' ';
-//     }
-//     std::cout << std::endl;
-//   }
+  void Print() {
+    std::cout << "PackLevel: ";
+    for (auto ele: packIndex) {
+      std::cout << ele << ' ';
+    }
+    std::cout << std::endl;
+    std::cout << "PartitionLevel: ";
+    for (auto ele: partitionIndex) {
+      std::cout << ele << ' ';
+    }
+    std::cout << std::endl;
+  }
 
-// private:
-//   std::vector<int> packIndex;
-//   std::vector<int> partitionIndex;
-// };
+private:
+  std::vector<int> packIndex;
+  std::vector<int> partitionIndex;
+};
 
 } //endof sparlay
 } //endof mlir

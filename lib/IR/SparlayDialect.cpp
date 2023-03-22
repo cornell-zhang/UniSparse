@@ -137,6 +137,7 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
   CrdMap crdMap = {};
   CompressMap compressMap = {};
   unsigned bitWidth = 8;
+  LayoutPrim layout = {};
 
   IndirectFunc sched_name = {};
   for (const auto& attr: dict) {
@@ -166,18 +167,18 @@ Attribute SparlayEncodingAttr::parse(AsmParser &parser, Type type) {
       EnumeratePrim enumVal = schedAttr.getEnumVal();
       SchedulePrim schedVal = schedAttr.getSchedVal();
       ReorderPrim reorderVal = schedAttr.getReorderVal();
-      // crdMap.Print();
-      // compressMap.Print();
-      // sumVal.Print();
-      // enumVal.Print();
-      // schedVal.Print();
-      // reorderVal.Print();
       sched_name.setIndirectFunc(sumVal, enumVal, schedVal, reorderVal);
+    } else if (attr.getName() == "layout") {
+      auto layoutAttr = attr.getValue().dyn_cast<SparlayLayoutAttr>();
+      if (!layoutAttr) {
+        return {};
+      }
+      layout = layoutAttr.getValue();
     } else {
       return {};
     }
   }
-  return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), crdMap, compressMap, bitWidth, sched_name);
+  return parser.getChecked<SparlayEncodingAttr>(parser.getContext(), crdMap, compressMap, bitWidth, sched_name, layout);
 }
 
 Attribute SparlayIndirectAttr::parse(AsmParser &parser, Type type) {
@@ -484,6 +485,72 @@ Attribute SparlayReorderAttr::parse(AsmParser &parser, Type type) {
   return SparlayReorderAttr::get(parser.getContext(), ReorderPrim(traverseBy, workload, order));
 }
 
+Attribute SparlayLayoutAttr::parse(AsmParser &parser, Type type) {
+  auto packIndex = std::vector<int>{};
+  auto partitionIndex = std::vector<int>{};
+  std::vector<int>* curIndex = nullptr;
+  // SmallVector<AffineExpr> secondaryExprs;
+  std::string tok_pack = "pack", tok_partition = "partition";
+  SmallVector<StringRef, 2> op_token{tok_pack, tok_partition};
+  auto parseInteger = [&]() -> ParseResult {
+    int64_t val;
+    assert(curIndex != nullptr);
+    if (parser.parseOptionalInteger<int64_t>(val).hasValue()) {
+      curIndex->push_back(val);
+      return ParseResult(success());
+    } else {
+      return ParseResult(failure());
+    }
+  };
+  bool packed = 0;
+  bool partitioned = 0;
+  if (failed(parser.parseLess())) {
+    return {};
+  }
+  StringRef op_key_ref;
+  auto parseSingleCompress = [&]() -> ParseResult {
+    auto ret = parser.parseOptionalKeyword(&op_key_ref, ArrayRef<StringRef>(op_token));
+    if (succeeded(ret)) {
+      if (std::string(op_key_ref.str()) == "pack") {
+        if (packed) return failure();
+        packed = 1;
+        curIndex = &packIndex;
+        ret = parser.parseCommaSeparatedList(AsmParser::Delimiter::Paren, parseInteger);
+        if (failed(ret)) {
+          return ret;
+        } else {
+          std::sort(packIndex.begin(), packIndex.end());
+        }
+      } else if (std::string(op_key_ref.str()) == "partition") {
+        if (partitioned) return failure();
+        partitioned = 1;
+        curIndex = &partitionIndex;
+        if (failed(parser.parseCommaSeparatedList(
+          AsmParser::Delimiter::Paren, parseInteger
+        ))) {
+          return failure();
+        } else {
+          std::sort(partitionIndex.begin(), partitionIndex.end());
+        }
+      } else {
+        return parser.emitError(parser.getNameLoc(), "Expected \"pack\" or \"partition\""), failure();
+      }
+      return success();
+    }
+    return failure();
+  };
+  if (failed(parser.parseCommaSeparatedList(parseSingleCompress))) {
+    return {};
+  }
+  if (failed(parser.parseGreater())) {
+    return {};
+  }
+  SparlayLayoutAttr ret = SparlayLayoutAttr::get(
+    parser.getContext(), LayoutPrim(packIndex, partitionIndex)
+  );
+  return ret;
+}
+
 void SparlayEncodingAttr::print(AsmPrinter &printer) const {
   const CompressMap& compressMap = getCompressMap();
   const CrdMap& crdMap = getCrdMap();
@@ -626,6 +693,23 @@ void SparlayEncodingAttr::print(AsmPrinter &printer) const {
     printer << schedWorkload << ", " << schedBucket;
     printer << " > ";
   }
+
+  // 
+  const LayoutPrim& layout = getLayout();
+  printer << "layout = < pack_level(";
+  const auto& packIndex = layout.getPackIndex();
+  for (size_t i = 0; i < packIndex.size(); ++i) {
+    printer << packIndex[i];
+    if (i != packIndex.size()-1) printer << ',';
+  }
+  printer << "), ";
+  printer << "partition_level(";
+  const auto& partitionIndex = layout.getPartitionIndex();
+  for (size_t i = 0; i < partitionIndex.size(); ++i) {
+    printer << partitionIndex[i];
+    if (i != partitionIndex.size()-1) printer << ',';
+  }
+  printer << ") > ";
   printer << "} ";
 }
 
@@ -733,9 +817,15 @@ void SparlayReorderAttr::print(AsmPrinter &printer) const {
   return;
 }
 
+void SparlayLayoutAttr::print(AsmPrinter &printer) const {
+  printer << "HII";
+  return;
+}
+
 LogicalResult SparlayEncodingAttr::verify(
     function_ref<InFlightDiagnostic()> emitError,
-    CrdMap primaryMap, CompressMap secondaryMap, unsigned bitWidth, IndirectFunc indirectFunc
+    CrdMap primaryMap, CompressMap secondaryMap, unsigned bitWidth, 
+    IndirectFunc indirectFunc, LayoutPrim layout
 ) {
   return success();
 }
