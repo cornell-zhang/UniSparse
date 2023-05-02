@@ -36,7 +36,10 @@ enum AffineHighPrecOp {
 
 AffineExpr parseAffineExpr(AsmParser& parser);
 
-AffineMap parseAffineMapWithKeyword(AsmParser& parser, const ArrayRef<StringRef>& opTokens, std::vector< std::vector<bool> >& vis);
+AffineMap parseAffineMapWithKeyword(AsmParser& parser, const ArrayRef<StringRef>& opTokens, 
+                                    std::vector< std::vector<bool> >& vis,
+                                    std::vector< std::vector<AffineExpr> >& indirectExpr
+                                    );
 
 
 }
