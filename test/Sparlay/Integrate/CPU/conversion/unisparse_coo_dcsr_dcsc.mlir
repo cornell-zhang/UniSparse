@@ -16,31 +16,9 @@
   compressMap = #sparlay.compress<fuse(0), trim(0,1)>
 }>
 
-#trait1 = {
-indexing_maps = [
-    affine_map<(i,j,k) -> (i, k)>,  // A
-    affine_map<(i,j,k) -> (k, j)>,  // B
-    affine_map<(i,j,k) -> (i, j)>   // X (out)
-  ],
-  iterator_types = ["parallel", "parallel", "reduction"],
-  doc = "X(i,j) =+ A(i,k) * B(k, j)"
-}
-
 module {
   func.func private @rtclock() -> f64
   func.func private @getTensorFilename(index) -> (!Filename)
-
-  func.func @kernel_csr_spmm(%arg0: tensor<?x?xf32, #DCSC>, %arg1: tensor<?x?xf32>, %argx: tensor<?x?xf32>) -> tensor<?x?xf32> {
-    %0 = linalg.generic #trait1
-    ins(%arg0, %arg1 : tensor<?x?xf32, #DCSC>, tensor<?x?xf32>)
-    outs(%argx: tensor<?x?xf32>) {
-    ^bb0(%a: f32, %b: f32, %x: f32):
-      %2 = arith.mulf %a, %b : f32
-      %3 = arith.addf %x, %2 : f32
-      linalg.yield %3 : f32
-    } -> tensor<?x?xf32>
-    return %0 : tensor<?x?xf32>
-  }
 
   //CHECK-LABEL: func.func @main
   func.func @main() {

@@ -6,9 +6,14 @@
   compressMap = #sparlay.compress<trim(0,1)>
 }>
 
-#BCSR = #sparlay.encoding<{
+#CSR = #sparlay.encoding<{
+  crdMap = #sparlay.crd<(i,j)->(i,j)>,
+  compressMap = #sparlay.compress<fuse(0), trim(1,1)>
+}>
+
+#CSBDCSR = #sparlay.encoding<{
   crdMap = #sparlay.crd<(i, j)->(i floordiv 2, j floordiv 3, i mod 2, j mod 3)>,
-  compressMap = #sparlay.compress<fuse(0, 1), trim(1,1)>
+  compressMap = #sparlay.compress<fuse(0,1,2), trim(2,3)>
 }>
 
 module {
@@ -24,23 +29,28 @@ module {
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
     %a_ori = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-//    sparlay.printStorage (%a_ori): tensor<?x?xf32, #COO>
+    sparlay.printStorage (%a_ori): tensor<?x?xf32, #COO>
     %a1 = sparlay.copy (%a_ori): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
+    %a6 = sparlay.convert (%a1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
+    sparlay.printStorage (%a6): tensor<?x?xf32, #CSR>
+    
 
     %t_start0 = call @rtclock() : () -> f64
-    %a2 = sparlay.convert (%a1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #BCSR>
-//    sparlay.printStorage (%a2): tensor<?x?xf32, #BCSR>
+    %a2 = sparlay.convert (%a6): tensor<?x?xf32, #CSR> to tensor<?x?xf32, #CSBDCSR>
+    sparlay.printStorage (%a2): tensor<?x?xf32, #CSBDCSR>
     %t_end0 = call @rtclock() : () -> f64
     %t_0 = arith.subf %t_end0, %t_start0: f64
     vector.print %t_0 : f64
 
-    %a3 = sparlay.convert (%a2): tensor<?x?xf32, #BCSR> to tensor<?x?xf32, #COO>
-//    sparlay.printStorage (%a3): tensor<?x?xf32, #COO>
-    sparlay.check (%a3, %a_ori): tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>
+    %a3 = sparlay.convert (%a2): tensor<?x?xf32, #CSBDCSR> to tensor<?x?xf32, #CSR>
+    sparlay.printStorage (%a3): tensor<?x?xf32, #CSR>
+
+    %a4 = sparlay.convert (%a3): tensor<?x?xf32, #CSR> to tensor<?x?xf32, #COO>
+    sparlay.check (%a4, %a_ori): tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>
 
     //Release the resources 
     bufferization.dealloc_tensor %a_ori : tensor<?x?xf32, #COO>
-    bufferization.dealloc_tensor %a3 : tensor<?x?xf32, #COO>
+    bufferization.dealloc_tensor %a4 : tensor<?x?xf32, #COO>
     return
   }
 }

@@ -15,7 +15,9 @@
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 // #ifdef MLIR_CRUNNERUTILS_DEFINE_FUNCTIONS
-// #define DEBUG
+#define DEBUG
+//#define PRINT
+//#define PARALLEL
 
 #include <omp.h>
 #include <algorithm>
@@ -38,7 +40,9 @@
 #include <cuda_runtime.h>
 #include <cusparse.h>
 #include "Eigen/Dense"
+#include "CVector.hpp"
 #define DataType float
+#define THREAD_NUM 48
 
 #define CHECK_CUDA(func)                                                       \
 {                                                                              \
@@ -250,6 +254,21 @@ public:
   }  
 };
 
+struct Pack1c1v {
+    int crd1;
+    DataType vals;
+};
+struct Pack2c {
+  int crd1;
+  int crd2;
+};
+
+struct Pack2c1v {
+  int crd1;
+  int crd2;
+  DataType vals;
+};
+
 /*!
  * \brief assume that Level 0 is root
  */
@@ -259,14 +278,19 @@ public:
   std::vector<uint64_t> dimSizes;
   std::vector< std::shared_ptr<LevelStorage> > vLevel;
   std::vector< std::shared_ptr<Vector2i> > exprs;
-  std::vector<float> valueArray;
+  std::vector<DataType> valueArray;
   std::vector< std::vector<float> > vectorArray;
-  std::vector<float> vector_1d;
+  std::vector<DataType*> vectorPointer;
+  std::vector<DataType> vector_1d;
+  std::vector<int> query;
+  std::vector<int> sum;
+  std::vector<Pack2c> pack_vector;
   int singleVectorSize;
 
   #define LVINFO 4
   #define LVTRIM 1
   #define LVFUSE 2
+  #define LVINDT 8
 
   SparlayStorage() {singleVectorSize=0;}
   SparlayStorage(std::vector<uint64_t> &dimSizes, uint64_t *perm, const SparlayDimLevelType *sparsity)
@@ -327,26 +351,37 @@ public:
   bool fuse(const int level);
   bool grow(const int level);
   bool separate(const int level);
+  bool enumerate(const int start_lv, const int end_lv);
+  bool sums(const int level);
+  bool reorder(const int dst_lv, const int slice_lv);
+  bool schedule(const int dst_lv, const int slice_lv, const int partitions);
   bool swap(const int LU, const int LD);
   bool add(const int Ltarget, const int Lsrc);
   bool sub(const int Ltarget, const int Lsrc);
   bool vectorize(const int lv);
   bool devectorize(const int level);
+  bool pad(const int start_lv, const int end_lv);
   bool neg(const int level);
   bool moveLv(const int srcLevel, const int targetLevel);
   bool tile_merge(const int lv, const int factor);
   bool tile_split(const int lv, const int factor);
 
+  bool pack(const int start_lv, const int end_lv);
+  bool partition(const int level);
+
+  bool cust_pad(const int start_lv, const int end_lv);
+  bool cust_pad_opt(const int start_lv, const int end_lv);
+
   void getSize(size_t lv) {
     assert(lv < exprs.size());
     // assert(dimSizes.size() == 3);
-    std::cerr << "dimSizes[0] is " << dimSizes[0] << ", and dimSizes[1] is " << dimSizes[1] << std::endl; 
+//    std::cerr << "dimSizes[0] is " << dimSizes[0] << ", and dimSizes[1] is " << dimSizes[1] << std::endl; 
     Vector2i t0(0,0), t1(0,dimSizes[1]), t2(dimSizes[0],0), t3(dimSizes[0],dimSizes[1]);
     const auto& expr = exprs[lv];
-    std::cerr << "midstage expr[" << lv << "] is " << *exprs[lv] << std::endl;
+//    std::cerr << "midstage expr[" << lv << "] is " << *exprs[lv] << std::endl;
     int mn = std::min(0, std::min(expr->dot(t1), std::min(expr->dot(t2), expr->dot(t3))));
     int mx = std::max(0, std::max(expr->dot(t1), std::max(expr->dot(t2), expr->dot(t3))));
-    std::cerr << "max is " << mx << ", and mn is " << mn << std::endl;
+//    std::cerr << "max is " << mx << ", and mn is " << mn << std::endl;
     vLevel[lv]->size = (mx - mn);
   }
 
@@ -365,6 +400,7 @@ public:
     auto svLS = vLevel[srcLv];
     auto expLS = exprs[srcLv];
     for (int i = srcLv; i >= dstLv+1; --i) {
+  //    std::cerr << i << std::endl;
       vLevel[i] = vLevel[i-1];
       exprs[i] = exprs[i-1];
     }
@@ -393,15 +429,15 @@ public:
         new_val_array[i] = std::move(valueArray[perm[i]]);
       }
       valueArray = std::move(new_val_array);
-    } else if (vectorArray.size()) {
-      static std::vector< std::vector<float> > new_vector_array;
-      assert(perm.size() == vectorArray.size());
+    } else if (vectorPointer.size()) {
+      static std::vector< DataType* > new_vector_array;
+      assert(perm.size() == vectorPointer.size());
       new_vector_array.clear();
       new_vector_array.resize(perm.size(), {});
-      for (size_t i = 0; i < vectorArray.size(); ++i) {
-        new_vector_array[i] = std::move(vectorArray[perm[i]]);
+      for (size_t i = 0; i < vectorPointer.size(); ++i) {
+        new_vector_array[i] = std::move(vectorPointer[perm[i]]);
       }
-      vectorArray = std::move(new_vector_array);
+      vectorPointer = std::move(new_vector_array);
     } else {
       std::cerr << "where is the value?" << std::endl;
       assert(0);
@@ -409,7 +445,7 @@ public:
   }
 
   void clearVector() {
-    vectorArray.clear();
+    vectorPointer.clear();
     singleVectorSize = 0;
   }
 
@@ -596,7 +632,7 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
     fout << "expr[" << i << "]: ";
     fout << *exprs[i] << std::endl; 
     if (verbose && vLevel[i]->same_path.size()) {
-      assert(vLevel[i]->same_path.size() == vLevel[i]->crd.size());
+//      assert(vLevel[i]->same_path.size() == vLevel[i]->crd.size());
       fout << "smp[" << i << "]: ";
       for (const auto ele: vLevel[i]->same_path) {
         fout << std::setw(8) << ele;
@@ -617,13 +653,11 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
       fout << std::setw(8) << valueArray[i];
     }
     fout << std::endl;
-  } else if (vectorArray.size()) {
-    size_t Size = vectorArray[0].size();
-    for (size_t j = 0; j < Size; ++j) {
+  } else if (vectorPointer.size()) {
+    for (int j = 0; j < this->singleVectorSize; ++j) {
       fout << "values: ";
-      for (size_t i = 0; i < vectorArray.size(); ++i) {
-        assert(vectorArray[i].size() == Size);
-        fout << std::setw(8) << vectorArray[i][j];
+      for (size_t i = 0; i < vectorPointer.size(); ++i) {
+        fout << std::setw(8) << vectorPointer[i][j];
       }
       fout << std::endl;
     }
@@ -677,13 +711,16 @@ SparlayStorage* readFromFile(std::istream& fin) {
   auto ret = new SparlayStorage();
   ret->vLevel.push_back(std::shared_ptr<LevelStorage>(rootStore));
 
+
   std::vector< std::vector<int> > bucket;
   std::vector<int> pos, oriID;
   bucket.resize(H, {});
   pos.resize(rowStore->crd.size(), 0);
   oriID.resize(pos.size(), 0);
   for (size_t i = 0; i < rowStore->crd.size(); ++i) {
-    
+    if((size_t)rowStore->crd[i] >= bucket.size()) {
+      std::cerr << "Wrong value in " << i << " position is " << (size_t)rowStore->crd[i] << std::endl;
+    }
     assert((size_t)rowStore->crd[i] < bucket.size());
     bucket[rowStore->crd[i]].push_back(i);
     pos[i] = i;
@@ -702,10 +739,10 @@ SparlayStorage* readFromFile(std::istream& fin) {
         oriID[cur_pos] = oriID[ptr];
       }
       ptr++;
-#ifdef DEBUG
-      for (size_t k = 0; k < pos.size(); ++k) std::cerr << pos[k] << ' ';
-      std::cerr << std::endl;
-#endif
+//#ifdef DEBUG
+//      for (size_t k = 0; k < pos.size(); ++k) std::cerr << pos[k] << ' ';
+//      std::cerr << std::endl;
+//#endif
     }
   }
 
@@ -728,6 +765,7 @@ SparlayStorage* readFromFile(std::istream& fin) {
 }
 
 bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
+//  std::cerr << "Enter moveLv" << std::endl;
   assert(dstLv <= srcLv);
   assert(dstLv >= 1);
   for (int curLv = dstLv; curLv <= srcLv; ++curLv) {
@@ -779,16 +817,22 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
     }
     perm = std::move(new_perm);
   }
+//  std::cerr << "Start move storage " << std::endl;
   this->moveStorage(srcLv, dstLv);
 
   static std::vector< std::vector<int> > new_crd;
   static std::vector< std::vector<bool> > new_same_path;
   new_crd.resize(vLevel.size()-dstLv);
   new_same_path.resize(vLevel.size()-dstLv);
+
   for (size_t i = dstLv; i < vLevel.size(); ++i) {
     new_crd[i-dstLv].resize(vLevel[dstLv]->crd.size(),0);
+//    std::cerr << "After resize new_crd[" << i-dstLv << "]with size of "  << vLevel[dstLv]->crd.size() << std::endl;
+
     new_same_path[i-dstLv].resize(vLevel[dstLv]->crd.size(),0);
+//    std::cerr << "After resize new_same_path[" << i-dstLv << "] with size of "  << vLevel[dstLv]->crd.size() << std::endl;
   }
+
   int stLv = dstLv;
   if (!perm.size()) return 1;
   if (stLv == 1) {
@@ -801,10 +845,12 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
     vLevel[1]->same_path = std::move(new_same_path[0]);
     stLv++;
   }
+
   for (size_t i = stLv; i < vLevel.size(); ++i) {
     int curLv = i-dstLv;
     new_crd[curLv][0] = std::move(vLevel[i]->crd[perm[0]]);
   }
+
   for (size_t i = stLv; i < vLevel.size(); ++i) {
     int curLv = i-dstLv;
     for (size_t j = 1; j < vLevel[dstLv]->crd.size(); ++j) {  
@@ -819,13 +865,37 @@ bool SparlayStorage::moveLv(const int srcLv, const int dstLv) {
 }
 
 bool SparlayStorage::tile_split(int lv, int factor) {
+//  std::cerr << "Enter tile_split" << std::endl;
   assert(!(vLevel[lv]->type & LVFUSE));
   assert(vLevel[lv]->type & LVTRIM);
   std::vector<int> new_crd;
   std::vector<bool> new_same_path;
   new_crd.resize(vLevel[lv]->crd.size(),0);
   new_same_path.resize(vLevel[lv]->crd.size(),0);
+
+#ifdef PARALLEL
+  if (new_crd.size()) {
+    new_same_path[0] = 0;
+    vLevel[lv]->same_path[0] = 0;
+  }
+  int* lv_crd = vLevel[lv]->crd.data();
+  #pragma omp parallel for simd num_threads(THREAD_NUM) shared(factor) private(new_crd, lv_crd)
   for (size_t i = 0; i < new_crd.size(); ++i) {
+    new_crd[i] = lv_crd[i]%factor;
+    lv_crd[i] /= factor;
+  }
+  #pragma omp barrier
+  #pragma omp parallel for num_threads(THREAD_NUM) shared(lv, new_crd, lv_crd) private(new_same_path)
+  for (size_t i = 1; i < new_crd.size(); ++i) {
+    new_same_path[i] = (new_crd[i] == new_crd[i-1]);
+    new_same_path[i] = new_same_path[i] && (vLevel[lv]->same_path[i]);
+    vLevel[lv]->same_path[i] = (lv_crd[i] == lv_crd[i-1]);
+    if (lv != 1) (vLevel[lv]->same_path[i]) = (vLevel[lv]->same_path[i]) && (vLevel[lv-1]->same_path[i]);
+  }
+  #pragma omp barrier
+#else
+  for (size_t i = 0; i < new_crd.size(); ++i) {
+//    std::cerr << i << std::endl;
     new_crd[i] = vLevel[lv]->crd[i]%factor;
     vLevel[lv]->crd[i] /= factor;
     if (i == 0) {
@@ -839,6 +909,9 @@ bool SparlayStorage::tile_split(int lv, int factor) {
       if (lv != 1) (vLevel[lv]->same_path[i]) = (vLevel[lv]->same_path[i]) && (vLevel[lv-1]->same_path[i]);
     }
   }
+  std::cerr << "After loop" << std::endl;
+#endif
+
   vLevel[lv]->size = ceil((float)vLevel[lv]->size/factor);
   std::vector<int> empty_ptr = {};
   std::shared_ptr<Vector2i> ptr = std::make_shared<Vector2i>(0,0);
@@ -857,12 +930,30 @@ bool SparlayStorage::tile_merge(int lv, int factor) {
   assert(vLevel[lv+1]->type & LVTRIM);
   assert(!(vLevel[lv+1]->type&LVFUSE));
   assert(vLevel[lv+1]->size == factor);
+
+#ifdef PARALLEL
+  int* lv_crd = vLevel[lv]->crd.data();
+  int* nextlv_crd = vLevel[lv+1]->crd.data();
+  #pragma omp parallel for simd num_threads(THREAD_NUM) shared(vLevel, factor, lv) private(lv_crd, nextlv_crd)
+  for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
+    (lv_crd[i] *= factor) += nextlv_crd[i];
+  }
+  #pragma omp barrier
+
+  #pragma omp parallel for simd num_threads(THREAD_NUM) shared(vLevel, lv_crd)
+  for (size_t i = 1; i < vLevel[lv]->crd.size(); ++i) {
+    vLevel[lv]->same_path[i] = (vLevel[lv]->same_path[i] && (lv_crd[i]==lv_crd[i-1]));
+  }
+  #pragma omp barrier
+#else
   for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
     (vLevel[lv]->crd[i] *= factor) += vLevel[lv+1]->crd[i];
     if (i != 0) {
       vLevel[lv]->same_path[i] = (vLevel[lv]->same_path[i] && (vLevel[lv]->crd[i]==vLevel[lv]->crd[i-1]));
     }
   }
+#endif
+
   this->getSize(lv);
   this->removeStorage(lv+1);
   return 1;
@@ -903,12 +994,12 @@ std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
   u64 ed_level_size = 1;
   for (int i = 0; i <= ed_lv; ++i) {
     ed_level_size *= vLevel[i]->size;
-    if (ed_level_size > 1e7) {
+    if (ed_level_size > 1e9) {
       std::cerr << "The untrimmed level is too huge to be stored, or inefficient conversion sequence" << std::endl;
       assert(0);
     }
   }
-  assert(!(vLevel[st_lv]->type&1));
+  assert(!(vLevel[st_lv]->type & LVTRIM));
   assert(vLevel[st_lv]->size);
   ret.resize(ed_level_size+1, -1);
   for (size_t i = 0; i < vLevel[st_lv]->ptr.size()-1; ++i) {
@@ -919,17 +1010,369 @@ std::vector<int> SparlayStorage::lowerPtr(int st_lv, int ed_lv) {
   for (size_t i = 1; i < ret.size(); ++i) {
     if (ret[i] == -1) ret[i] = ret[i-1];
   }
-#ifdef DEBUG
-  Print(std::cerr, 1);
-  std::cerr << "ret: ";
-  for (size_t i = 0; i < ret.size(); ++i) std::cerr << std::setw(8) << ret[i];
-  std::cerr << std::endl;
-#endif
+//#ifdef PRINT
+//  Print(std::cerr, 1);
+//  std::cerr << "ret: ";
+//  for (size_t i = 0; i < ret.size(); ++i) std::cerr << std::setw(8) << ret[i];
+//  std::cerr << std::endl;
+//#endif
   return ret;
 }
 
+//Frist, right before this primitive, every level is b LVTRIM and LVFUSE 
+//Second, right before this primitive, we think the coordinate at every level has already been sorted. 
+bool SparlayStorage::enumerate(const int dst_lv, const int slice_lv) {
+  for(int i = 1; i <= slice_lv; i++) {
+    assert(vLevel[i]->type & LVTRIM);
+    assert(!(vLevel[i]->type & LVFUSE));
+  }
+
+  std::vector<int> new_crd(vLevel[slice_lv]->crd.size());
+
+  new_crd[0] = 0;
+  int idx = 0;
+  for(size_t i = 1; i < vLevel[slice_lv]->crd.size(); i++) {
+    if(vLevel[slice_lv-1]->same_path[i]) {
+      idx++;
+    } else {
+      idx = 0;
+    }
+    new_crd[i] = idx;
+  }
+
+  int max = 0;
+  for(size_t i = 0; i < this->sum.size(); i++) {
+    if(this->sum[i] > max) {
+      max = this->sum[i];
+    }
+  }
+
+  std::vector<bool> new_same_path = {};
+  std::vector<int> empty_ptr = {};
+  std::shared_ptr<Vector2i> ptr = std::make_shared<Vector2i>(0,0);
+  this->newStorage(
+    dst_lv, 
+    std::shared_ptr<LevelStorage>(new LevelStorage((LVINDT^LVTRIM), max, new_crd, empty_ptr, new_same_path)), 
+    ptr
+  );
+  
+  return 1;
+}
+
+bool SparlayStorage::sums(const int lv) { 
+
+  int total_sum_size = 1;
+  for(int i = 1; i <= lv; i++) {
+    total_sum_size *= vLevel[i]->size;
+  }
+
+  int strides[lv];
+  for(int i = 1; i <= lv; i++) {
+    strides[i-1] = 1;
+    for(int j = i+1; j <= lv; j++){
+      strides[i-1] *= vLevel[j]->size;
+    }
+  }
+
+  int* sums = (int*)calloc(total_sum_size, sizeof(int));
+  if(vLevel[lv]->type == (LVFUSE ^ LVINFO)) {
+    for(int i = 0; i < lv; i++) {
+      assert(!(vLevel[i]->type & LVTRIM));
+    }
+    for(int i = 0; i < total_sum_size; i++) {
+      sums[i] = vLevel[lv]->ptr[i+1] - vLevel[lv]->ptr[i];
+    }
+  } else if((vLevel[lv]->type & LVTRIM) && !(vLevel[lv]->type & LVFUSE)) {
+    for(size_t i = 0; i < vLevel[lv]->crd.size(); i++) {
+      int offset = 0;
+      for(int l = 1; l <= lv; l++) {
+        offset += vLevel[l]->crd[i] * strides[l-1];
+      }
+      sums[offset]++;
+    }
+  } else {
+    assert("The sum operator on the other level types is not supported");
+  }
+
+  this->sum = std::move(std::vector<int>(sums, sums+total_sum_size));
+
+  return 1;
+}
+
+bool SparlayStorage::reorder(const int dst_lv, const int slice_lv) {
+  assert(vLevel[slice_lv]->type & LVTRIM);
+  int total_size = 1;
+//  std::cerr << slice_lv << std::endl;
+  for(int i = 1; i <= slice_lv; i++) {
+    assert(!(vLevel[i]->type & LVFUSE));
+    assert((vLevel[i]->type & LVTRIM));
+    total_size *= vLevel[i]->size;
+  }
+  assert(total_size == this->sum.size());
+
+
+  std::vector<int> new_crd(vLevel[slice_lv]->crd.size());
+  std::vector<int> sorted(this->sum.size());
+  std::vector<int> indices(this->sum.size());
+  for (size_t i = 0; i < this->sum.size(); ++i) {
+      sorted[i] = i;
+  }
+
+  std::vector<std::pair<int, int>> indexed_vec;
+  for (size_t i = 0; i < sorted.size(); ++i) {
+    indexed_vec.push_back(std::make_pair(sorted[i], i));
+  }
+  std::sort(indexed_vec.begin(), indexed_vec.end(), [this](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+    if(a.first == b.first) {
+      return a.second < b.second;
+    } 
+    return this->sum[a.first] > this->sum[b.first]; 
+  });
+  for (size_t i = 0; i < indexed_vec.size(); ++i) {
+    indices[indexed_vec[i].second] = i;
+  }
+
+  for(size_t i = 0; i < vLevel[slice_lv]->crd.size(); i++) {
+    new_crd[i] = indices[vLevel[slice_lv]->crd[i]];
+  }
+  std::vector<bool> new_same_path(vLevel[slice_lv]->same_path.size());
+  new_same_path = vLevel[slice_lv]->same_path;
+  std::vector<int> empty_ptr = {};
+  std::shared_ptr<Vector2i> ptr = std::make_shared<Vector2i>(0,0);
+  this->newStorage(
+    dst_lv, 
+    std::shared_ptr<LevelStorage>(new LevelStorage((LVINDT^LVTRIM), vLevel[slice_lv]->size, new_crd, empty_ptr, new_same_path)), 
+    ptr
+  );
+
+  return 1;
+}
+
+struct CoreInfo {
+ int core_id;
+ int num_nnz;
+ int num_rows;
+};
+
+struct nnz_greater {
+bool operator()(const CoreInfo& a,const CoreInfo& b) const{
+    return a.num_nnz > b.num_nnz;
+}
+};
+
+bool SparlayStorage::schedule(const int dst_lv, const int slice_lv, const int partitions) {
+  int total_size = 1;
+//  std::cerr << slice_lv << std::endl;
+  for(int i = 1; i <= slice_lv; i++) {
+    assert(!(vLevel[i]->type & LVFUSE));
+    assert((vLevel[i]->type & LVTRIM));
+    total_size *= vLevel[i]->size;
+  }
+//  std::cerr << "sum size " << this->sum.size() << " total_size" << total_size << std::endl;
+  assert(total_size == this->sum.size());
+  std::vector<int> new_crd(vLevel[slice_lv]->crd.size());
+
+  std::vector<CoreInfo> cores_info;
+  std::vector<int> core_map(this->sum.size());
+  for(int i = 0; i < partitions; i++) {
+    CoreInfo coreinfo;
+    coreinfo.core_id = i;
+    coreinfo.num_nnz = 0;
+    coreinfo.num_rows = 0;
+    cores_info.push_back(coreinfo);
+  }
+  std::make_heap(cores_info.begin(), cores_info.end(), nnz_greater());
+  for(int i = 0; i < this->sum.size(); i++) {
+    int cur_row_nnz = this->sum[i];
+    std::pop_heap(cores_info.begin(), cores_info.end(), nnz_greater());
+    CoreInfo min_core = cores_info.back();
+    min_core.num_nnz = min_core.num_nnz + cur_row_nnz;
+    min_core.num_rows = min_core.num_rows + 1;
+    cores_info.pop_back();
+    core_map[i] = min_core.core_id;
+    cores_info.push_back(min_core);
+    std::push_heap(cores_info.begin(), cores_info.end(), nnz_greater());
+  }
+  int strides[slice_lv];
+  for(int i = 1; i <= slice_lv; i++) {
+    strides[i-1] = 1;
+    for(int j = i+1; j <= slice_lv; j++){
+      strides[i-1] *= vLevel[j]->size;
+    }
+  }
+
+  for(size_t i = 0; i < vLevel[slice_lv]->crd.size(); i++) {
+    int offset = 0;
+    for(int l = 1; l <= slice_lv; l++){
+      offset += vLevel[l]->crd[i] * strides[l-1];
+    }
+//    std::cerr << "offset" << offset << std::endl;
+    new_crd[i] = core_map[offset];
+  }
+
+  std::vector<bool> new_same_path = {};
+  std::vector<int> empty_ptr = {};
+  std::shared_ptr<Vector2i> ptr = std::make_shared<Vector2i>(0,0);
+  this->newStorage(
+    dst_lv, 
+    std::shared_ptr<LevelStorage>(new LevelStorage((LVINDT^LVTRIM), partitions, new_crd, empty_ptr, new_same_path)), 
+    ptr
+  );
+
+  return 1;
+}
+
+// The difference between pad and vectorize is, both coordinate and value of the 0 values is padded
+// Inaddition to adding the value and coordinate of zero values, pad operation needs to trim and separate the level to formulate a singlton structure,
+// this is for the following move operation. 
+bool SparlayStorage::pad(const int start_lv, const int end_lv) {
+//  std::cerr << "Start level is " << start_lv << " and end level is " << end_lv << std::endl;
+  for(int i = start_lv; i <= end_lv; i++) {
+    assert(vLevel[i]->type & LVTRIM);
+    assert(!(vLevel[i]->type & LVFUSE));
+  }
+  for(int i = 2; i < start_lv; i++) {
+    assert(vLevel[i]->type & LVFUSE);
+    assert(!(vLevel[i]->type & LVTRIM));
+  }
+  assert(vLevel[1]->type & LVINDT);
+  assert(vLevel[start_lv-1]->type & LVINFO);
+
+  int strides_low[end_lv-start_lv+1];
+  int strides_high[start_lv-2];
+  std::vector<std::vector<int>> coordArray;
+  coordArray.resize(start_lv-1, {});
+  for(int i = start_lv; i <= end_lv; i++) {
+    strides_low[i-start_lv] = 1;
+    for(int j = i+1; j <= end_lv; j++){
+      strides_low[i-start_lv] *= vLevel[j]->size;
+    }
+//    std::cerr << "strides_low[" << i-start_lv << "] is " << strides_low[i-start_lv] << std::endl;
+  }
+
+  for(int i = 2; i <= start_lv-1; i++) {
+    strides_high[i-2] = 1;
+    for(int j = i+1; j < start_lv; j++){
+      strides_high[i-2] *= vLevel[j]->size;
+    }
+//    std::cerr << "strides_high[" << i-2 << "] is " << strides_high[i-2] << std::endl;
+  }
+
+  //Direct trim and separate the dense level
+  for(int i = 0; i < this->query.size(); i++) {
+    for(int j = vLevel[start_lv-1]->ptr[i]; j < vLevel[start_lv-1]->ptr[i+1]; j++) {
+      int coordinate = i;
+      for(int k = 2; k < start_lv; k++) {
+        int this_coord = coordinate / strides_high[k-2];
+        coordinate = coordinate - this_coord * strides_high[k-2];
+//        std::cerr << "this_coord is " << this_coord << " coordinate is " << coordinate << " strides is " << strides_high[k-2] << std::endl;
+        vLevel[k]->crd.push_back(this_coord);
+      }
+    }
+  }
+
+  //Add coordinate of padded 0 values
+  for(int i = 0; i < this->query.size(); i++) {
+    if(query[i] != vLevel[1]->size) {
+      int remain = vLevel[1]->size - query[i];
+      int offset = 0;
+      int idx = vLevel[start_lv-1]->ptr[i];
+      while(remain != 0) {
+        int offset_comp = 0;
+        if(idx < vLevel[start_lv-1]->ptr[i+1]) {
+          for(int k = start_lv; k <= end_lv; k++) {
+            offset_comp += vLevel[k]->crd[idx] * strides_low[k-2];
+          }
+          if(offset != offset_comp) {
+            //pad low
+            int coordinate = offset;
+            for(int l = start_lv; l <= end_lv; l++) {
+              int this_coord = coordinate / strides_low[l-start_lv];
+              coordinate = coordinate - this_coord * strides_low[l-start_lv];
+              vLevel[l]->crd.push_back(this_coord);
+            }
+            //pad high
+            int coord_out = i;
+            for(int l = 2; l < start_lv; l++) {
+              int this_coord = coord_out / strides_high[l-2];
+              coord_out = coord_out - this_coord * strides_high[l-2];
+//              std::cerr << "this_coord is " << this_coord << " coord_out is " << coord_out << std::endl;
+              vLevel[l]->crd.push_back(this_coord); 
+            }
+            vLevel[end_lv]->same_path.push_back(0);
+
+            //pad value
+            if(this->vectorPointer.size()) {
+
+              DataType* new_obj = (DataType*)calloc(this->singleVectorSize, sizeof(DataType));
+              vectorPointer.push_back(new_obj);
+            } else if (!this->valueArray.empty()) {
+              valueArray.push_back(0);
+            } else {
+              assert("At least one valueArray or vectorPointer should have element !");
+            }
+
+            vLevel[1]->crd.push_back(this->query[i]);
+            offset++;
+            remain--;
+            this->query[i]++;
+          } else {
+            offset++;
+            idx++;
+          }
+        } else {
+          //pad low
+          int coordinate = offset;
+          for(int l = start_lv; l <= end_lv; l++) {
+            int this_coord = coordinate / strides_low[l-start_lv];
+            coordinate = coordinate - this_coord * strides_low[l-start_lv];
+            vLevel[l]->crd.push_back(this_coord);
+          }
+          //pad high
+          int coord_out = i;
+          for(int l = 2; l < start_lv; l++) {
+            int this_coord = coord_out / strides_high[l-2];
+            coord_out = coord_out - this_coord * strides_high[l-2];
+            vLevel[l]->crd.push_back(this_coord); 
+          }
+          vLevel[end_lv]->same_path.push_back(0);
+
+          //pad value
+          if(this->vectorPointer.size()) {
+
+            DataType* new_obj = (DataType*)calloc(this->singleVectorSize, sizeof(DataType));
+            vectorPointer.push_back(new_obj);
+          } else if (!this->valueArray.empty()) {
+            valueArray.push_back(0);
+          } else {
+            assert("At least one valueArray or vectorPointer should have element !");
+          }
+
+          vLevel[1]->crd.push_back(this->query[i]);
+          offset++;
+          remain--;
+          this->query[i]++;
+        }
+      }
+    }  
+  }
+ 
+  assert(vLevel[1]->crd.size() == query.size() * vLevel[1]->size);
+  vLevel[1]->type ^= LVTRIM;
+  for(int i = 2; i <= start_lv; i++) {
+    assert(vLevel[i]->crd.size() == query.size() * vLevel[1]->size);
+    vLevel[i]->type = LVTRIM;
+  }
+  vLevel[start_lv-1]->ptr.clear();
+  vLevel[0]->ptr.resize(2);
+  vLevel[0]->ptr[0] = 0;
+  vLevel[0]->ptr[1] = query.size() * vLevel[1]->size;
+  vLevel[0]->type = (LVINFO ^ LVFUSE);
+  return 1;
+}
+
 bool SparlayStorage::grow(const int lv) {
-  if (!(vLevel[lv]->type & 1)) { //already not trimmed
+  if (!(vLevel[lv]->type & LVTRIM)) { //already not trimmed
     return 1;
   }
   if (lv == (int)(vLevel.size()-1)) {
@@ -938,7 +1381,7 @@ bool SparlayStorage::grow(const int lv) {
   }
   int st_lv = 0;
   for (size_t i = 1; i < vLevel.size(); ++i) {
-    if (vLevel[i]->type & 1) { st_lv = i; break; }
+    if (vLevel[i]->type & LVTRIM) { st_lv = i; break; }
   }
   st_lv--;
   assert(st_lv != -1);
@@ -950,7 +1393,7 @@ bool SparlayStorage::grow(const int lv) {
     if (i != lv) vLevel[i]->ptr.clear();
     if (vLevel[i]->type & LVTRIM) {
       assert(i != st_lv);
-      vLevel[i]->type ^= 1;
+      vLevel[i]->type ^= LVTRIM;
     }
   }
   assert(vLevel[st_lv]->type & LVINFO);
@@ -962,7 +1405,7 @@ bool SparlayStorage::grow(const int lv) {
 }
 
 bool SparlayStorage::trim(const int lv) {
-  if (vLevel[lv]->type & 1) return 1; //already trimmed
+  if (vLevel[lv]->type & LVTRIM) return 1; //already trimmed
   int lower_lv = vLevel.size()-1;
   while (lower_lv != 0 && (vLevel[lower_lv-1]->type & LVTRIM)) lower_lv--;
   assert(lower_lv > lv);
@@ -1111,6 +1554,7 @@ bool SparlayStorage::fuse(const int lv) {
 }
 
 bool SparlayStorage::separate(const int lv) {
+//  std::cerr << "Enter separate " << std::endl;
   if (!(vLevel[lv]->type & LVFUSE)) return 1;
   if (vLevel[lv]->type & LVTRIM) {
     int upper_lv = lv;
@@ -1147,6 +1591,7 @@ bool SparlayStorage::separate(const int lv) {
     vLevel[lv]->ptr.clear();
     vLevel[lv]->type ^= LVFUSE;
   } else {
+    //TODO: need to add support of separate the dense level
     vLevel[lv]->type ^= LVFUSE;
   }
   return 1;
@@ -1167,12 +1612,25 @@ bool SparlayStorage::add(const int Ltarget, const int Lsrc) {
   for (int i = Lsrc; i <= Ltarget; ++i) {
     assert(!(vLevel[i]->type & LVFUSE));
   }
+
+#ifdef PARALLEL 
+  int* target_crd = vLevel[Ltarget]->crd.data();
+  int* src_crd = vLevel[Lsrc]->crd.data();
+  size_t total_size = vLevel[Lsrc]->crd.size(); 
+  #pragma omp parallel for simd num_threads(THREAD_NUM) shared(total_size) private(target_crd, src_crd) aligned(target_crd, src_crd : 32)
+  for (size_t i = 0; i < total_size; ++i) {
+    target_crd[i] += src_crd[i];
+  }
+  #pragma omp barrier
+#else 
   for (size_t i = 0; i < vLevel[Lsrc]->crd.size(); ++i) {
     vLevel[Ltarget]->crd[i] += vLevel[Lsrc]->crd[i];
   }
+#endif
+
   (*exprs[Ltarget]) += (*exprs[Lsrc]);
   getSize(Ltarget);
-  std::cerr << "Size of Level " << Ltarget << " is " << vLevel[Ltarget]->size << std::endl;
+//  std::cerr << "Size of Level " << Ltarget << " is " << vLevel[Ltarget]->size << std::endl;
   return 1;
 }
 
@@ -1184,23 +1642,37 @@ bool SparlayStorage::sub(const int Ltarget, const int Lsrc) {
     assert(!(vLevel[i]->type & LVFUSE));
   }
   assert(vLevel[Lsrc]->crd.size() == vLevel[Ltarget]->crd.size());
+
+#ifdef PARALLRL
+  int* target_crd = vLevel[Ltarget]->crd.data();
+  int* src_crd = vLevel[Lsrc]->crd.data();
+  size_t total_size = vLevel[Lsrc]->crd.size();
+  #pragma omp parallel for simd num_threads(THREAD_NUM) shared(vLevel, Lsrc, Ltarget) private(target_crd, src_crd) aligned(target_crd, src_crd : 32)
+  for (size_t i = 0; i < total_size; ++i) {
+    target_crd[i] -= src_crd[i];
+  }
+  #pragma omp barrier
+#else
   for (size_t i = 0; i < vLevel[Lsrc]->crd.size(); ++i) {
     vLevel[Ltarget]->crd[i] -= vLevel[Lsrc]->crd[i];
   }
-  std::cerr << "Ltarget exprs[" << Ltarget << "] is " << std::endl << *exprs[Ltarget] << std::endl << "Lsrc exprs[" << Lsrc << "] is " << std::endl << *exprs[Lsrc] << std::endl;
+#endif
+
+//  std::cerr << "Ltarget exprs[" << Ltarget << "] is " << std::endl << *exprs[Ltarget] << std::endl << "Lsrc exprs[" << Lsrc << "] is " << std::endl << *exprs[Lsrc] << std::endl;
   (*exprs[Ltarget]) -= (*exprs[Lsrc]);
   getSize(Ltarget);
-  std::cerr << "Size of Level " << Ltarget << " is " << vLevel[Ltarget]->size << std::endl;
+//  std::cerr << "Size of Level " << Ltarget << " is " << vLevel[Ltarget]->size << std::endl;
   return 1;
 }
 
 //All the levels above lv will be converted to dense type.
+//TODO all the other primitives support the vectorPointer
 bool SparlayStorage::vectorize(const int lv) {
 //  assert(lv == 2);
 //  assert((size_t)lv == vLevel.size()-1);
-//  bool mark = !(vLevel[lv-1]->type&LVFUSE);
+//  bool mark = !(vLevel[lv-1]->type&LVFUSE);]
 //  std::cerr << "mark info: " << vLevel[lv]->type << ", " << LVFUSE << ", " << !(vLevel[lv]->type&LVFUSE) << std::endl;
-  std::cerr << "Enter vectorize, vLevel.size() is " << vLevel.size() << ", and lv is " << lv << std::endl;
+//  std::cerr << "Enter vectorize, vLevel.size() is " << vLevel.size() << ", and lv is " << lv << std::endl;
   int strides[vLevel.size()];
   strides[vLevel.size()-1] = 1;
   for(int i = 0; i < vLevel.size()-1; i++) {
@@ -1210,8 +1682,8 @@ bool SparlayStorage::vectorize(const int lv) {
     } 
   }
   fuse(lv-1);
-  std::cerr << "After fuse inside vectorize " << std::endl;
-  this->Print(std::cerr, 1);
+//  std::cerr << "After fuse inside vectorize " << std::endl;
+//  this->Print(std::cerr, 1);
   auto& father_ptr = vLevel[lv-1]->ptr;
   auto& father_crd = vLevel[lv-1]->crd;
   int cur_lv_size = 1;
@@ -1220,25 +1692,32 @@ bool SparlayStorage::vectorize(const int lv) {
   }
   if (father_ptr.size()) {
     int prev_ptr = 0;
-    assert(vectorArray.size() == 0);
-    vectorArray.resize(father_crd.size(),{});
-    std::cerr << "level[" << lv-1 << "] crd size is " << father_crd.size() << std::endl;
-    std::cerr << "level[" << lv-1 << "] ptr size is " << father_ptr.size() << std::endl; 
+    assert(vectorPointer.size() == 0);
+    vectorPointer.resize(father_crd.size(),{});
+    std::cerr << "Need to have " << father_crd.size() << " vectors" << std::endl;
+//    std::cerr << "level[" << lv-1 << "] crd size is " << father_crd.size() << std::endl;
+//    std::cerr << "level[" << lv-1 << "] ptr size is " << father_ptr.size() << std::endl; 
     assert(valueArray.size() == vLevel[lv]->crd.size());
-    static std::vector<float> V;
+    DataType* new_obj = (DataType*)calloc(cur_lv_size * father_crd.size(), sizeof(DataType));
+//    static std::vector<float> V;
     for (size_t i = 0; i < father_crd.size(); ++i) {
-      std::cerr << "i = " << i << std::endl;
-      V.clear();
-      V.resize(cur_lv_size, 0.0);
+//      std::cerr << "i = " << i << std::endl;
+//      V.clear();
+//      V.resize(cur_lv_size, 0);
+      DataType* start = new_obj + i*cur_lv_size;
+//      std::vector<DataType> V = std::move(std::vector<DataType>(start, end));
       assert(father_ptr[i+1] > prev_ptr);
       for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
         int offset = 0;
         for(int k = lv; k < vLevel.size(); k++){
           offset += vLevel[k]->crd[j] * strides[k];
         }
-        V[offset] = std::move(valueArray[j]);
+        start[offset] = std::move(valueArray[j]);
       }
-      vectorArray[i] = std::move(V);
+
+//      vectorArray[i] = std::move(V);
+      vectorPointer[i] = start;
+//      std::cerr << "After move into vectorArray " << std::endl;
       int add_one = (father_ptr[i+1]>prev_ptr);
       int new_ptr = father_ptr[i] + add_one;
       prev_ptr = father_ptr[i+1];
@@ -1246,11 +1725,11 @@ bool SparlayStorage::vectorize(const int lv) {
     }
     this->singleVectorSize = cur_lv_size;
     valueArray.clear();
-    for(int i = lv; i < vLevel.size(); i++) {
+    for(size_t i = lv; i < vLevel.size(); i++) {
       vLevel[i]->crd.clear();
       vLevel[i]->ptr.clear();
       vLevel[i]->same_path.clear();
-      vLevel[i]->type = LVINFO; 
+      vLevel[i]->type = LVFUSE; 
     }
 //    vLevel.pop_back();
   } else {
@@ -1265,6 +1744,7 @@ bool SparlayStorage::vectorize(const int lv) {
 
 //Devectorize is the process of coverting the dense tensor slice that start from dimension level lv to COO representation of the corresponding tensor slice.
 bool SparlayStorage::devectorize(const int level) {
+//  std::cerr << "Enter devectorize " << std::endl;
   int lv = level - 1;
   bool mark = !(vLevel[lv]->type&LVFUSE);
   fuse(lv);
@@ -1280,20 +1760,20 @@ bool SparlayStorage::devectorize(const int level) {
   }
   if (father_ptr.size()) {
     int prev_ptr = 0;
-    assert(vLevel[lv]->crd.size() == vectorArray.size());
+    assert(vLevel[lv]->crd.size() == vectorPointer.size());
 //    for(int i = level; i < )
     std::vector<int> new_crd;
     std::vector<bool> new_same_path;
     static std::vector<float> new_value;
     new_value.clear();
     size_t Size = this->singleVectorSize;
-    if (vectorArray.size() != 0) {
+    if (vectorPointer.size() != 0) {
       for (size_t i = 0; i < father_crd.size(); ++i) {
         assert(father_ptr[i+1] == prev_ptr+1);
         int cnt = 0;
         for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
-          for (size_t k = 0; k < vectorArray[j].size(); ++k) {
-            if (vectorArray[j][k]) {
+          for (size_t k = 0; k < this->singleVectorSize; ++k) {
+            if (vectorPointer[j][k]) {
               int remain = k;
               for(int l = level; l < vLevel.size(); l++) {
                 int coord = remain / strides[l];
@@ -1306,7 +1786,7 @@ bool SparlayStorage::devectorize(const int level) {
                 vLevel[l]->crd.push_back(coord);
               }
               cnt++;
-              new_value.push_back(vectorArray[j][k]);
+              new_value.push_back(vectorPointer[j][k]);
             }
           }
         }
@@ -1332,10 +1812,248 @@ bool SparlayStorage::devectorize(const int level) {
 
 bool SparlayStorage::neg(int lv) {
   assert(!(vLevel[lv]->type & LVFUSE));
+#ifdef PARALLEL
+  int* lv_crd = vLevel[lv]->crd.data();
+  size_t total_size = vLevel[lv]->crd.size();
+  #pragma omp parallel for simd num_threads(THREAD_NUM) shared(total_size) private(lv_crd) aligned(lv_crd : 32)
+  for (size_t i = 0; i < total_size; ++i) {
+    lv_crd[i] = -lv_crd[i];
+  }
+  #pragma omp barrier
+#else
   for (size_t i = 0; i < vLevel[lv]->crd.size(); ++i) {
     vLevel[lv]->crd[i] = -vLevel[lv]->crd[i];
-  }
+  }  
+#endif
   (*exprs[lv]) = -(*exprs[lv]);
+  return 1;
+}
+
+//This version we push_back 0 at the end of vector and reorder.
+bool SparlayStorage::cust_pad(const int start_lv, const int end_lv) {
+  for(int i = 1; i < vLevel.size(); i++) {
+    assert(vLevel[i]->type & LVTRIM);
+  }
+
+  int strides[end_lv-start_lv+1];
+  int subtensor_size = 1;
+  for(int i = start_lv; i <= end_lv; i++) {
+    strides[i-start_lv] = 1;
+    for(int j = i+1; j <= end_lv; j++){
+      strides[i-start_lv] *= vLevel[j]->size;
+    } 
+    subtensor_size *= vLevel[i]->size;
+  }
+
+  int* block = (int*)calloc(subtensor_size, sizeof(int));
+  int idx = 0;
+  for(int l = start_lv; l <= end_lv; l++) {
+    idx += vLevel[start_lv]->crd[0] * strides[l-start_lv];
+  }
+  block[idx] = 1;
+  int remember = 0;
+  size_t before_pad_size = vLevel[start_lv]->crd.size();
+  for(size_t i = 1; i < before_pad_size; i++) {
+    if((start_lv == 1) || (vLevel[start_lv-1]->same_path[i])) {
+      int offset = 0;
+      for(int l = start_lv; l <= end_lv; l++) {
+        offset += vLevel[start_lv]->crd[i] * strides[l-start_lv];
+      }
+      block[offset] = 1;
+    } else {
+      //Pad happens here
+      int buffer_crd[start_lv-1];
+      for(int j = 0; j < subtensor_size; j++) {
+        if(block[j] != 0) {
+          for(int k = 1; k < start_lv; k++) {
+            buffer_crd[k-1] = vLevel[k]->crd[remember];
+//            std::cerr << "remember is " << i << "buffer_crd[" << k-1 << "] is " << buffer_crd[k-1] << std::endl;
+          }
+          break;
+        }
+      }
+      for(int j = 0; j < subtensor_size; j++) { 
+        if(block[j] == 0) {
+          int offset = j;
+          for(int k = start_lv; k <= end_lv; k++) {
+            int index = offset / strides[k-start_lv];
+            offset = offset - index * strides[k-start_lv];
+            vLevel[k]->crd.push_back(index);
+            vLevel[k]->same_path.push_back(0);
+          }
+          for(int k = 1; k < start_lv; k++){
+            vLevel[k]->crd.push_back(buffer_crd[k-1]);
+            vLevel[k]->same_path.push_back(0);
+          }
+          for(int k =end_lv+1; k < vLevel.size(); k++) {
+            vLevel[k]->crd.push_back(0);
+            vLevel[k]->same_path.push_back(0);
+          }
+          this->valueArray.push_back(0);
+        }
+      }
+      remember = i;
+      std::memset(block, 0, subtensor_size * sizeof(int));
+      int offset = 0;
+      for(int l = start_lv; l <= end_lv; l++) {
+        offset += vLevel[start_lv]->crd[i] * strides[l-start_lv];
+      }
+      block[offset] = 1;
+    }
+  }
+
+  int buffer_crd[start_lv-1];
+  for(int j = 0; j < subtensor_size; j++) {
+    if(block[j] != 0) {
+      for(int k = 1; k < start_lv; k++) {
+        buffer_crd[k-1] = vLevel[k]->crd[remember];
+//        std::cerr << "remember is " << remember << "buffer_crd[" << k-1 << "] is " << buffer_crd[k-1] << std::endl;
+      }
+      break;
+    }
+  }
+  for(int j = 0; j < subtensor_size; j++) { 
+    if(block[j] == 0) {
+      int offset = j;
+      for(int k = start_lv; k <= end_lv; k++) {
+        int index = offset / strides[k-start_lv];
+        offset = offset - index * strides[k-start_lv];
+        vLevel[k]->crd.push_back(index);
+        vLevel[k]->same_path.push_back(0);
+      }
+      for(int k = 1; k < start_lv; k++){
+        vLevel[k]->crd.push_back(buffer_crd[k-1]);
+        vLevel[k]->same_path.push_back(0);
+      }
+      for(int k =end_lv+1; k < vLevel.size(); k++) {
+        vLevel[k]->crd.push_back(0);
+        vLevel[k]->same_path.push_back(0);
+      }
+      this->valueArray.push_back(0);
+    }
+  }
+
+  return 1;
+}
+
+//One shot write 
+bool SparlayStorage::cust_pad_opt(const int start_lv, const int end_lv) {
+  for(size_t i = 1; i <= end_lv; i++) {
+    assert(vLevel[i]->type & LVTRIM);
+  }
+
+  int strides[end_lv-start_lv+1];
+  int subtensor_size = 1;
+  for(int i = start_lv; i <= end_lv; i++) {
+    strides[i-start_lv] = 1;
+    for(int j = i+1; j <= end_lv; j++){
+      strides[i-start_lv] *= vLevel[j]->size;
+    } 
+    subtensor_size *= vLevel[i]->size;
+  }
+  int high_level_size = 0;
+  if(start_lv != 1) {
+    for(size_t i = 0; i < vLevel[start_lv-1]->same_path.size(); i++){
+      if(vLevel[start_lv-1]->same_path[i] == 0) {
+        high_level_size++;
+      }
+    }
+  } else {
+    high_level_size = 1;
+  }
+  int vector_size = 1;
+  for(size_t i = vLevel.size()-1; i > end_lv; i--) {
+    if(vLevel[i]->type == LVFUSE) {
+      vector_size *= vLevel[i]->size;
+    }
+  }
+
+  static std::vector< std::vector<int> > level_crds;
+  level_crds.resize(vLevel.size()-end_lv-1);
+  static std::vector<DataType*> value_pointer;
+  value_pointer.resize(high_level_size * subtensor_size, nullptr);
+  static std::vector<DataType> valuearray;
+  valuearray.resize(high_level_size * subtensor_size, 0);
+
+  for(size_t l = end_lv+1; l < this->vLevel.size(); l++) {
+    level_crds[l-end_lv-1].resize(high_level_size*subtensor_size, 0);
+  }
+  int idx = 0;
+  for(size_t i = 0; i < this->vLevel[start_lv]->crd.size(); i++) {
+    int offset = 0;
+    if(start_lv != 1 && this->vLevel[start_lv-1]->same_path[i] == 0) {
+      idx++;
+    }
+    offset = start_lv == 1 ? 0 : (idx-1) * subtensor_size;
+    for(int l = start_lv; l <= end_lv; l++) {
+      offset += this->vLevel[l]->crd[i] * strides[l-start_lv];
+    }
+
+    for(int l = end_lv+1; l < this->vLevel.size(); l++) {
+      level_crds[l-end_lv-1][offset] = vLevel[l]->crd[i];
+    }
+
+    if(vector_size > 1) {
+      value_pointer[offset] = this->vectorPointer[i];
+    } else {
+      valuearray[offset] = this->valueArray[i];
+    }  
+  }
+
+  if(vector_size > 1) {
+    for(int i = 0; i < high_level_size * subtensor_size; i++) {
+      if(value_pointer[i] == nullptr) {
+        value_pointer[i] = (DataType*)calloc(vector_size, sizeof(DataType));
+      }
+    }
+  }
+
+  for(int l = end_lv+1; l < vLevel.size(); l++) {
+    this->vLevel[l]->crd = std::move(level_crds[l-end_lv-1]);
+
+  }
+  if(vector_size > 1) {
+    this->vectorPointer = std::move(value_pointer);
+  } else {
+    this->valueArray = std::move(valuearray);
+  }
+
+  for(int l = start_lv; l <= end_lv; l++) {
+    this->vLevel[l]->type = LVFUSE;
+    this->vLevel[l]->crd.clear();
+    this->vLevel[l]->same_path.clear();
+  }
+
+/*
+  for (const auto ele: vLevel[3]->crd) {
+    std::cerr << std::setw(8) << ele;
+  }
+  std::cerr << "\n";
+  for (const auto ele: this->valueArray) {
+    std::cerr << std::setw(8) << ele;
+  }
+  std::cerr << "\n";
+*/
+  return 1;
+}
+
+//TODO: very ugly and hardcode implementation, need to support the struct with variable number of integers.
+bool SparlayStorage::pack(const int start_lv, const int end_lv) {
+  for(int i = start_lv; i < end_lv; i++) {
+    assert(vLevel[i]->type = LVTRIM);
+  }
+  assert(end_lv < vLevel.size());
+  assert(end_lv - start_lv == 1);
+  this->pack_vector.resize(vLevel[start_lv]->crd.size());
+
+  for(size_t i = 0; i < vLevel[start_lv]->crd.size(); i++) {
+    pack_vector[i].crd1 = vLevel[start_lv]->crd[i];
+    pack_vector[i].crd2 = vLevel[end_lv]->crd[i];
+  }
+  return 1;
+}
+
+bool SparlayStorage::partition(const int lv) {
   return 1;
 }
 
@@ -1639,6 +2357,7 @@ extern "C" {
   }
 
   void _mlir_ciface_sptCheck(void* A, void* B) {
+    std::cerr << "Enter the check function" << std::endl;
     SparlayStorage* aa = (SparlayStorage*)(A);
     SparlayStorage* bb = (SparlayStorage*)(B);
     if ((*aa) == (*bb)) {
@@ -1665,8 +2384,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Fuse done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after Fuse" << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1679,8 +2400,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Grow done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after grow" << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1693,8 +2416,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Trim done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after trim" << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1707,8 +2432,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Separate done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after separate" << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1721,8 +2448,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Swap done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after swap" << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1735,8 +2464,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Sub done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after sub" << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1749,8 +2480,10 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Add done, time = " << TI-tic << "(s)" << std::endl;
       #endif
+      #ifdef PRINT
       std::cerr << "Print after add " << std::endl;
       sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
   }
 
@@ -1763,8 +2496,91 @@ extern "C" {
       #ifdef DEBUG
       std::cerr << std::endl << "Neg done, time = " << TI-tic << "(s)" << std::endl;
       #endif
-      // sparT->Print(std::cerr);
+      #ifdef PRINT
+      std::cerr << "Print after neg " << std::endl;
+      sparT->Print(std::cerr, 1);
+      #endif
       return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptEnumerate(void* ptr, int start_lv, int end_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->enumerate(start_lv+1, end_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Enumerate done, time = " << (TI-tic) << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after enumerate" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptPad(void* ptr, int start_lv, int end_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->pad(start_lv+1, end_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Pad done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after pad" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptReorder(void* ptr, int dst_lv, int slice_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->reorder(dst_lv+1, slice_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Reorder done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after reorder" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptSum(void* ptr, int lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->sums(lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Sum done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after sum" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptSchedule(void* ptr, int dst_lv, int slice_lv, int p) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->schedule(dst_lv+1, slice_lv+1, p);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Schedule done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after schedule" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
   }
 
   void* _mlir_ciface_sptTileSplit(void* ptr, int lv, int factor) {
@@ -1777,8 +2593,10 @@ extern "C" {
     #ifdef DEBUG
     std::cerr << std::endl << "Tile Split done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    #ifdef PRINT
     std::cerr << "Print tile split" << std::endl;
     sparT->Print(std::cerr, 1);
+    #endif
     return (void*)sparT;
   }
 
@@ -1791,8 +2609,10 @@ extern "C" {
     #ifdef DEBUG
     std::cerr << std::endl << "Tile Merge done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    #ifdef PRINT
     std::cerr << "Print after Tile Merge" << std::endl;
     sparT->Print(std::cerr, 1);
+    #endif
     return (void*)sparT;
   }
 
@@ -1803,10 +2623,12 @@ extern "C" {
     SparlayStorage* sparT = (SparlayStorage*)(ptr);
     sparT->moveLv(srcLv+1, dstLv+1);
     #ifdef DEBUG
-    std::cerr << std::endl << "Move done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+    std::cerr << std::endl << "Move done, time = " << (TI-tic) << "(s)" << std::endl;
     #endif
+    #ifdef PRINT
     std::cerr << "Print after move(" << srcLv << ", " << dstLv << ")" << std::endl;
     sparT->Print(std::cerr, 1);
+    #endif
     return (void*)sparT;
   }
 
@@ -1817,10 +2639,12 @@ extern "C" {
     SparlayStorage* sparT = (SparlayStorage*)(ptr);
     sparT->vectorize(lv+1);
     #ifdef DEBUG
-    std::cerr << std::endl << "Vectorize done, time = " << (TI-tic)*1000.0 << "(ms)" << std::endl;
+    std::cerr << std::endl << "Vectorize done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    #ifdef PRINT
     std::cerr << "Print after vectorize" << std::endl;
     sparT->Print(std::cerr, 1);
+    #endif
     return (void*)sparT;
   }
 
@@ -1833,8 +2657,58 @@ extern "C" {
     #ifdef DEBUG
     std::cerr << std::endl << "Devectorize done, time = " << TI-tic << "(s)" << std::endl;
     #endif
+    #ifdef PRINT
     std::cerr << "Print after devectorize" << std::endl;
     sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptPack(void* ptr, int start_lv, int end_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->pack(start_lv+1, end_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Pack done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after pack" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptPartition(void* ptr, int lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->partition(lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Partition done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after partition" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptCustPad(void* ptr, int start_lv, int end_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->cust_pad_opt(start_lv+1, end_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "CustPad done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after CustPad" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
     return (void*)sparT;
   }
 
@@ -2782,6 +3656,15 @@ extern "C" {
         // printf("\n");
     }
 
+  void output_header(std::ofstream& outfile, int row_size, int col_size, int nnz) {
+    outfile << "%%MatrixMarket matrix coordinate integer general\n";
+    outfile << "%\n";
+    outfile << "% This is a test sparse matrix in Matrix Market Exchange Format.\n";
+    outfile << "% see https://math.nist.gov/MatrixMarket\n";
+    outfile << "%\n";
+    outfile << row_size << " " << col_size << " " << nnz << "\n"; 
+  }
+
   void* _mlir_ciface_decompose_BDIA(void* ptr, int32_t blockSize, float thres) {
     SparlayStorage* sparT = (SparlayStorage*)ptr;
     // int32_t *row_crd = sparT->vLevel[1]->crd.data();
@@ -2791,9 +3674,9 @@ extern "C" {
     uint64_t col_size = sparT->dimSizes.data()[1];
     // float *values = sparT->valueArray.data();
     uint64_t nnz = sparT->vLevel[2]->crd.size();
-    std::vector<int> row_crd(sparT->vLevel[1]->crd);
-    std::vector<int> col_crd(sparT->vLevel[2]->crd);
-    std::vector<float> values(sparT->valueArray);
+//    std::vector<int> row_crd(sparT->vLevel[1]->crd);
+//    std::vector<int> col_crd(sparT->vLevel[2]->crd);
+//    std::vector<float> values(sparT->valueArray);
     sparT->vLevel[0]->ptr.pop_back();
     sparT->vLevel[1]->crd.clear();
     sparT->vLevel[1]->same_path.clear();
@@ -2826,8 +3709,8 @@ extern "C" {
     for(uint64_t i = 0; i < nnz; i++) {
       // if (values[i] == 0) 
       //   continue;
-      int new_dim0 = row_crd[i]/blockSize;
-      int new_dim1 = col_crd[i]-row_crd[i];
+      int new_dim0 = sparT->vLevel[1]->crd[i]/blockSize;
+      int new_dim1 = sparT->vLevel[2]->crd[i]-sparT->vLevel[1]->crd[i];
       diag_nnz[new_dim0][new_dim1+col_size-1] += 1;
     }
     // std::cout << "diag_nnz:" << std::endl;
@@ -2880,13 +3763,17 @@ extern "C" {
     int* dim2_crd = T_BDIA->vLevel[2]->crd.data();
     // std::vector<int> punch_pos;
     int dia_nnz_count = 0;
+    std::string output_file_path = "/work/shared/users/staff/zz546/Sparse_Layout_Dialect/test/Data/output_matrix_market.mtx";
+    std::ofstream outfile(output_file_path);
+    output_header(outfile, row_size, col_size, nnz);
     for(unsigned i = 0; i < nnz; i++) {
       // if (values[i] == 0) 
       //   continue;
-      int new_dim1 = row_crd[i]/blockSize;
-      int new_dim2 = col_crd[i]-row_crd[i];
-      int new_dim3 = row_crd[i]%blockSize;
+      int new_dim1 = sparT->vLevel[1]->crd[i]/blockSize;
+      int new_dim2 = sparT->vLevel[2]->crd[i]-sparT->vLevel[1]->crd[i];
+      int new_dim3 = sparT->vLevel[1]->crd[i]%blockSize;
       if (diag_nnz[new_dim1][new_dim2+col_size-1] > blockSize*thres) {
+        outfile << sparT->vLevel[1]->crd[i]+1 << " " << sparT->vLevel[2]->crd[i]+1 << " " << std::scientific << std::setprecision(3) << sparT->valueArray[i] << "\n"; 
         // if (row_crd[i] == 0)
         //   std::cout << "col = "<< col_crd[i] << ", values =" << values[i] << std::endl;
         // BDIA
@@ -2895,25 +3782,30 @@ extern "C" {
           if (dim2_crd[diag_block] == new_dim2)
             break;
         // T_BDIA->vectorArray[diag_block][new_dim3] = values[i];
-        T_BDIA->vector_1d[diag_block*blockSize+new_dim3] = values[i];
+        T_BDIA->vector_1d[diag_block*blockSize+new_dim3] = sparT->valueArray[i];
         dia_nnz_count++;
         // punch_pos.push_back(i);
       } 
       else {
         if (sparT->valueArray.size() > 0) {
-          sparT->vLevel[1]->same_path.push_back(row_crd[i] == sparT->vLevel[1]->crd.back());
+          sparT->vLevel[1]->same_path.push_back(sparT->vLevel[1]->crd[i] == sparT->vLevel[1]->crd.back());
           sparT->vLevel[2]->same_path.push_back(
-              (row_crd[i] == sparT->vLevel[1]->crd.back()) && (col_crd[i] == sparT->vLevel[2]->crd.back()));
+              (sparT->vLevel[1]->crd[i] == sparT->vLevel[1]->crd.back()) && (sparT->vLevel[2]->crd[i] == sparT->vLevel[2]->crd.back()));
         }
-        sparT->vLevel[1]->crd.push_back(row_crd[i]);
-        sparT->vLevel[2]->crd.push_back(col_crd[i]);
-        sparT->valueArray.push_back(values[i]);
+        sparT->vLevel[1]->crd.push_back(sparT->vLevel[1]->crd[i]);
+        sparT->vLevel[2]->crd.push_back(sparT->vLevel[2]->crd[i]);
+        sparT->valueArray.push_back(sparT->valueArray[i]);
         // T_COO->vLevel[1]->crd.push_back(row_crd[i]);
         // T_COO->vLevel[1]->same_path.push_back(row_crd[i]== T_COO->vLevel[1]->crd.back());
         // T_COO->vLevel[2]->crd.push_back(col_crd[i]);
         // T_COO->valueArray.push_back(values[i]);
       }
     }
+    outfile.seekp(0);
+    output_header(outfile, row_size, col_size, dia_nnz_count);
+    outfile.close();
+
+
     // for (auto pos: punch_pos) {
     //     sparT->valueArray[pos]=0;
     // }
@@ -2954,9 +3846,9 @@ extern "C" {
     uint64_t row_size = sparT->dimSizes.data()[0];
     uint64_t col_size = sparT->dimSizes.data()[1];
     uint64_t nnz = sparT->vLevel[2]->crd.size();
-    std::vector<int> row_crd(sparT->vLevel[1]->crd);
-    std::vector<int> col_crd(sparT->vLevel[2]->crd);
-    std::vector<float> values(sparT->valueArray);
+//    std::vector<int> row_crd(sparT->vLevel[1]->crd);
+//    std::vector<int> col_crd(sparT->vLevel[2]->crd);
+//    std::vector<float> values(sparT->valueArray);
     sparT->vLevel[0]->ptr.pop_back();
     sparT->vLevel[1]->crd.clear();
     sparT->vLevel[1]->same_path.clear();
@@ -2989,10 +3881,11 @@ extern "C" {
     int* diag_nnz = new int[blockSize+col_size-1];
     for(unsigned i = 0; i < blockSize+col_size-1; i++) 
       diag_nnz[i] = 0;
-    int prev_row_block = row_crd[0]/blockSize;
+    int prev_row_block = sparT->vLevel[1]->crd[0]/blockSize;
+
     for(uint64_t i = 0; i < nnz; i++) {
-      int new_dim1 = row_crd[i]/blockSize;
-      int new_dim2 = col_crd[i]-row_crd[i];
+      int new_dim1 = sparT->vLevel[1]->crd[i] / blockSize;
+      int new_dim2 = sparT->vLevel[2]->crd[i] - sparT->vLevel[1]->crd[i];
       if (new_dim1 == prev_row_block) {
         diag_nnz[new_dim2+(new_dim1+1)*blockSize-1] += 1;
       } else {
@@ -3029,6 +3922,7 @@ extern "C" {
           T_BDIA->vector_1d.push_back(0);
       }
     }
+
     for (unsigned m = prev_row_block; m <((row_size-1)/blockSize)+1; m++) {
       T_BDIA->vLevel[1]->ptr.push_back(diag_block_count);
       row_ptr.push_back(nnz);
@@ -3059,9 +3953,9 @@ extern "C" {
     for (i = 0; i < ((row_size-1)/blockSize)+1; i++) {
       COO_pos=row_ptr[i]-dia_row_ptr[i];
       for(pos = row_ptr[i]; pos < row_ptr[i+1]; pos++) {
-        iter2_dim1 = row_crd[pos]/blockSize;
-        iter2_dim2 = col_crd[pos]-row_crd[pos];
-        iter2_dim3 = row_crd[pos]%blockSize;
+        iter2_dim1 = sparT->vLevel[1]->crd[pos]/blockSize;
+        iter2_dim2 = sparT->vLevel[2]->crd[pos]-sparT->vLevel[1]->crd[pos];
+        iter2_dim3 = sparT->vLevel[1]->crd[pos]%blockSize;
         start_pos = dim1_ptr[iter2_dim1];
         end_pos = dim1_ptr[iter2_dim1+1];
         // std::cout<<"start_pos="<<start_pos<<", end_pos="<<end_pos<<std::endl;
@@ -3074,17 +3968,17 @@ extern "C" {
           }
         }
         if (is_BDIA) {
-          T_BDIA->vector_1d[insert_pos*blockSize+iter2_dim3] = values[pos];
+          T_BDIA->vector_1d[insert_pos*blockSize+iter2_dim3] = sparT->valueArray[pos];
         } else {
           // COO_pos = COO_start_pos+COO_pos_iter;
           if (COO_pos > 0) {
-            sparT->vLevel[1]->same_path[COO_pos]=(row_crd[pos] == sparT->vLevel[1]->crd[COO_pos-1]);
+            sparT->vLevel[1]->same_path[COO_pos]=(sparT->vLevel[1]->crd[pos] == sparT->vLevel[1]->crd[COO_pos-1]);
             sparT->vLevel[2]->same_path[COO_pos]=(
-                (row_crd[pos] == sparT->vLevel[1]->crd[COO_pos-1]) && (col_crd[pos] == sparT->vLevel[2]->crd[COO_pos-1]));
+                (sparT->vLevel[1]->crd[pos] == sparT->vLevel[1]->crd[COO_pos-1]) && (sparT->vLevel[2]->crd[pos] == sparT->vLevel[2]->crd[COO_pos-1]));
           }
-          sparT->vLevel[1]->crd[COO_pos]=(row_crd[pos]);
-          sparT->vLevel[2]->crd[COO_pos]=(col_crd[pos]);
-          sparT->valueArray[COO_pos]=(values[pos]);
+          sparT->vLevel[1]->crd[COO_pos]=(sparT->vLevel[1]->crd[pos]);
+          sparT->vLevel[2]->crd[COO_pos]=(sparT->vLevel[2]->crd[pos]);
+          sparT->valueArray[COO_pos]=(sparT->valueArray[pos]);
           // std::cout<<"COO_pos="<<COO_pos<<", crd[1] size="<<sparT->vLevel[1]->crd.size()
           // <<", crd="<<sparT->vLevel[1]->crd[COO_pos]<<", value="<<sparT->valueArray[COO_pos]<< std::endl;
           COO_pos++;

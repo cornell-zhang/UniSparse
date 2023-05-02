@@ -6,9 +6,9 @@
   compressMap = #sparlay.compress<trim(0,1)>
 }>
 
-#DIA = #sparlay.encoding<{
-  crdMap = #sparlay.crd<(i,j)->(j minus i, i)>,
-  compressMap = #sparlay.compress<fuse(0), trim(0,0)>
+#C2SR = #sparlay.encoding<{
+  crdMap = #sparlay.crd<(i, j)->(i mod 1024, i floordiv 1024, j)>,
+  compressMap = #sparlay.compress<fuse(0,1), trim(2,2)>
 }>
 
 module {
@@ -26,22 +26,17 @@ module {
     %a_ori = sparlay.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
 //    sparlay.printStorage (%a_ori): tensor<?x?xf32, #COO>
     %a1 = sparlay.copy (%a_ori): tensor<?x?xf32, #COO> to tensor<?x?xf32, #COO>
-    
 
     %t_start0 = call @rtclock() : () -> f64
-    %a2 = sparlay.convert (%a1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DIA>
-//    sparlay.printStorage (%a2): tensor<?x?xf32, #DIA>
+    %a2 = sparlay.convert (%a1): tensor<?x?xf32, #COO> to tensor<?x?xf32, #C2SR>
+//    sparlay.printStorage (%a2): tensor<?x?xf32, #C2SR>
     %t_end0 = call @rtclock() : () -> f64
     %t_0 = arith.subf %t_end0, %t_start0: f64
     vector.print %t_0 : f64
 
-    %t_start1 = call @rtclock() : () -> f64
-    %a3 = sparlay.convert (%a2): tensor<?x?xf32, #DIA> to tensor<?x?xf32, #COO>
+    %a3 = sparlay.convert (%a2): tensor<?x?xf32, #C2SR> to tensor<?x?xf32, #COO>
 //    sparlay.printStorage (%a3): tensor<?x?xf32, #COO>
     sparlay.check (%a3, %a_ori): tensor<?x?xf32, #COO>, tensor<?x?xf32, #COO>
-    %t_end1 = call @rtclock() : () -> f64
-    %t_1 = arith.subf %t_end1, %t_start1: f64
-    vector.print %t_1 : f64
 
     //Release the resources 
     bufferization.dealloc_tensor %a_ori : tensor<?x?xf32, #COO>

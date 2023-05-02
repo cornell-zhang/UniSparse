@@ -473,7 +473,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
             auto divNum = exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS().dyn_cast<AffineConstantExpr>().getValue();
-            assert(divNum < 5LL);
+//            assert(divNum < 5LL);
             Ops.push_back(GeneralConversionOp(TileMerge, "", {i, (int)divNum}));
             newExprs.push_back(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS());
         } else if (exprs[i].getKind() != AffineExprKind::Mod) {
@@ -555,19 +555,23 @@ public:
             const GeneralConversionOp& gco
         ) {
             switch (gco.type) {
-                case TileMerge: //tiling: merge
+                case TileMerge: { //tiling: merge
                     assert(gco.args.size() == 2);
                     assert(gco.args[0] < 6 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
-                    genFunc1R(tileMergeName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
-                break;
-                case TileSplit: //tiling: split
+//                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    mlir::arith::ConstantOp factor_merge = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(gco.args[1]));
+                    genFunc1R(tileMergeName, {prevRes, Const[gco.args[0]], factor_merge});
+                    break; 
+                }
+                case TileSplit: {//tiling: split
                     assert(gco.args.size() == 2);
                     assert(gco.args[0] < 6 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
-                    genFunc1R(tileSplitName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
-                break;
-                case Move: //move
+//                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    mlir::arith::ConstantOp factor_split = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(gco.args[1]));
+                    genFunc1R(tileSplitName, {prevRes, Const[gco.args[0]], factor_split});
+                    break;
+                }
+                case Move:  { //move
                     assert(gco.args.size() == 2);
                     assert(gco.args[0] < 6 && gco.args[0] >= 0);
                     assert(gco.args[1] < 6 && gco.args[1] >= 0);
@@ -578,10 +582,12 @@ public:
                     } else {
                         genFunc1R(moveName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                     }
-                break;
-                default:
+                    break;
+                }
+                default: {
                     assert(0);
-                break;
+                    break;
+                }
             }
         };
 
@@ -645,7 +651,7 @@ public:
             flatSrcCrd.dump();
             flatDstCrd.dump();
 
-            // trivial Gaussian Elimination with functiion generation
+            // trivial Gaussian Elimination with function generation
             // Calculate M: (range(dstM)->range(srcM))
             std::cerr << "dstM " << dstM << std::endl;
             std::cerr << "srcM " << srcM << std::endl;
@@ -1472,7 +1478,7 @@ public:
     Type outputType = inputTensor.getType();
     std::vector<Value> params = {inputTensor, blockSize, thres};
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "decompose_BDIA_opt2", outputType, params, true),
+        getFunc(op, "decompose_BDIA", outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
