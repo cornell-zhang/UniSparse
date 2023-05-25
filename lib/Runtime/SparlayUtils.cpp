@@ -231,6 +231,10 @@ public:
   std::vector<int> crd;
   std::vector<int> ptr;
   std::vector<bool> same_path;
+  int* pointer_crd = nullptr;
+  int crd_size;
+  int* pointer_ptr = nullptr;
+  int ptr_size;
   LevelStorage() {
     type = 0;
     size = 0;
@@ -242,6 +246,15 @@ public:
     type = _type, size = _size;
     crd = _crd;
     ptr = _ptr;
+    same_path = _same_path;
+  }
+  LevelStorage(
+    int _type, int _size, int* _crd, int _crd_size, int* _ptr, int _ptr_size, std::vector<bool>& _same_path
+  ) {
+    type = _type, size = _size;
+    pointer_crd = _crd;
+    crd_size = _crd_size;
+    pointer_ptr = _ptr;
     same_path = _same_path;
   }
   bool operator == (const LevelStorage& A) {
@@ -283,9 +296,11 @@ public:
   std::vector<DataType*> vectorPointer;
   std::vector<DataType> vector_1d;
   std::vector<int> query;
-  std::vector<int> sum;
+  int* sum;
+  int sumSize = 1;
   std::vector<Pack2c> pack_vector;
   int singleVectorSize;
+  DataType* value_array = nullptr;
 
   #define LVINFO 4
   #define LVTRIM 1
@@ -369,7 +384,7 @@ public:
   bool pack(const int start_lv, const int end_lv);
   bool partition(const int level);
 
-  bool cust_pad(const int start_lv, const int end_lv);
+  bool fuse_enumerate_pad(const int dst_lv, const int start_lv, const int end_lv);
   bool cust_pad_opt(const int start_lv, const int end_lv);
 
   void getSize(size_t lv) {
@@ -623,8 +638,14 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
   fout << "==============================================" << std::endl;
   for (size_t i = 0; i < vLevel.size(); ++i) {
     fout << "crd[" << i << "]: ";
-    for (const auto ele: vLevel[i]->crd) {
-      fout << std::setw(8) << ele;
+    if(vLevel[i]->crd.size()) {
+      for (const auto ele: vLevel[i]->crd) {
+        fout << std::setw(8) << ele;
+      }
+    } else if(vLevel[i]->pointer_crd != nullptr) {
+      for(int j = 0; j < vLevel[i]->crd_size; j++) {
+        fout << std::setw(8) << vLevel[i]->pointer_crd[j];
+      }
     }
     fout << "      (Type:" << vLevel[i]->type << ")";
     fout << " [Size:" << vLevel[i]->size << "]";
@@ -639,15 +660,25 @@ void SparlayStorage::Print(std::ostream& fout, bool verbose) {
       }
       fout << std::endl;
     }
-    if (vLevel[i]->ptr.size()) {
-      fout << "ptr[" << i << "]: ";
+    fout << "ptr[" << i << "]: ";
+    if (vLevel[i]->ptr.size()) { 
       for (const auto ele: vLevel[i]->ptr) {
         fout << std::setw(8) << ele;
       }
-      fout << std::endl;
+    } else if (vLevel[i]->pointer_ptr != nullptr) {
+      for(int j = 0; j < vLevel[i]->ptr_size; i++) {
+        fout << std::setw(8) << vLevel[i]->pointer_ptr[j];
+      }
     }
+    fout << std::endl;
   }
-  if (valueArray.size()) {
+  if (this->value_array != nullptr) {
+    fout << "values: ";
+    for(int i = 0; i < this->singleVectorSize; i++){
+      fout << std::setw(8) << value_array[i];
+    }
+    fout << std::endl;
+  } else if (valueArray.size()) {
     fout << "values: ";
     for (size_t i = 0; i < valueArray.size(); ++i) {
       fout << std::setw(8) << valueArray[i];
@@ -1041,7 +1072,7 @@ bool SparlayStorage::enumerate(const int dst_lv, const int slice_lv) {
   }
 
   int max = 0;
-  for(size_t i = 0; i < this->sum.size(); i++) {
+  for(int i = 0; i < this->sumSize; i++) {
     if(this->sum[i] > max) {
       max = this->sum[i];
     }
@@ -1074,7 +1105,7 @@ bool SparlayStorage::sums(const int lv) {
     }
   }
 
-  int* sums = (int*)calloc(total_sum_size, sizeof(int));
+  static int* sums = (int*)calloc(total_sum_size, sizeof(int));
   if(vLevel[lv]->type == (LVFUSE ^ LVINFO)) {
     for(int i = 0; i < lv; i++) {
       assert(!(vLevel[i]->type & LVTRIM));
@@ -1094,7 +1125,8 @@ bool SparlayStorage::sums(const int lv) {
     assert("The sum operator on the other level types is not supported");
   }
 
-  this->sum = std::move(std::vector<int>(sums, sums+total_sum_size));
+  this->sum = sums;
+  this->sumSize = total_sum_size;
 
   return 1;
 }
@@ -1108,13 +1140,13 @@ bool SparlayStorage::reorder(const int dst_lv, const int slice_lv) {
     assert((vLevel[i]->type & LVTRIM));
     total_size *= vLevel[i]->size;
   }
-  assert(total_size == this->sum.size());
+  assert(total_size == this->sumSize);
 
 
   std::vector<int> new_crd(vLevel[slice_lv]->crd.size());
-  std::vector<int> sorted(this->sum.size());
-  std::vector<int> indices(this->sum.size());
-  for (size_t i = 0; i < this->sum.size(); ++i) {
+  std::vector<int> sorted(this->sumSize);
+  std::vector<int> indices(this->sumSize);
+  for (int i = 0; i < this->sumSize; ++i) {
       sorted[i] = i;
   }
 
@@ -1169,11 +1201,11 @@ bool SparlayStorage::schedule(const int dst_lv, const int slice_lv, const int pa
     total_size *= vLevel[i]->size;
   }
 //  std::cerr << "sum size " << this->sum.size() << " total_size" << total_size << std::endl;
-  assert(total_size == this->sum.size());
+  assert(total_size == this->sumSize);
   std::vector<int> new_crd(vLevel[slice_lv]->crd.size());
 
   std::vector<CoreInfo> cores_info;
-  std::vector<int> core_map(this->sum.size());
+  std::vector<int> core_map(this->sumSize);
   for(int i = 0; i < partitions; i++) {
     CoreInfo coreinfo;
     coreinfo.core_id = i;
@@ -1182,7 +1214,7 @@ bool SparlayStorage::schedule(const int dst_lv, const int slice_lv, const int pa
     cores_info.push_back(coreinfo);
   }
   std::make_heap(cores_info.begin(), cores_info.end(), nnz_greater());
-  for(int i = 0; i < this->sum.size(); i++) {
+  for(int i = 0; i < this->sumSize; i++) {
     int cur_row_nnz = this->sum[i];
     std::pop_heap(cores_info.begin(), cores_info.end(), nnz_greater());
     CoreInfo min_core = cores_info.back();
@@ -1259,7 +1291,7 @@ bool SparlayStorage::pad(const int start_lv, const int end_lv) {
   }
 
   //Direct trim and separate the dense level
-  for(int i = 0; i < this->query.size(); i++) {
+  for(size_t i = 0; i < this->query.size(); i++) {
     for(int j = vLevel[start_lv-1]->ptr[i]; j < vLevel[start_lv-1]->ptr[i+1]; j++) {
       int coordinate = i;
       for(int k = 2; k < start_lv; k++) {
@@ -1272,7 +1304,7 @@ bool SparlayStorage::pad(const int start_lv, const int end_lv) {
   }
 
   //Add coordinate of padded 0 values
-  for(int i = 0; i < this->query.size(); i++) {
+  for(size_t i = 0; i < this->query.size(); i++) {
     if(query[i] != vLevel[1]->size) {
       int remain = vLevel[1]->size - query[i];
       int offset = 0;
@@ -1766,13 +1798,13 @@ bool SparlayStorage::devectorize(const int level) {
     std::vector<bool> new_same_path;
     static std::vector<float> new_value;
     new_value.clear();
-    size_t Size = this->singleVectorSize;
+    int Size = this->singleVectorSize;
     if (vectorPointer.size() != 0) {
       for (size_t i = 0; i < father_crd.size(); ++i) {
         assert(father_ptr[i+1] == prev_ptr+1);
         int cnt = 0;
         for (int j = prev_ptr; j < father_ptr[i+1]; ++j) {
-          for (size_t k = 0; k < this->singleVectorSize; ++k) {
+          for (int k = 0; k < this->singleVectorSize; ++k) {
             if (vectorPointer[j][k]) {
               int remain = k;
               for(size_t l = level; l < vLevel.size(); l++) {
@@ -1829,109 +1861,138 @@ bool SparlayStorage::neg(int lv) {
   return 1;
 }
 
-//This version we push_back 0 at the end of vector and reorder.
-bool SparlayStorage::cust_pad(const int start_lv, const int end_lv) {
-  for(int i = 1; i < vLevel.size(); i++) {
+//Fused enumerate and pad is a customized operation for ELLPACK like format. It is for
+//the performance optimization purpose which allocate ELLPACK storage in one-shot and 
+//Rewrite the coordinate and values according to the ELLPACK layout.
+//Its current implementation only support: COO to ELLPACK; converting from the other format
+//needs the generalization routine that convert the source format to COO.
+//This fused operation cannot be used to optimize the conversion routine of Serpens, which
+//requires customized padding.
+//Currently, the dst_lv = 1, we will support flexible dst_lv in the future.
+
+bool SparlayStorage::fuse_enumerate_pad(const int dst_lv, const int start_lv, const int end_lv) {
+  #ifdef DEBUG
+  auto tic = TI;
+  #endif
+  for(size_t i = 1; i <= end_lv; i++) {
     assert(vLevel[i]->type & LVTRIM);
   }
 
-  int strides[end_lv-start_lv+1];
-  int subtensor_size = 1;
-  for(int i = start_lv; i <= end_lv; i++) {
-    strides[i-start_lv] = 1;
-    for(int j = i+1; j <= end_lv; j++){
-      strides[i-start_lv] *= vLevel[j]->size;
-    } 
-    subtensor_size *= vLevel[i]->size;
+  int max_size = 0;
+  for(int i = 0; i < this->sumSize; i++) {
+    if(max_size < this->sum[i]) {
+      max_size = this->sum[i];
+    }
   }
 
-  int* block = (int*)calloc(subtensor_size, sizeof(int));
-  int idx = 0;
-  for(int l = start_lv; l <= end_lv; l++) {
-    idx += vLevel[start_lv]->crd[0] * strides[l-start_lv];
+  int ellpack_size = 1;
+  for(int i = 1; i < start_lv; i++) { 
+    ellpack_size *= vLevel[i]->size;
   }
-  block[idx] = 1;
-  int remember = 0;
-  size_t before_pad_size = vLevel[start_lv]->crd.size();
-  for(size_t i = 1; i < before_pad_size; i++) {
-    if((start_lv == 1) || (vLevel[start_lv-1]->same_path[i])) {
-      int offset = 0;
-      for(int l = start_lv; l <= end_lv; l++) {
-        offset += vLevel[start_lv]->crd[i] * strides[l-start_lv];
-      }
-      block[offset] = 1;
+
+  ellpack_size *= max_size;
+
+  int strides[start_lv];
+  for(int i = 0; i < start_lv; i++) {
+    strides[i] = 1;
+    for(int j = i+1; j< start_lv; j++) {
+      strides[i] *= vLevel[j]->size;
+    }
+  }
+
+  int vector_size = 1;
+  for(size_t i = vLevel.size()-1; i > end_lv; i--) {
+    if(vLevel[i]->type == LVFUSE) {
+      vector_size *= vLevel[i]->size;
+    }
+  }
+  #ifdef DEBUG
+  std::cerr << std::endl << "Epilog time = " << TI-tic << "(s)" << std::endl;
+  #endif
+
+  #ifdef DEBUG
+  auto tic1 = TI;
+  #endif
+  int* count = (int*)calloc(this->sumSize, sizeof(int));
+  static std::vector<int*> level_crds;
+  level_crds.resize(end_lv-start_lv+1, nullptr);
+  DataType* values = (DataType*)calloc(ellpack_size, sizeof(DataType));
+  static std::vector<DataType*> value_pointer;
+  if(vector_size > 1) {
+    value_pointer.resize(ellpack_size, nullptr);
+  }
+  for(size_t l = start_lv; l <= end_lv; l++) {
+    level_crds[l-start_lv] =(int*)calloc(ellpack_size, sizeof(int));
+  }
+
+  #ifdef DEBUG
+  std::cerr << std::endl << "Memory allocation time = " << TI-tic1 << "(s)" << std::endl;
+  #endif
+
+  #ifdef DEBUG
+  auto tic2 = TI;
+  #endif
+  for(size_t i = 0; i < this->vLevel[start_lv]->crd.size(); i++) {
+    int ct_offset = 0;
+    for(int l = 1; l < start_lv; l++) {
+      ct_offset += this->vLevel[l]->crd[i] * strides[l];
+    }
+    int idx = count[ct_offset];
+    count[ct_offset]++;
+    int offset = idx * strides[0];
+    offset += ct_offset;
+    for(int l = start_lv; l <= end_lv; l++) {
+      level_crds[l-start_lv][offset] = vLevel[l]->crd[i];
+    }
+    
+    if(vector_size > 1) {
+      value_pointer[offset] = this->vectorPointer[i];
     } else {
-      //Pad happens here
-      int buffer_crd[start_lv-1];
-      for(int j = 0; j < subtensor_size; j++) {
-        if(block[j] != 0) {
-          for(int k = 1; k < start_lv; k++) {
-            buffer_crd[k-1] = vLevel[k]->crd[remember];
-//            std::cerr << "remember is " << i << "buffer_crd[" << k-1 << "] is " << buffer_crd[k-1] << std::endl;
-          }
-          break;
-        }
+      values[offset] = this->valueArray[i];
+    }  
+  }
+  #ifdef DEBUG
+  std::cerr << std::endl << "value and crd creation time = " << TI-tic2 << "(s)" << std::endl;
+  #endif
+
+  #ifdef DEBUG
+  auto tic3 = TI;
+  #endif
+  this->singleVectorSize = ellpack_size;
+  if(vector_size > 1) {
+    for(int i = 0; i < ellpack_size; i++) {
+      if(value_pointer[i] == nullptr) {
+        value_pointer[i] = (DataType*)calloc(vector_size, sizeof(DataType));
       }
-      for(int j = 0; j < subtensor_size; j++) { 
-        if(block[j] == 0) {
-          int offset = j;
-          for(int k = start_lv; k <= end_lv; k++) {
-            int index = offset / strides[k-start_lv];
-            offset = offset - index * strides[k-start_lv];
-            vLevel[k]->crd.push_back(index);
-            vLevel[k]->same_path.push_back(0);
-          }
-          for(int k = 1; k < start_lv; k++){
-            vLevel[k]->crd.push_back(buffer_crd[k-1]);
-            vLevel[k]->same_path.push_back(0);
-          }
-          for(int k =end_lv+1; k < vLevel.size(); k++) {
-            vLevel[k]->crd.push_back(0);
-            vLevel[k]->same_path.push_back(0);
-          }
-          this->valueArray.push_back(0);
-        }
-      }
-      remember = i;
-      std::memset(block, 0, subtensor_size * sizeof(int));
-      int offset = 0;
-      for(int l = start_lv; l <= end_lv; l++) {
-        offset += vLevel[start_lv]->crd[i] * strides[l-start_lv];
-      }
-      block[offset] = 1;
     }
+    this->vectorPointer = std::move(value_pointer);
+  } else {
+    this->value_array = values;
+  }
+  
+  for(int l = 1; l < start_lv; l++) {
+    this->vLevel[l]->type = LVFUSE;
+    this->vLevel[l]->crd.clear();
+    this->vLevel[l]->same_path.clear();
+  }
+  for(int l = start_lv; l <= end_lv; l++) {
+    this->vLevel[l]->crd.clear();
+    this->vLevel[l]->same_path.clear();
+    this->vLevel[l]->pointer_crd = level_crds[l-start_lv];
+    this->vLevel[l]->crd_size = ellpack_size;
   }
 
-  int buffer_crd[start_lv-1];
-  for(int j = 0; j < subtensor_size; j++) {
-    if(block[j] != 0) {
-      for(int k = 1; k < start_lv; k++) {
-        buffer_crd[k-1] = vLevel[k]->crd[remember];
-//        std::cerr << "remember is " << remember << "buffer_crd[" << k-1 << "] is " << buffer_crd[k-1] << std::endl;
-      }
-      break;
-    }
-  }
-  for(int j = 0; j < subtensor_size; j++) { 
-    if(block[j] == 0) {
-      int offset = j;
-      for(int k = start_lv; k <= end_lv; k++) {
-        int index = offset / strides[k-start_lv];
-        offset = offset - index * strides[k-start_lv];
-        vLevel[k]->crd.push_back(index);
-        vLevel[k]->same_path.push_back(0);
-      }
-      for(int k = 1; k < start_lv; k++){
-        vLevel[k]->crd.push_back(buffer_crd[k-1]);
-        vLevel[k]->same_path.push_back(0);
-      }
-      for(int k =end_lv+1; k < vLevel.size(); k++) {
-        vLevel[k]->crd.push_back(0);
-        vLevel[k]->same_path.push_back(0);
-      }
-      this->valueArray.push_back(0);
-    }
-  }
+  std::vector<bool> new_same_path = {};
+  //TODO: give the enumerated level a valid expr
+  std::shared_ptr<Vector2i> ptr = std::make_shared<Vector2i>(0,0);
+  this->newStorage(
+    1, 
+    std::shared_ptr<LevelStorage>(new LevelStorage(LVFUSE, max_size, nullptr, 0, nullptr, 0, new_same_path)), 
+    ptr
+  );
+  #ifdef DEBUG
+  std::cerr << std::endl << "Epoclog time = " << TI-tic3 << "(s)" << std::endl;
+  #endif
 
   return 1;
 }
@@ -2514,6 +2575,22 @@ extern "C" {
     #endif
     #ifdef PRINT
     std::cerr << "Print after enumerate" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptFusedEnumeratePad(void* ptr, int start_lv, int end_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->fuse_enumerate_pad(1, start_lv+1, end_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Fused Enumerate and Pad done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after Fused Enumerate and Pad" << std::endl;
     sparT->Print(std::cerr, 1);
     #endif
     return (void*)sparT;

@@ -34,7 +34,7 @@ module {
     %6 = call @sptSum(%2, %c0_i32) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %7 = call @sptEnumerate(%6, %c0_i32, %c1_i32) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
     %8 = call @sptMove(%7, %c0_i32, %c0_i32) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
-    %9 = call @sptCustPad(%8, %c1_i32, %c1_i32) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
+    %9 = call @sptCustPad(%8, %c0_i32, %c1_i32) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
 //    %10 = call @sptMove(%9, %c0_i32, %c0_i32) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
 //    %11 = call @sptMove(%10, %c1_i32, %c1_i32) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
     %12 = call @rtclock() : () -> f64
