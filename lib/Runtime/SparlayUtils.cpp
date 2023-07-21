@@ -30,6 +30,7 @@
 #include <cmath>
 #include <numeric>
 #include <vector>
+#include <set>
 #include <map>
 #include <iostream>
 #include <fstream>
@@ -385,6 +386,8 @@ public:
   bool partition(const int level);
 
   bool fuse_enumerate_pad(const int dst_lv, const int start_lv, const int end_lv);
+  bool fuse_dia_2d_only(const int neg, const int keep_lv);
+  bool fuse_transpose(const int mode);
   bool cust_pad_opt(const int start_lv, const int end_lv);
 
   void getSize(size_t lv) {
@@ -2098,6 +2101,200 @@ bool SparlayStorage::cust_pad_opt(const int start_lv, const int end_lv) {
   return 1;
 }
 
+//The fused operation to support generating DIA from CSR, DCSR and COO.
+//Note that this is only for 2D matrix
+//
+bool SparlayStorage::fuse_dia_2d_only(const int neg, const int keep_lv) {
+
+  assert(neg == 1 || neg == -1);
+  assert(keep_lv <= 2 && keep_lv >= 1);
+  assert(vLevel.size() == 3);
+  assert(vLevel[2]->type == LVTRIM);
+  #ifdef DEBUG
+  auto tic1 = TI;
+  #endif
+  int size_0 = vLevel[1]->size + vLevel[2]->size;
+  int size_1 = vLevel[keep_lv]->size;
+  std::vector<int> new_crds(vLevel[2]->crd.size());
+  bool* A1_attr_nonempty = (bool*)calloc(size_0, sizeof(bool));
+  if(vLevel[1]->type == (LVFUSE ^ LVINFO)) {
+    for(int i = 0; i < vLevel[1]->size; i++) {
+      for(int j = vLevel[1]->ptr[i]; j < vLevel[1]->ptr[i+1]; j++) {
+        int row = i;
+        int col = vLevel[2]->crd[j];
+        int offset = (row - col) * neg + size_1;
+        A1_attr_nonempty[offset] = 1; 
+      }
+    }
+  } else if(vLevel[1]->type == (LVFUSE ^ LVTRIM)) {
+    //TODO: Add support for DCSR
+  } else if(vLevel[1]->type == (LVTRIM)) {
+    for(size_t i = 0; i < vLevel[1]->crd.size(); i++) {
+      int row = vLevel[1]->crd[i];
+      int col = vLevel[2]->crd[i];
+      int offset = (row - col) * neg + size_1;
+      A1_attr_nonempty[offset] = 1;
+    }
+  }
+  
+  int* A1_perm = (int*)malloc(sizeof(int32_t) * size_0);
+  int* A1_nzslice = (int*)malloc(sizeof(int32_t) * 1);
+  A1_nzslice[0] = 0;
+  for (int32_t i0 = 0; i0 < size_0; i0++) {
+    if (A1_attr_nonempty[i0] == 1) {
+      A1_perm[A1_nzslice[0]] = i0;
+      A1_nzslice[0] = A1_nzslice[0] + 1;
+    }
+  }
+  int32_t* A1_rperm = 0;
+  A1_rperm = (int32_t*)malloc(sizeof(int32_t) * size_0);
+  int32_t A1_nzslice_local = A1_nzslice[0];
+  for (int32_t p = 0; p < A1_nzslice_local; p++) {
+    A1_rperm[A1_perm[p]] = p;
+  }
+  #ifdef DEBUG
+  std::cerr << std::endl << "New crds calculation time = " << TI-tic1 << "(s)" << std::endl;
+  #endif
+
+  #ifdef DEBUG
+  auto tic2 = TI;
+  #endif
+  /*
+  std::set<int> uniqueValues(new_crds.begin(), new_crds.end());
+  int* crds = (int*)malloc(uniqueValues.size() * sizeof(int));
+  std::copy(uniqueValues.begin(), uniqueValues.end(), crds);
+  std::map<int, int> mappedSequence;
+  int index = 0;
+  for(const auto& value: uniqueValues) {
+    mappedSequence[value] = index++;
+  }
+  */
+  #ifdef DEBUG
+  std::cerr << std::endl << "Map generation time = " << TI-tic2 << "(s)" << std::endl;
+  #endif
+
+  #ifdef DEBUG
+  auto tic3 = TI;
+  #endif
+  DataType* values = (DataType*)malloc(A1_nzslice[0] * size_1 * sizeof(DataType));
+  memset(values, 0, A1_nzslice[0] * size_1 * sizeof(DataType));
+  this->singleVectorSize = A1_nzslice[0] * size_1;
+  if(vLevel[1]->type == (LVFUSE ^ LVINFO)) {
+    for(int i = 0; i < vLevel[1]->size; i++) {
+      for(int j = vLevel[1]->ptr[i]; j < vLevel[1]->ptr[i+1]; j++) {
+        int row = i;
+        int col = vLevel[2]->crd[j];
+        int offset = (keep_lv == 1) ? row : col;
+        offset += A1_rperm[(row - col) * neg + size_1] * size_1;
+        values[offset] = this->valueArray[j];
+      }
+    }
+  } else if(vLevel[1]->type == (LVFUSE ^ LVTRIM)) {
+    //TODO: Add support for DCSR
+  } else if(vLevel[1]->type == (LVTRIM)) {
+    for(size_t i = 0; i < vLevel[1]->crd.size(); i++) {
+      int row = vLevel[1]->crd[i];
+      int col = vLevel[2]->crd[i];
+      int offset = (keep_lv == 1) ? row : col;
+      offset += A1_rperm[(row - col) * neg + size_1] * size_1;
+      values[offset] = this->valueArray[i];
+    }
+  }
+
+  vLevel[1]->crd.clear();
+  vLevel[1]->ptr.clear();
+  vLevel[1]->same_path.clear();
+  vLevel[1]->size = size_0;
+  vLevel[1]->crd_size = A1_nzslice[0];
+  vLevel[1]->pointer_crd = A1_perm;
+  vLevel[1]->type = LVTRIM;
+
+  vLevel[2]->crd.clear();
+  vLevel[2]->ptr.clear();
+  vLevel[2]->same_path.clear();
+  vLevel[2]->size = size_1;
+  vLevel[2]->type = LVFUSE;
+
+  this->valueArray.clear();
+  this->value_array = values;
+  #ifdef DEBUG
+  std::cerr << std::endl << "Value generation time = " << TI-tic3 << "(s)" << std::endl;
+  #endif
+
+  return 1;
+}
+
+bool SparlayStorage::fuse_transpose(const int mode) {
+  assert(vLevel.size() == 3);
+  assert(vLevel[2]->type == LVTRIM);
+  int size_0 = vLevel[1]->size;
+  int size_1 = vLevel[2]->size;
+  size_t nnz = vLevel[2]->crd.size();
+  int32_t* temp = (int32_t*)calloc(size_1, sizeof(int32_t));
+
+  if(vLevel[1]->type == (LVFUSE ^ LVINFO)) {
+    // Source format is csr
+    for(int i = 0; i < size_0; i++) {
+      for(int j = vLevel[1]->ptr[i]; j < vLevel[1]->ptr[i+1]; j++) {
+        int col_idx = vLevel[2]->crd[j];
+        temp[col_idx] += 1;
+      }
+    }
+  } else if(vLevel[1]->type == (LVFUSE ^ LVTRIM)) {
+    //TODO: Add support for DCSR
+  } else if(vLevel[1]->type == LVTRIM) {
+    for(size_t i = 0; i < vLevel[1]->crd.size(); i++) {
+      int col_idx = vLevel[2]->crd[i];
+      temp[col_idx] += 1;
+    }
+  }
+
+//  int32_t* crds = (int32_t*)malloc(sizeof(int32_t) * nnz);
+//  DataType* values = (DataType*)malloc(sizeof(DataType) * nnz);
+  std::vector<int32_t> crds(nnz);
+  std::vector<DataType> values(nnz);
+  if(mode == 0) { //CSR -> CSC or CSC -> CSR
+//    int32_t* ptr = (int32_t*)malloc(sizeof(int32_t) * (size_1+2));
+    std::vector<int32_t> ptrs(size_1+2);
+    ptrs[0] = 0;
+    ptrs[1] = 0;
+    for(int i = 1; i <size_1+1; i++) {
+      ptrs[i+1] = ptrs[i] + temp[i-1];
+    }
+    for(int i = 0; i < size_0; i++) {
+      for(int j = vLevel[1]->ptr[i]; j < vLevel[1]->ptr[i+1]; j++) {
+        int col_idx = vLevel[2]->crd[j];
+        int dst_idx = ptrs[col_idx+1];
+        crds[dst_idx] = i;
+        values[dst_idx] = this->valueArray[j];
+        ptrs[col_idx+1]++;
+      }
+    }
+
+    vLevel[1]->crd.clear();
+    vLevel[1]->ptr.clear();
+    vLevel[1]->same_path.clear();
+    vLevel[1]->size = size_1;
+    ptrs.pop_back();
+    vLevel[1]->ptr = std::move(ptrs);
+
+    vLevel[2]->crd.clear();
+    vLevel[2]->ptr.clear();
+    vLevel[2]->size = size_0;
+    vLevel[2]->crd = std::move(crds);
+
+    this->valueArray.clear();
+    this->valueArray = std::move(values);
+    
+  } else if(mode == 2) { // COO row-major -> CSC or COO col-major -> CSR 
+  
+  } else if(mode == 3) { // CSR -> COO col-major or CSC -> COO col-major
+
+  }
+
+  return 1;
+}
+
 //TODO: very ugly and hardcode implementation, need to support the struct with variable number of integers.
 bool SparlayStorage::pack(const int start_lv, const int end_lv) {
   for(int i = start_lv; i < end_lv; i++) {
@@ -2591,6 +2788,38 @@ extern "C" {
     #endif
     #ifdef PRINT
     std::cerr << "Print after Fused Enumerate and Pad" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptFusedDIA2D(void* ptr, int neg, int keep_lv) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->fuse_dia_2d_only(neg, keep_lv+1);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Fused DIA done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after Fused DIA" << std::endl;
+    sparT->Print(std::cerr, 1);
+    #endif
+    return (void*)sparT;
+  }
+
+  void* _mlir_ciface_sptFusedTranspose(void* ptr, int mode) {
+    #ifdef DEBUG
+    auto tic = TI;
+    #endif
+    SparlayStorage* sparT = (SparlayStorage*)(ptr);
+    sparT->fuse_transpose(mode);
+    #ifdef DEBUG
+    std::cerr << std::endl << "Fused Transpose done, time = " << TI-tic << "(s)" << std::endl;
+    #endif
+    #ifdef PRINT
+    std::cerr << "Print after Fused Transpose" << std::endl;
     sparT->Print(std::cerr, 1);
     #endif
     return (void*)sparT;

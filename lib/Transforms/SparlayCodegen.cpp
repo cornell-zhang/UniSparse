@@ -172,7 +172,7 @@ bool findAffine(Merger &merger, unsigned tensor, AffineExpr a, Dim dim,
   }
 }
 
-  bool findSparseAnnotations(Merger &merger, linalg::GenericOp op) {
+bool findSparseAnnotations(Merger &merger, linalg::GenericOp op) {
 //  std::cerr << "Enter findSparseAnnotations " << std::endl;
   bool annotated = false;
   for (OpOperand *t : op.getInputAndOutputOperands()) {
