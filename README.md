@@ -13,16 +13,21 @@ mkdir build && cd build
 cmake -G Ninja .. -DMLIR_DIR=$PREFIX/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit
 cmake --build . --target check-standalone
 ``` -->
-This project is dependent on [LLVM](https://github.com/llvm/llvm-project/tree/llvmorg-15.0.0-rc1) 15 and [Eigen](https://gitlab.com/libeigen/eigen/-/releases/3.4.0).
+This project is dependent on [LLVM](https://github.com/llvm/llvm-project/tree/llvmorg-15.0.0-rc1) 15 and [Eigen](https://gitlab.com/libeigen/eigen/-/releases/3.4.0). Please export the environment variables properly according to your LLVM and Eigen installation paths:
+
+```sh
+export LLVM_ROOT=$YOUR_LLVM_ROOT_DIR_PATH
+export EIGEN_ROOT=$YOUR_EIGEN_ROOT_DIR_PATH
+```
 
 Please modify `scripts/cmake-config.sh` according to your LLVM build path and Eigen install path:
 ```sh
--DMLIR_DIR="$LLVM_PROJECT_BUILD/lib/cmake/mlir" \
--DLLVM_DIR="$LLVM_PROJECT_BUILD/lib/cmake/llvm" \
--DLLVM_BUILD_LIBRARY_DIR="$LLVM_PROJECT_BUILD/build" \
--DLLVM_EXTERNAL_LIT="$LLVM_PROJECT_BUILD/build/bin/llvm-lit" \
--DEXTERNAL_INCLUDE_DIRS="$EIGEN_INSTALL_PATH" \
--DMLIR_LIB_DIR="$LLVM_PROJECT_BUILD/mlir/lib" \
+-DMLIR_DIR="$LLVM_ROOT/build/lib/cmake/mlir" \
+-DLLVM_DIR="$LLVM_ROOT/build/lib/cmake/llvm" \
+-DLLVM_BUILD_LIBRARY_DIR="$LLVM_ROOT/build" \
+-DLLVM_EXTERNAL_LIT="$LLVM_ROOT/build/bin/llvm-lit" \
+-DEXTERNAL_INCLUDE_DIRS="$EIGEN_ROOT" \
+-DMLIR_LIB_DIR="$LLVM_ROOT/mlir/lib" \
 ```
 
 Then

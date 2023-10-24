@@ -15,7 +15,7 @@
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 // #ifdef MLIR_CRUNNERUTILS_DEFINE_FUNCTIONS
-#define DEBUG
+// #define DEBUG
 //#define PRINT
 //#define PARALLEL
 
@@ -41,7 +41,6 @@
 #include <cuda_runtime.h>
 #include <cusparse.h>
 #include "Eigen/Dense"
-#include "CVector.hpp"
 #define DataType float
 #define THREAD_NUM 48
 
