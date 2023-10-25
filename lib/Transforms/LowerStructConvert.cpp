@@ -11,26 +11,26 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayTypes.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseOps.h"
+#include "IR/UniSparseTypes.h"
 #include "Transforms/Passes.h"
 
 #include <cstdio>
 #include <cstring>
 
 using namespace mlir;
-using namespace sparlay;
+using namespace unisparse;
 
 namespace {
 #define GEN_PASS_CLASSES
 #include "Transforms/Passes.h.inc"
 
-class StructConvertOpLowering : public OpConversionPattern<sparlay::StructConvertOp> {
+class StructConvertOpLowering : public OpConversionPattern<unisparse::StructConvertOp> {
 public:
-  using OpConversionPattern<sparlay::StructConvertOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::StructConvertOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::StructConvertOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::StructConvertOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op->getLoc();
     //access all element
@@ -45,15 +45,15 @@ public:
     assert(inputSize == outputSize);
     std::vector<Value> inputValues;
     for (uint64_t i = 0; i < inputSize; ++i) {
-      inputValues.push_back(rewriter.create<sparlay::StructAccessOp>(loc,inputElmTypes[i],input,i));
+      inputValues.push_back(rewriter.create<unisparse::StructAccessOp>(loc,inputElmTypes[i],input,i));
     }
     std::vector<Value> outputValues;
     //convert
     for (size_t i = 0; i < inputValues.size(); ++i) {
-      outputValues.push_back(rewriter.create<sparlay::ConvertOp>(loc, outputElmTypes[i], inputValues[i]));
+      outputValues.push_back(rewriter.create<unisparse::ConvertOp>(loc, outputElmTypes[i], inputValues[i]));
     }
     //construct a new struct
-    Value outStruct = rewriter.create<sparlay::StructConstructOp>(loc, outputType, llvm::makeArrayRef(outputValues));
+    Value outStruct = rewriter.create<unisparse::StructConstructOp>(loc, outputType, llvm::makeArrayRef(outputValues));
     rewriter.replaceOp(op, outStruct);
     return success();
   }
@@ -66,9 +66,9 @@ public LowerStructConvertBase<LowerStructConvertPass> {
     ConversionTarget target(getContext());
     target.addLegalDialect<
       arith::ArithmeticDialect, LLVM::LLVMDialect, 
-      func::FuncDialect, sparlay::SparlayDialect
+      func::FuncDialect, unisparse::UniSparseDialect
     >();
-    target.addIllegalOp<sparlay::StructConvertOp>();
+    target.addIllegalOp<unisparse::StructConvertOp>();
     RewritePatternSet patterns(&getContext());
     patterns.add<StructConvertOpLowering>(&getContext());
     func::FuncOp curOp = getOperation();
@@ -82,6 +82,6 @@ public LowerStructConvertBase<LowerStructConvertPass> {
 
 } //end of anonymus namespace
 
-std::unique_ptr<Pass> mlir::sparlay::createLowerStructConvertPass() {
+std::unique_ptr<Pass> mlir::unisparse::createLowerStructConvertPass() {
     return std::make_unique<LowerStructConvertPass>();
 }

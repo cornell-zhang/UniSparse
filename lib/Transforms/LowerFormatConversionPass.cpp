@@ -31,9 +31,9 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayTypes.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseOps.h"
+#include "IR/UniSparseTypes.h"
 #include "Transforms/Passes.h"
 #include "Eigen/Dense"
 
@@ -42,7 +42,7 @@
 #include <tuple>
 
 using namespace mlir;
-using namespace sparlay;
+using namespace unisparse;
 
 #define DEBUG_TYPE "lower-format-conversion"
 
@@ -87,8 +87,8 @@ static func::CallOp createFuncCall(OpBuilder &builder, Operation *op,
   return builder.create<func::CallOp>(op->getLoc(), resultType, fn, operands);
 }
 
-static Value genSparlayDimSizeCall(OpBuilder &builder, Operation *op,
-                            SparlayEncodingAttr &enc, Value src,
+static Value genUniSparseDimSizeCall(OpBuilder &builder, Operation *op,
+                            UniSparseEncodingAttr &enc, Value src,
                             int64_t idx) {
   // Permute the index according to an optional dimension ordering.
   if (AffineMap p = enc.getCrdMap())
@@ -100,24 +100,24 @@ static Value genSparlayDimSizeCall(OpBuilder &builder, Operation *op,
   return createFuncCall(builder, op, name, iTp, params, true).getResult(0);
 }
 
-static Value genSparlayAlloc(RewriterBase &rewriter, Location loc, Value sz, Type tp) {
+static Value genUniSparseAlloc(RewriterBase &rewriter, Location loc, Value sz, Type tp) {
   auto memTp = MemRefType::get({ShapedType::kDynamicSize}, tp);
   return rewriter.create<memref::AllocOp>(loc, memTp, ValueRange{sz});
 }
 
-static Value genSparlayAlloca(OpBuilder &builder, Location loc, Value sz, Type tp) {
+static Value genUniSparseAlloca(OpBuilder &builder, Location loc, Value sz, Type tp) {
   auto memTp = MemRefType::get({ShapedType::kDynamicSize}, tp);
   return builder.create<memref::AllocaOp>(loc, memTp, ValueRange{sz});
 }
 
-static Value genSparlayAlloca(OpBuilder &builder, Location loc, unsigned sz, Type tp) {
-  return genSparlayAlloca(builder, loc, sparse_tensor::constantIndex(builder, loc, sz), tp);
+static Value genUniSparseAlloca(OpBuilder &builder, Location loc, unsigned sz, Type tp) {
+  return genUniSparseAlloca(builder, loc, sparse_tensor::constantIndex(builder, loc, sz), tp);
 }
 
-static Value genSparlayBuffer(OpBuilder &builder, Location loc, ValueRange values) {
+static Value genUniSparseBuffer(OpBuilder &builder, Location loc, ValueRange values) {
   unsigned sz = values.size();
   assert(sz >= 1);
-  Value buffer = genSparlayAlloca(builder, loc, sz, values[0].getType());
+  Value buffer = genUniSparseAlloca(builder, loc, sz, values[0].getType());
   for (unsigned i = 0; i < sz; i++) {
     Value idx = sparse_tensor::constantIndex(builder, loc, i);
     builder.create<memref::StoreOp>(loc, values[i], buffer, idx);
@@ -125,7 +125,7 @@ static Value genSparlayBuffer(OpBuilder &builder, Location loc, ValueRange value
   return buffer;
 }
 
-std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> inferDimLevelType(SparlayEncodingAttr enc, int64_t rank) {
+std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> inferDimLevelType(UniSparseEncodingAttr enc, int64_t rank) {
   std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> lt;
   assert(enc);
 //  std::cerr << "rank is " << rank << std::endl;
@@ -164,8 +164,8 @@ std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> inferDimLevel
   return lt;
 }
 
-static void SparlaynewParams(OpBuilder &builder, SmallVector<Value, 8> &params, Operation *op, 
-                             SparlayEncodingAttr &enc, ValueRange szs, int64_t rank, Value ptr = Value()) {
+static void UniSparsenewParams(OpBuilder &builder, SmallVector<Value, 8> &params, Operation *op, 
+                             UniSparseEncodingAttr &enc, ValueRange szs, int64_t rank, Value ptr = Value()) {
   Location loc = op->getLoc();
   std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> dlt = inferDimLevelType(enc, rank);
 //  std::cerr << "Finish infer DimLevelType " << std::endl;
@@ -174,11 +174,11 @@ static void SparlaynewParams(OpBuilder &builder, SmallVector<Value, 8> &params, 
   SmallVector<Value, 4> attrs;
   for (unsigned i = 0; i < sz; i++)
     attrs.push_back(constantDimLevelTypeEncoding(builder, loc, dlt[i]));
-  params.push_back(genSparlayBuffer(builder, loc, attrs));
+  params.push_back(genUniSparseBuffer(builder, loc, attrs));
 // std::cerr << "Finish gen level attr buffer " << std::endl;
   // Dimension sizes array of the enveloping tensor. Useful for either
   // verification of external data, or for construction of internal data.
-  params.push_back(genSparlayBuffer(builder, loc, szs));
+  params.push_back(genUniSparseBuffer(builder, loc, szs));
 //  std::cerr << "Finish gen dimension size " << std::endl;
   // Dimension order permutation array. This is the "identity" permutation by
   // default, or otherwise the "reverse" permutation of a given ordering, so
@@ -191,7 +191,7 @@ static void SparlaynewParams(OpBuilder &builder, SmallVector<Value, 8> &params, 
     for (unsigned i = 0; i < sz; i++)
       rev[i] = sparse_tensor::constantIndex(builder, loc, i);
   }
-  params.push_back(genSparlayBuffer(builder, loc, rev));
+  params.push_back(genUniSparseBuffer(builder, loc, rev));
 //  std::cerr << "Finish gen reverse permutation " << std::endl;
   // Secondary and primary types encoding.
 //  Type elemTp = stp.getElementType();
@@ -206,9 +206,9 @@ static void SparlaynewParams(OpBuilder &builder, SmallVector<Value, 8> &params, 
   params.push_back(ptr);
 }
 
-static Value genSparlayNewCall(OpBuilder &builder, Operation *op,
+static Value genUniSparseNewCall(OpBuilder &builder, Operation *op,
                         ArrayRef<Value> params) {
-  StringRef name = "newSparlayTensor";
+  StringRef name = "newUniSparseTensor";
   Type pTp = LLVM::LLVMPointerType::get(builder.getI8Type());
   return createFuncCall(builder, op, name, pTp, params, true).getResult(0);
 }
@@ -217,12 +217,12 @@ static Value genSparlayNewCall(OpBuilder &builder, Operation *op,
 // RewritePatterns: New operations
 //===----------------------------------------------------------------------===//
 
-class NewOpLowering : public OpConversionPattern<sparlay::NewOp> {
+class NewOpLowering : public OpConversionPattern<unisparse::NewOp> {
 public:
-    using OpConversionPattern<sparlay::NewOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::NewOp>::OpConversionPattern;
 
     LogicalResult 
-        matchAndRewrite(sparlay::NewOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::NewOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         
@@ -273,25 +273,25 @@ public:
             valParams);
             
         // use struct_construct to construct them into the sparse data structure
-        // which will be folded with struct_access or eliminated with DCE in finalize_sparlay_lowering
+        // which will be folded with struct_access or eliminated with DCE in finalize_unisparse_lowering
         SmallVector<Value, 3> input_vec;
         for (unsigned i = 0; i < resSize; i++) {
             input_vec.push_back(indicesOp[i].getResult(0));
         }
         ValueRange input = llvm::makeArrayRef(input_vec);
 
-        Value crdStructOp = rewriter.create<sparlay::StructConstructOp>(loc, crdType, input);
-        rewriter.replaceOpWithNewOp<sparlay::StructConstructOp>(op, resType, 
+        Value crdStructOp = rewriter.create<unisparse::StructConstructOp>(loc, crdType, input);
+        rewriter.replaceOpWithNewOp<unisparse::StructConstructOp>(op, resType, 
             ValueRange({crdStructOp, valueOp.getResult(0)}));
         return success();
     }
 };
 
-class fromFileOpLowering : public OpConversionPattern<sparlay::fromFileOp> {
+class fromFileOpLowering : public OpConversionPattern<unisparse::fromFileOp> {
 public:
-    using OpConversionPattern<sparlay::fromFileOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::fromFileOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::fromFileOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::fromFileOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         
@@ -485,18 +485,18 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
     return std::make_tuple(newCrdMap, Ops);
 }
 
-class ConvertOpLowering : public OpConversionPattern<sparlay::ConvertOp> {
+class ConvertOpLowering : public OpConversionPattern<unisparse::ConvertOp> {
 public:
-    using OpConversionPattern<sparlay::ConvertOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::ConvertOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::ConvertOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::ConvertOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op.getLoc();
         Type resType = op.getType();
         Value src = adaptor.getOperands()[0];
         Type srcType = src.getType();
-        auto encSrc = getSparlayEncoding(op->getOperand(0).getType());
-        auto encDst = getSparlayEncoding(resType);
+        auto encSrc = getUniSparseEncoding(op->getOperand(0).getType());
+        auto encDst = getUniSparseEncoding(resType);
 
         //handle swap only (quick round-about)
         auto srcCrd = encSrc.getCrdMap();
@@ -820,10 +820,10 @@ public:
     }
 };
 
-class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageOp> {
-    using OpConversionPattern<sparlay::printStorageOp>::OpConversionPattern;
+class printStorageOpLowering : public OpConversionPattern<unisparse::printStorageOp> {
+    using OpConversionPattern<unisparse::printStorageOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::printStorageOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::printStorageOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         
         Value candValue = adaptor.getOperands()[0];
@@ -841,10 +841,10 @@ class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageO
     }
 };
 
-class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
-    using OpConversionPattern<sparlay::copyOp>::OpConversionPattern;
+class copyOpLowering : public OpConversionPattern<unisparse::copyOp> {
+    using OpConversionPattern<unisparse::copyOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::copyOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::copyOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue = adaptor.getOperands()[0];
         func::CallOp copyOp;
@@ -858,10 +858,10 @@ class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
     }
 };
 
-class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
-    using OpConversionPattern<sparlay::checkOp>::OpConversionPattern;
+class checkOpLowering : public OpConversionPattern<unisparse::checkOp> {
+    using OpConversionPattern<unisparse::checkOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::checkOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::checkOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue1 = adaptor.getOperands()[0];
         Value candValue2 = adaptor.getOperands()[1];
@@ -875,10 +875,10 @@ class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
     }
 };
 
-class ticOpLowering : public OpConversionPattern<sparlay::ticOp> {
-    using OpConversionPattern<sparlay::ticOp>::OpConversionPattern;
+class ticOpLowering : public OpConversionPattern<unisparse::ticOp> {
+    using OpConversionPattern<unisparse::ticOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::ticOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::ticOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         func::CallOp ticOp;
         StringRef funcName = "sptTic";
@@ -890,10 +890,10 @@ class ticOpLowering : public OpConversionPattern<sparlay::ticOp> {
     }
 };
 
-class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
-    using OpConversionPattern<sparlay::tocOp>::OpConversionPattern;
+class tocOpLowering : public OpConversionPattern<unisparse::tocOp> {
+    using OpConversionPattern<unisparse::tocOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::tocOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::tocOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         func::CallOp tocOp;
         StringRef funcName = "sptToc";
@@ -905,10 +905,10 @@ class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
     }
 };
 
-class StructAccessOpLowering: public OpConversionPattern<sparlay::StructAccessOp> {
+class StructAccessOpLowering: public OpConversionPattern<unisparse::StructAccessOp> {
 public:
-    using OpConversionPattern<sparlay::StructAccessOp>::OpConversionPattern;
-    LogicalResult matchAndRewrite(sparlay::StructAccessOp op, OpAdaptor adaptor,
+    using OpConversionPattern<unisparse::StructAccessOp>::OpConversionPattern;
+    LogicalResult matchAndRewrite(unisparse::StructAccessOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         Value inputPtr = adaptor.getOperands()[0];
@@ -925,7 +925,7 @@ public:
     }
 };
 
-AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const sparlay::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
+AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const unisparse::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
     std::vector<AffineExpr> exprs = crdMap.getResults();
     assert(exprs.size() <= (size_t)2);
     std::vector<AffineExpr> new_exprs = {};
@@ -959,11 +959,11 @@ AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const spar
     return AffineMap::get(crdMap.getNumDims(), 0, new_exprs, crdMap.getContext());
 }
 
-class DecompseOpLowering : public OpConversionPattern<sparlay::DecomposeOp> {
+class DecompseOpLowering : public OpConversionPattern<unisparse::DecomposeOp> {
 public:
-  using OpConversionPattern<sparlay::DecomposeOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::DecomposeOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::DecomposeOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::DecomposeOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1010,11 +1010,11 @@ public:
   }
 };
 
-class ToPtrOpLowering: public OpConversionPattern<sparlay::ToPtrOp> {
+class ToPtrOpLowering: public OpConversionPattern<unisparse::ToPtrOp> {
 public:
-  using OpConversionPattern<sparlay::ToPtrOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToPtrOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToPtrOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToPtrOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1031,11 +1031,11 @@ public:
   }
 };
 
-class ToCrdOpLowering: public OpConversionPattern<sparlay::ToCrdOp> {
+class ToCrdOpLowering: public OpConversionPattern<unisparse::ToCrdOp> {
 public:
-  using OpConversionPattern<sparlay::ToCrdOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToCrdOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToCrdOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToCrdOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1052,11 +1052,11 @@ public:
   }
 };
 
-class ToValueOpLowering: public OpConversionPattern<sparlay::ToValueOp> {
+class ToValueOpLowering: public OpConversionPattern<unisparse::ToValueOp> {
 public:
-  using OpConversionPattern<sparlay::ToValueOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToValueOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToValueOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToValueOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1073,11 +1073,11 @@ public:
   }
 };
 
-class ToSizeOpLowering: public OpConversionPattern<sparlay::ToSizeOp> {
+class ToSizeOpLowering: public OpConversionPattern<unisparse::ToSizeOp> {
 public:
-  using OpConversionPattern<sparlay::ToSizeOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToSizeOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToSizeOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToSizeOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1094,7 +1094,7 @@ public:
   }
 };
 
-class SparlayReturnConverter : public OpConversionPattern<func::ReturnOp> {
+class UniSparseReturnConverter : public OpConversionPattern<func::ReturnOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
   LogicalResult
@@ -1105,7 +1105,7 @@ public:
   }
 };
 
-class SparlayToDimSizeConverter
+class UniSparseToDimSizeConverter
     : public OpConversionPattern<tensor::DimOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
@@ -1113,7 +1113,7 @@ public:
   matchAndRewrite(tensor::DimOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     // Only rewrite annotated DimOp with constant index.
-    auto enc = getSparlayEncoding(op.getSource().getType());
+    auto enc = getUniSparseEncoding(op.getSource().getType());
     if (!enc)
       return failure();
     Optional<int64_t> index = op.getConstantIndex();
@@ -1122,12 +1122,12 @@ public:
     // Generate the call.
     Value src = adaptor.getOperands()[0];
     int64_t idx = *index;
-    rewriter.replaceOp(op, genSparlayDimSizeCall(rewriter, op, enc, src, idx));
+    rewriter.replaceOp(op, genUniSparseDimSizeCall(rewriter, op, enc, src, idx));
     return success();
   }
 };
 
-class SparlayAllocConverter
+class UniSparseAllocConverter
     : public OpConversionPattern<bufferization::AllocTensorOp> {
 public:
   using OpConversionPattern<bufferization::AllocTensorOp>::OpConversionPattern;
@@ -1139,7 +1139,7 @@ public:
       return rewriter.notifyMatchFailure(op, "sparse tensor copy not implemented");
     RankedTensorType resType = op.getType();
     int64_t rank = resType.getRank();
-    auto enc = getSparlayEncoding(resType);
+    auto enc = getUniSparseEncoding(resType);
     if (!enc)
       return failure();
     // Gather all dimension sizes as SSA values.
@@ -1156,26 +1156,26 @@ public:
     // Generate the call to construct empty tensor. The sizes are
     // explicitly defined by the arguments to the alloc operator.
     SmallVector<Value, 8> params;
-    std::cerr << "Enter SparlaynewParams" << std::endl;
-    SparlaynewParams(rewriter, params, op, enc, sizes, rank);
-    std::cerr << "Finish SparlaynewParams" << std::endl;
-    rewriter.replaceOp(op, genSparlayNewCall(rewriter, op, params)); 
+    std::cerr << "Enter UniSparsenewParams" << std::endl;
+    UniSparsenewParams(rewriter, params, op, enc, sizes, rank);
+    std::cerr << "Finish UniSparsenewParams" << std::endl;
+    rewriter.replaceOp(op, genUniSparseNewCall(rewriter, op, params)); 
     return success();
   }
 };
 
-class SparlayDeallocConverter
+class UniSparseDeallocConverter
     : public OpConversionPattern<bufferization::DeallocTensorOp> {
 public:
   using OpConversionPattern<bufferization::DeallocTensorOp>::OpConversionPattern;
   LogicalResult
   matchAndRewrite(bufferization::DeallocTensorOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {        
-    auto enc = getSparlayEncoding(op.getTensor().getType());
+    auto enc = getUniSparseEncoding(op.getTensor().getType());
     if (!enc) {
       return failure();
     }
-    StringRef name = "delSparlayTensor";
+    StringRef name = "delUniSparseTensor";
     rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
     return success();
@@ -1185,26 +1185,26 @@ public:
 //===----------------------------------------------------------------------===//
 // LowerFormatConversionPass
 //===----------------------------------------------------------------------===//
-class SparlayTensorTypeConverter : public TypeConverter {
+class UniSparseTensorTypeConverter : public TypeConverter {
 public:
-  SparlayTensorTypeConverter() {
+  UniSparseTensorTypeConverter() {
     addConversion([](Type type) { return type; });
-    addConversion(convertSparlayTypes);
+    addConversion(convertUniSparseTypes);
   }
   // Maps each sparse tensor type to an opaque pointer.
-  static Optional<Type> convertSparlayTypes(Type type) {
-    if (getSparlayEncoding(type) != nullptr)
+  static Optional<Type> convertUniSparseTypes(Type type) {
+    if (getUniSparseEncoding(type) != nullptr)
       return LLVM::LLVMPointerType::get(IntegerType::get(type.getContext(), 8));
     return llvm::None;
   }
 };
 
 /// Sparse conversion rule for tensor rematerialization.
-class SparlayLoadConverter : public OpConversionPattern<sparlay::LoadOp> {
+class UniSparseLoadConverter : public OpConversionPattern<unisparse::LoadOp> {
 public:
-  using OpConversionPattern<sparlay::LoadOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::LoadOp>::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(sparlay::LoadOp op, OpAdaptor adaptor,
+  matchAndRewrite(unisparse::LoadOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 //    std::cerr << "Enter the lowering LoadOp " << std::endl;
     if (op.hasInserts()) {
@@ -1219,11 +1219,11 @@ public:
 };
 
 /// Sparse conversion rule for inserting in lexicographic index order.
-class SparlayInsertConverter : public OpConversionPattern<sparlay::InsertOp> {
+class UniSparseInsertConverter : public OpConversionPattern<unisparse::InsertOp> {
 public:
-  using OpConversionPattern<sparlay::InsertOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::InsertOp>::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(sparlay::InsertOp op, OpAdaptor adaptor,
+  matchAndRewrite(unisparse::InsertOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 //    std::cerr << "Enter the lowering InsertOp " << std::endl;
 //    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
@@ -1234,11 +1234,11 @@ public:
   }
 };
 
-class SparlayExpandConverter : public OpConversionPattern<sparlay::ExpandOp> {
+class UniSparseExpandConverter : public OpConversionPattern<unisparse::ExpandOp> {
 public:
-  using OpConversionPattern<sparlay::ExpandOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ExpandOp>::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(sparlay::ExpandOp op, OpAdaptor adaptor,
+  matchAndRewrite(unisparse::ExpandOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 //    std::cerr << "Enter the lowering ExpandOp " << std::endl;
     Location loc = op->getLoc();
@@ -1249,15 +1249,15 @@ public:
     // All initialization should be done on entry of the loop nest.
     rewriter.setInsertionPointAfter(op.tensor().getDefiningOp());
     // Determine the size for access expansion.
-    auto enc = getSparlayEncoding(srcType);
+    auto enc = getUniSparseEncoding(srcType);
     Value src = adaptor.getOperands()[0];
-    Value sz = genSparlayDimSizeCall(rewriter, op, enc, src, srcType.getRank() - 1);
+    Value sz = genUniSparseDimSizeCall(rewriter, op, enc, src, srcType.getRank() - 1);
     // Allocate temporary buffers for values, filled-switch, and indices.
     // We do not use stack buffers for this, since the expanded size may
     // be rather large (as it envelops a single expanded dense dimension).
-    Value values = genSparlayAlloc(rewriter, loc, sz, eltType);
-    Value filled = genSparlayAlloc(rewriter, loc, sz, boolType);
-    Value indices = genSparlayAlloc(rewriter, loc, sz, idxType);
+    Value values = genUniSparseAlloc(rewriter, loc, sz, eltType);
+    Value filled = genUniSparseAlloc(rewriter, loc, sz, boolType);
+    Value indices = genUniSparseAlloc(rewriter, loc, sz, idxType);
     Value zero = mlir::sparse_tensor::constantZero(rewriter, loc, idxType);
     // Reset the values/filled-switch to all-zero/false. Note that this
     // introduces an O(N) operation into the computation, but this reset
@@ -1277,11 +1277,11 @@ public:
   }
 };
 
-class SparlayCompressConverter : public OpConversionPattern<sparlay::CompressOp> {
+class UniSparseCompressConverter : public OpConversionPattern<unisparse::CompressOp> {
 public:
-  using OpConversionPattern<sparlay::CompressOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::CompressOp>::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(sparlay::CompressOp op, OpAdaptor adaptor,
+  matchAndRewrite(unisparse::CompressOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op->getLoc();
     // Note that this method call resets the values/filled-switch back to
@@ -1309,12 +1309,12 @@ public:
   }
 };
 
-class DiaSpmvOpLowering : public OpConversionPattern<sparlay::DiaSpmvOp> {
+class DiaSpmvOpLowering : public OpConversionPattern<unisparse::DiaSpmvOp> {
 public:
-    using OpConversionPattern<sparlay::DiaSpmvOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::DiaSpmvOp>::OpConversionPattern;
 
     LogicalResult 
-        matchAndRewrite(sparlay::DiaSpmvOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::DiaSpmvOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         Value output = op->getResult(0);
@@ -1332,12 +1332,12 @@ public:
     }
 };
 
-class DiaSpmmOpLowering : public OpConversionPattern<sparlay::DiaSpmmOp> {
+class DiaSpmmOpLowering : public OpConversionPattern<unisparse::DiaSpmmOp> {
 public:
-    using OpConversionPattern<sparlay::DiaSpmmOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::DiaSpmmOp>::OpConversionPattern;
 
     LogicalResult 
-        matchAndRewrite(sparlay::DiaSpmmOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::DiaSpmmOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         Value output = op->getResult(0);
@@ -1355,11 +1355,11 @@ public:
     }
 };
 
-class COOSpMVOpLowering: public OpConversionPattern<sparlay::COOSpMVOp> {
+class COOSpMVOpLowering: public OpConversionPattern<unisparse::COOSpMVOp> {
 public:
-  using OpConversionPattern<sparlay::COOSpMVOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::COOSpMVOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::COOSpMVOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::COOSpMVOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1377,11 +1377,11 @@ public:
   }
 };
 
-class COOSpMMOpLowering: public OpConversionPattern<sparlay::COOSpMMOp> {
+class COOSpMMOpLowering: public OpConversionPattern<unisparse::COOSpMMOp> {
 public:
-  using OpConversionPattern<sparlay::COOSpMMOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::COOSpMMOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::COOSpMMOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::COOSpMMOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1399,11 +1399,11 @@ public:
   }
 };
 
-class BDIASpMVOpLowering: public OpConversionPattern<sparlay::BDIASpMVOp> {
+class BDIASpMVOpLowering: public OpConversionPattern<unisparse::BDIASpMVOp> {
 public:
-  using OpConversionPattern<sparlay::BDIASpMVOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::BDIASpMVOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::BDIASpMVOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::BDIASpMVOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor_CSR = adaptor.getOperands()[0];
@@ -1434,11 +1434,11 @@ public:
   }
 };
 
-class BDIASpMMOpLowering: public OpConversionPattern<sparlay::BDIASpMMOp> {
+class BDIASpMMOpLowering: public OpConversionPattern<unisparse::BDIASpMMOp> {
 public:
-  using OpConversionPattern<sparlay::BDIASpMMOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::BDIASpMMOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::BDIASpMMOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::BDIASpMMOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor_CSR = adaptor.getOperands()[0];
@@ -1469,11 +1469,11 @@ public:
   }
 };
 
-class DecomposeBDIAOpLowering: public OpConversionPattern<sparlay::DecomposeBDIAOp> {
+class DecomposeBDIAOpLowering: public OpConversionPattern<unisparse::DecomposeBDIAOp> {
 public:
-  using OpConversionPattern<sparlay::DecomposeBDIAOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::DecomposeBDIAOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::DecomposeBDIAOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::DecomposeBDIAOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1491,11 +1491,11 @@ public:
   }
 };
 
-class DecomposeBELLOpLowering: public OpConversionPattern<sparlay::DecomposeBELLOp> {
+class DecomposeBELLOpLowering: public OpConversionPattern<unisparse::DecomposeBELLOp> {
 public:
-  using OpConversionPattern<sparlay::DecomposeBELLOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::DecomposeBELLOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::DecomposeBELLOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::DecomposeBELLOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -1514,11 +1514,11 @@ public:
   }
 };
 
-class ReleaseOpLowering: public OpConversionPattern<sparlay::ReleaseOp> {
+class ReleaseOpLowering: public OpConversionPattern<unisparse::ReleaseOp> {
 public:
-  using OpConversionPattern<sparlay::ReleaseOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ReleaseOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ReleaseOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ReleaseOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, "release", llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
@@ -1549,7 +1549,7 @@ void LowerFormatConversionPass::runOnOperation() {
     // The first thing to define is the conversion target. This will define the
     // final target for this lowering.
     ConversionTarget target(getContext());
-    SparlayTensorTypeConverter converter;
+    UniSparseTensorTypeConverter converter;
 
     // We define the specific operations, or dialects, that are legal targets for
     // this lowering. In our case, we are lowering to a combination of the
@@ -1557,11 +1557,11 @@ void LowerFormatConversionPass::runOnOperation() {
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
                            vector::VectorDialect, bufferization::BufferizationDialect,
                            arith::ArithmeticDialect, LLVM::LLVMDialect, func::FuncDialect>();
-    target.addIllegalDialect<sparlay::SparlayDialect>();
+    target.addIllegalDialect<unisparse::UniSparseDialect>();
 
-    // We also define the Sparlay dialect as Illegal so that the conversion will fail
+    // We also define the UniSparse dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
-    // a partial lowering, we explicitly mark the Sparlay operations that don't want
+    // a partial lowering, we explicitly mark the UniSparse operations that don't want
     // to lower as `legal`.
   
     target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
@@ -1604,7 +1604,7 @@ void LowerFormatConversionPass::runOnOperation() {
     target.addLegalOp<linalg::FillOp>();
 
     // Now that the conversion target has been defined, we just need to provide
-    // the set of patterns that will lower the Sparlay operations.
+    // the set of patterns that will lower the UniSparse operations.
     RewritePatternSet patterns(&getContext());
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
                                                                    converter);
@@ -1614,9 +1614,9 @@ void LowerFormatConversionPass::runOnOperation() {
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
                  StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
                  ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, 
-                 SparlayAllocConverter, SparlayDeallocConverter, SparlayToDimSizeConverter,
-                 SparlayLoadConverter, SparlayInsertConverter, SparlayReturnConverter,
-                 SparlayExpandConverter, SparlayCompressConverter, 
+                 UniSparseAllocConverter, UniSparseDeallocConverter, UniSparseToDimSizeConverter,
+                 UniSparseLoadConverter, UniSparseInsertConverter, UniSparseReturnConverter,
+                 UniSparseExpandConverter, UniSparseCompressConverter, 
                  DiaSpmvOpLowering, DiaSpmmOpLowering, COOSpMVOpLowering, COOSpMMOpLowering,
                  DecomposeBDIAOpLowering, DecomposeBELLOpLowering, BDIASpMVOpLowering, BDIASpMMOpLowering, ReleaseOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
@@ -1629,6 +1629,6 @@ void LowerFormatConversionPass::runOnOperation() {
         signalPassFailure();
 }
 
-std::unique_ptr<Pass> mlir::sparlay::createLowerFormatConversionPass() {
+std::unique_ptr<Pass> mlir::unisparse::createLowerFormatConversionPass() {
     return std::make_unique<LowerFormatConversionPass>();
 }

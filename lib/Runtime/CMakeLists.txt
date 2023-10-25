@@ -1,5 +1,5 @@
 set(LLVM_OPTIONAL_SOURCES
-  SparlayUtils.cpp
+  UniSparseUtils.cpp
   )
 
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
@@ -20,14 +20,14 @@ endif()
 find_library(CUDA_LIBRARIES cuda REQUIRED)
 find_library(CUDA_cusparse_LIBRARY cuda REQUIRED)
 
-add_mlir_library(mlir_sparlay_runner_utils
+add_mlir_library(mlir_unisparse_runner_utils
   SHARED
-  SparlayUtils.cpp
+  UniSparseUtils.cpp
 
   EXCLUDE_FROM_LIBMLIR
 )
 
-set_property(TARGET mlir_sparlay_runner_utils PROPERTY CXX_STANDARD 14)
-target_compile_definitions(mlir_sparlay_runner_utils PRIVATE mlir_sparlay_runner_utils_EXPORTS)
-target_include_directories(mlir_sparlay_runner_utils PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-target_link_libraries(mlir_sparlay_runner_utils PRIVATE OpenMP::OpenMP_CXX PRIVATE ${CUDA_LIBRARIES} PRIVATE ${CUDA_cusparse_LIBRARY})
+set_property(TARGET mlir_unisparse_runner_utils PROPERTY CXX_STANDARD 14)
+target_compile_definitions(mlir_unisparse_runner_utils PRIVATE mlir_unisparse_runner_utils_EXPORTS)
+target_include_directories(mlir_unisparse_runner_utils PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+target_link_libraries(mlir_unisparse_runner_utils PRIVATE OpenMP::OpenMP_CXX PRIVATE ${CUDA_LIBRARIES} PRIVATE ${CUDA_cusparse_LIBRARY})

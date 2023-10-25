@@ -5,16 +5,16 @@ configure_lit_site_cfg(
         ${CMAKE_CURRENT_SOURCE_DIR}/lit.cfg.py
 )
 
-set(SPARLAY_TEST_DEPENDS
+set(UNISPARSE_TEST_DEPENDS
         FileCheck count not
-        sparlay-opt
-        sparlay-translate
+        unisparse-opt
+        unisparse-translate
         )
 
-add_lit_testsuite(check-sparlay "Running the sparlay regression tests"
+add_lit_testsuite(check-unisparse "Running the unisparse regression tests"
         ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS ${SPARLAY_TEST_DEPENDS}
+        DEPENDS ${UNISPARSE_TEST_DEPENDS}
         )
-set_target_properties(check-sparlay PROPERTIES FOLDER "Tests")
+set_target_properties(check-unisparse PROPERTIES FOLDER "Tests")
 
-add_lit_testsuites(SPARLAY ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${SPARLAY_TEST_DEPENDS})
+add_lit_testsuites(UNISPARSE ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${UNISPARSE_TEST_DEPENDS})

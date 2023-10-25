@@ -1,4 +1,4 @@
-//===-- Passes.td - Sparlay pass definition file -----------*- tablegen -*-===//
+//===-- Passes.td - UniSparse pass definition file -----------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,18 +6,18 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains definitions for passes within the Sparlay/ directory.
+// This file contains definitions for passes within the UniSparse/ directory.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_DIALECT_SPARLAY_PASSES
-#define MLIR_DIALECT_SPARLAY_PASSES
+#ifndef MLIR_DIALECT_UNISPARSE_PASSES
+#define MLIR_DIALECT_UNISPARSE_PASSES
 
 include "mlir/Pass/PassBase.td"
 
 def LowerFormatConversion : Pass<"lower-format-conversion", "func::FuncOp"> {
     let summary = "Lower operations for format conversion";
-    let constructor = "mlir::sparlay::createLowerFormatConversionPass()";
+    let constructor = "mlir::unisparse::createLowerFormatConversionPass()";
     let dependentDialects = [
         "arith::ArithmeticDialect",
         "func::FuncDialect",
@@ -31,35 +31,35 @@ def LowerFormatConversion : Pass<"lower-format-conversion", "func::FuncOp"> {
 
 def LowerStruct : Pass<"lower-struct", "func::FuncOp"> {
     let summary = "Lower struct conversion";
-    let constructor = "mlir::sparlay::createLowerStructPass()";
+    let constructor = "mlir::unisparse::createLowerStructPass()";
 }
 
 def LowerStructConvert: Pass<"lower-struct-convert", "func::FuncOp"> {
     let summary = "Lower Struct Convert conversion";
-    let constructor = "mlir::sparlay::createLowerStructConvertPass()";
+    let constructor = "mlir::unisparse::createLowerStructConvertPass()";
     let dependentDialects = [
         "arith::ArithmeticDialect",
         "func::FuncDialect",
-        "SparlayDialect"
+        "UniSparseDialect"
     ];
 }
 
 def DeadCodeElimination : Pass<"dce", "func::FuncOp"> {
     let summary = "dead code elimination";
-    let constructor = "mlir::sparlay::createDeadCodeEliminationPass()";
+    let constructor = "mlir::unisparse::createDeadCodeEliminationPass()";
 }
 
-def SparlayCodegen : Pass<"sparlay-codegen"> {
-    let summary = "Automatically generate sparse tensor code from sparlay sparse tensor types";
-    let constructor = "mlir::sparlay::createSparlayCodegenPass()";
+def UniSparseCodegen : Pass<"unisparse-codegen"> {
+    let summary = "Automatically generate sparse tensor code from unisparse sparse tensor types";
+    let constructor = "mlir::unisparse::createUniSparseCodegenPass()";
     let dependentDialects = [
       "AffineDialect",
       "bufferization::BufferizationDialect",
       "memref::MemRefDialect",
       "scf::SCFDialect",
-      "sparlay::SparlayDialect",
+      "unisparse::UniSparseDialect",
       "vector::VectorDialect"
     ];   
 }
 
-#endif // MLIR_DIALECT_SPARLAY_PASSES
+#endif // MLIR_DIALECT_UNISPARSE_PASSES

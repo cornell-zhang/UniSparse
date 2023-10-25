@@ -1,9 +1,9 @@
-add_mlir_dialect_library(MLIRSparlayTransforms
+add_mlir_dialect_library(MLIRUniSparseTransforms
   
   LowerFormatConversionPass.cpp
   LowerStructPass.cpp
   DeadCodeEliminationPass.cpp
-  SparlayCodegen.cpp
+  UniSparseCodegen.cpp
   LowerStructConvert.cpp
 
   ADDITIONAL_HEADER_DIRS
@@ -11,9 +11,9 @@ add_mlir_dialect_library(MLIRSparlayTransforms
   ${PROJECT_SOURCE_DIR}/include/IR
 
   DEPENDS
-  MLIRSparlayOpsIncGen
-  MLIRSparselayAttrIncGen
-  MLIRSparlayTransformsIncGen
+  MLIRUniSparseOpsIncGen
+  MLIRUniSparseAttrIncGen
+  MLIRUniSparseTransformsIncGen
 
   LINK_LIBS PUBLIC
   MLIRIR
@@ -21,5 +21,5 @@ add_mlir_dialect_library(MLIRSparlayTransforms
   MLIRSideEffectInterfaces
   MLIRTransformUtils
   MLIRVectorToLLVM
-  MLIRSparlay
+  MLIRUniSparse
   )

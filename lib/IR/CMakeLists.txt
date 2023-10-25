@@ -1,15 +1,15 @@
-add_mlir_dialect_library(MLIRSparlay
-        SparlayDialect.cpp
-        SparlayOps.cpp
-        SparlayTypes.cpp
-        SparlayParser.cpp
+add_mlir_dialect_library(MLIRUniSparse
+        UniSparseDialect.cpp
+        UniSparseOps.cpp
+        UniSparseTypes.cpp
+        UniSparseParser.cpp
 
         ADDITIONAL_HEADER_DIRS
         ${PROJECT_SOURCE_DIR}/include/IR
 
         DEPENDS
-        MLIRSparlayOpsIncGen
-        MLIRSparselayAttrIncGen
+        MLIRUniSparseOpsIncGen
+        MLIRUniSparseAttrIncGen
 
 	LINK_LIBS PUBLIC
 	MLIRIR
