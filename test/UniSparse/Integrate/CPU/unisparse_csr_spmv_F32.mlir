@@ -1,14 +1,14 @@
-// unisparse-opt ./unisparse_dcsr_spmv.mlir -unisparse-codegen -lower-format-conversion -lower-struct -dce | \
+// unisparse-opt ./unisparse_csr_spmv_F32.mlir -unisparse-codegen -lower-format-conversion -lower-struct -dce | \
 // mlir-opt -one-shot-bufferize="bufferize-function-boundaries=1 allow-return-allocs unknown-type-conversion=identity-layout-map function-boundary-type-conversion=identity-layout-map" \
 // -finalizing-bufferize -convert-linalg-to-loops -convert-vector-to-scf -convert-scf-to-cf -lower-affine \
 // -convert-vector-to-llvm -convert-memref-to-llvm -convert-complex-to-standard -convert-math-to-llvm \
 // -convert-math-to-libm -convert-complex-to-libm -convert-complex-to-llvm -convert-func-to-llvm \
-// -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o spmv.o
+// -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o csr_spmv_F32.o
 
-// clang++ spmv.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils \
-//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o spmv
+// clang++ csr_spmv_F32.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils \
+//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o csr_spmv_F32
 
-// ./spmv
+// ./csr_spmv_F32
 
 !Filename = !llvm.ptr<i8>
 
@@ -17,9 +17,9 @@
   compressMap = #unisparse.compress<trim(0,1)>
 }>
 
-#DCSR = #unisparse.encoding<{
+#CSR = #unisparse.encoding<{
   crdMap = #unisparse.crd<(i,j)->(i,j)>,
-  compressMap = #unisparse.compress<fuse(0), trim(0,1)>
+  compressMap = #unisparse.compress<fuse(0), trim(1,1)>
 }>
 
 #trait1 = {
@@ -36,9 +36,9 @@ module {
   func.func private @rtclock() -> f64
   func.func private @getTensorFilename(index) -> (!Filename)
 
-  func.func @kernel_dcsr_spmv(%arg0: tensor<?x?xf32, #DCSR>, %arg1: tensor<?xf32>, %argx: tensor<?xf32>) -> tensor<?xf32> {
+  func.func @kernel_csr_spmv(%arg0: tensor<?x?xf32, #CSR>, %arg1: tensor<?xf32>, %argx: tensor<?xf32>) -> tensor<?xf32> {
     %0 = linalg.generic #trait1
-    ins(%arg0, %arg1 : tensor<?x?xf32, #DCSR>, tensor<?xf32>)
+    ins(%arg0, %arg1 : tensor<?x?xf32, #CSR>, tensor<?xf32>)
     outs(%argx: tensor<?xf32>) {
     ^bb0(%a: f32, %b: f32, %x: f32):
       %2 = arith.mulf %a, %b : f32
@@ -56,13 +56,13 @@ module {
 
     %fileName = call @getTensorFilename(%c0) : (index) -> (!Filename)
 
-    %t_start2 = call @rtclock() : () -> f64
-    %A_2 = unisparse.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
-    %c256 = tensor.dim %A_2, %c1 : tensor<?x?xf32, #COO>
-    %a2 = unisparse.convert (%A_2): tensor<?x?xf32, #COO> to tensor<?x?xf32, #DCSR>
-    %t_end2 = call @rtclock() : () -> f64
-    %t_2 = arith.subf %t_end2, %t_start2: f64
-    vector.print %t_2 : f64
+    %t_start0 = call @rtclock() : () -> f64
+    %A_0 = unisparse.fromFile (%fileName) : !Filename to tensor<?x?xf32, #COO>
+    %c256 = tensor.dim %A_0, %c1 : tensor<?x?xf32, #COO>
+    %a0 = unisparse.convert (%A_0): tensor<?x?xf32, #COO> to tensor<?x?xf32, #CSR>
+    %t_end0 = call @rtclock() : () -> f64
+    %t_0 = arith.subf %t_end0, %t_start0: f64
+    vector.print %t_0 : f64
 
     // Initialize dense matrix.
     %init_256_4 = bufferization.alloc_tensor(%c256) : tensor<?xf32>
@@ -74,24 +74,24 @@ module {
       scf.yield %t3 : tensor<?xf32>
     }
 
-    %o2_4_4 = bufferization.alloc_tensor(%c256) : tensor<?xf32>
-    %o2 = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %o2_4_4) -> tensor<?xf32> {
+    %o0_4_4 = bufferization.alloc_tensor(%c256) : tensor<?xf32>
+    %o0 = scf.for %i = %c0 to %c256 step %c1 iter_args(%t = %o0_4_4) -> tensor<?xf32> {
       %t3 = tensor.insert %i0 into %t[%i] : tensor<?xf32>
       scf.yield %t3 : tensor<?xf32>
     }
 
-    %t_start6 = call @rtclock() : () -> f64
-    %2 = call @kernel_dcsr_spmv(%a2, %b, %o2) : (tensor<?x?xf32, #DCSR>, tensor<?xf32>, tensor<?xf32>) -> tensor<?xf32>
-    %t_end6 = call @rtclock() : () -> f64
-    %t_6 = arith.subf %t_end6, %t_start6: f64
-    vector.print %t_6 : f64
-    %v2 = vector.transfer_read %2[%c0], %i0: tensor<?xf32>, vector<4xf32>
-    vector.print %v2 : vector<4xf32>
+    %t_start4 = call @rtclock() : () -> f64
+    %0 = call @kernel_csr_spmv(%a0, %b, %o0) : (tensor<?x?xf32, #CSR>, tensor<?xf32>, tensor<?xf32>) -> tensor<?xf32>
+    %t_end4 = call @rtclock() : () -> f64
+    %t_4 = arith.subf %t_end4, %t_start4: f64
+    vector.print %t_4 : f64
+    %v0 = vector.transfer_read %0[%c0], %i0: tensor<?xf32>, vector<4xf32>
+    vector.print %v0 : vector<4xf32>
 
     //Release the resources 
-    bufferization.dealloc_tensor %A_2 : tensor<?x?xf32, #COO>
+    bufferization.dealloc_tensor %A_0 : tensor<?x?xf32, #COO>
 //    bufferization.dealloc_tensor %init_256_4 : tensor<?xf32>
-//    bufferization.dealloc_tensor %o2_4_4 : tensor<?xf32>
+//    bufferization.dealloc_tensor %o0_4_4 : tensor<?xf32>
     return
   }
 }

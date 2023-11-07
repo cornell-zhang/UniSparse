@@ -1,14 +1,14 @@
-// unisparse-opt ./unisparse_coo_spmm.mlir -unisparse-codegen -lower-format-conversion -lower-struct -dce | \
+// unisparse-opt ./unisparse_coo_spmm_F32.mlir -unisparse-codegen -lower-format-conversion -lower-struct -dce | \
 // mlir-opt -one-shot-bufferize="bufferize-function-boundaries=1 allow-return-allocs unknown-type-conversion=identity-layout-map function-boundary-type-conversion=identity-layout-map" \
 // -finalizing-bufferize -convert-linalg-to-loops -convert-vector-to-scf -convert-scf-to-cf -lower-affine \
 // -convert-vector-to-llvm -convert-memref-to-llvm -convert-complex-to-standard -convert-math-to-llvm \
 // -convert-math-to-libm -convert-complex-to-libm -convert-complex-to-llvm -convert-func-to-llvm \
-// -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o coo_spmm.o
+// -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o coo_spmm_F32.o
 
-// clang++ coo_spmm.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils \
-//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o coo_spmm
+// clang++ coo_spmm_F32.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils \
+//         -L$LLVMHOME/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o coo_spmm_F32
 
-// ./coo_spmm
+// ./coo_spmm_F32
 
 !Filename = !llvm.ptr<i8>
 

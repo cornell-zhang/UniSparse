@@ -87,14 +87,28 @@ static func::CallOp createFuncCall(OpBuilder &builder, Operation *op,
   return builder.create<func::CallOp>(op->getLoc(), resultType, fn, operands);
 }
 
+static std::string getTensorETSuffix(TensorType t) {
+  if (!t) {
+    return "SthThatMustGoWrong";
+  }
+  if (auto et = t.getElementType().dyn_cast<FloatType>()) {
+    return (et.getWidth() == 32 ? "F32" : "F64");
+  } else {
+    assert(0);
+    return "Data types other than F32 or F64 are not supported yet.";
+  }
+  return "SthThatMustGoWrong"; //no warning
+}
+
 static Value genUniSparseDimSizeCall(OpBuilder &builder, Operation *op,
                             UniSparseEncodingAttr &enc, Value src,
-                            int64_t idx) {
+                            int64_t idx, Type src_tensor_type) {
   // Permute the index according to an optional dimension ordering.
   if (AffineMap p = enc.getCrdMap())
     idx = p.getPermutedPosition(idx);
   // Generate the call.
-  StringRef name = "sparseDimSize";
+  static std::string _name = "sparseDimSize"+getTensorETSuffix(src_tensor_type.dyn_cast<TensorType>());
+  StringRef name(_name);
   SmallVector<Value, 2> params{src, sparse_tensor::constantIndex(builder, op->getLoc(), idx)};
   Type iTp = builder.getIndexType();
   return createFuncCall(builder, op, name, iTp, params, true).getResult(0);
@@ -206,9 +220,10 @@ static void UniSparsenewParams(OpBuilder &builder, SmallVector<Value, 8> &params
   params.push_back(ptr);
 }
 
-static Value genUniSparseNewCall(OpBuilder &builder, Operation *op,
+static Value genUniSparseNewCall(OpBuilder &builder, bufferization::AllocTensorOp op,
                         ArrayRef<Value> params) {
-  StringRef name = "newUniSparseTensor";
+  static std::string _name = "newUniSparseTensor"+getTensorETSuffix(op.getType().dyn_cast<TensorType>());
+  StringRef name(_name);
   Type pTp = LLVM::LLVMPointerType::get(builder.getI8Type());
   return createFuncCall(builder, op, name, pTp, params, true).getResult(0);
 }
@@ -299,8 +314,8 @@ public:
         Type inputType = fileName.getType();
 
         func::CallOp readOp;
-
-        StringRef funcName =  "sptFromFile";
+        static std::string _funcName = "sptFromFile"+getTensorETSuffix(op.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
 
         SmallVector<Value, 1> readParams;
         readParams.push_back(fileName);
@@ -322,12 +337,12 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     ret(0,0)=ret(0,1)=ret(1,0)=ret(1,1) = 0;
     llvm::SmallBitVector projectedDims(2, 0);
     projectedDims[1] = 1;
-    std::cerr << projectedDims.size() << std::endl;
+    // std::cerr << projectedDims.size() << std::endl;
     auto proj1 = getProjectedMap(crdMap, projectedDims);
-    std::cerr << "done1" << std::endl;
+    // std::cerr << "done1" << std::endl;
     int curDim = 0;
     for (AffineExpr expr : proj1.getResults()) {
-        expr.dump();
+        // expr.dump();
         if (expr != getAffineConstantExpr(0, proj1.getContext())) {
             if (expr == getAffineDimExpr(0, proj1.getContext())) ret(curDim, 0) = 1;
             else ret(curDim, 0) = -1;
@@ -339,7 +354,7 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     auto proj0 = getProjectedMap(crdMap, projectedDims);
     curDim = 0;
     for (AffineExpr expr: proj0.getResults()) {
-        expr.dump();
+        // expr.dump();
         if (expr != getAffineConstantExpr(0, proj0.getContext())) {
             if (expr == getAffineDimExpr(0, proj0.getContext())) ret(curDim, 1) = 1;
             else ret(curDim, 1) = -1;
@@ -352,16 +367,16 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
 }
 
 Matrix2i toIntMatrix(const Matrix2f& M) {
-  Matrix2i ret;
-  for (int i = 0; i < 2; ++i) {
-    for (int j = 0; j < 2; ++j) {
-      int curVal = (int)floor(M(i,j)+1e-4);
-      assert(M(i,j) < curVal + 1e-4);
-      assert(M(i,j) > curVal-1e-4);
-      ret(i,j) = curVal;
+    Matrix2i ret;
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            int curVal = (int)floor(M(i,j)+1e-4);
+            assert(M(i,j) < curVal + 1e-4);
+            assert(M(i,j) > curVal-1e-4);
+            ret(i,j) = curVal;
+        }
     }
-  }
-  return ret;
+    return ret;
 }
 
 enum ConversionOpType {
@@ -396,7 +411,7 @@ struct GeneralConversionOp {
 };
 
 std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(const AffineMap& crdMap, bool isSplit) {
-    std::cerr << "Enter Rewrite" << std::endl;
+    // std::cerr << "Enter Rewrite" << std::endl;
     std::vector<GeneralConversionOp> Ops;
     std::vector<AffineExpr> newExprs;
     std::vector<int> pendingMerge;
@@ -416,7 +431,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                 auto LHS = binExpr.getLHS();
                 auto RHS = binExpr.getRHS();
                 assert(RHS.isSymbolicOrConstant());
-                LHS.dump(), RHS.dump();
+                // LHS.dump(), RHS.dump();
                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
                 for (int j = i+1; j < (int)exprs.size(); ++j) {
                     if (vis[j]) continue;
@@ -460,7 +475,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                     }
                 }
                 for (size_t j = 0; j < exprs.size(); ++j) {
-                    exprs[j].dump();
+                    // exprs[j].dump();
                 }
             }
         }
@@ -481,7 +496,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
         }
     }
     auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
-    std::cerr << "Leave Rewrite" << std::endl;
+    // std::cerr << "Leave Rewrite" << std::endl;
     return std::make_tuple(newCrdMap, Ops);
 }
 
@@ -518,23 +533,33 @@ public:
         auto srcFuse = srcSecond.getFuseIndex();
         auto dstFuse = dstSecond.getFuseIndex();
 
-        StringRef fuseName = "sptFuse";
-        StringRef separateName = "sptSeparate";
-        StringRef trimName = "sptTrim";
-        StringRef growName = "sptGrow";
-        StringRef swapName = "sptSwap";
-        StringRef subName = "sptSub";
-        StringRef addName = "sptAdd";
-        StringRef negName = "sptNeg";
-        StringRef vectorizeName = "sptVectorize";
-        StringRef devectorizeName = "sptDevectorize";
-        StringRef tileMergeName = "sptTileMerge";
-        StringRef tileSplitName = "sptTileSplit";
-        StringRef moveName = "sptMove"; //partial sort
-        StringRef sumName = "sptSum";
-        StringRef enumName = "sptEnum";
-        StringRef reorderName = "sptReorder";
-        StringRef schedName = "sptSched";
+        std::string suf = getTensorETSuffix(resType.dyn_cast<TensorType>());
+        static std::string names[13] = {
+          "Fuse", "Separate", "Trim", "Grow", "Swap", "Sub", "Add", "Neg", "Vectorize", "Devectorize",
+          "TileMerge", "TileSplit", "Move"
+        };
+        static bool first = 1;
+        if (first) {
+          for (int i = 0; i < 13; ++i) {
+            names[i] = "spt" + names[i];
+            names[i] += suf;
+          }
+          first = 0;
+        }
+
+        StringRef fuseName(names[0]);
+        StringRef separateName(names[1]);
+        StringRef trimName(names[2]);
+        StringRef growName(names[3]);
+        StringRef swapName(names[4]);
+        StringRef subName(names[5]);
+        StringRef addName(names[6]);
+        StringRef negName(names[7]);
+        StringRef vectorizeName(names[8]);
+        StringRef devectorizeName(names[9]);
+        StringRef tileMergeName(names[10]);
+        StringRef tileSplitName(names[11]);
+        StringRef moveName(names[12]); //partial sort
         // StringRef lazySortName = "sptLazySort";
 
         Type prevType = srcType;
@@ -652,22 +677,22 @@ public:
             Matrix2f dstM = toMatrix(flatDstCrd);
             Matrix2f srcM = toMatrix(flatSrcCrd);
 
-            flatSrcCrd.dump();
-            flatDstCrd.dump();
+            // flatSrcCrd.dump();
+            // flatDstCrd.dump();
 
             // trivial Gaussian Elimination with function generation
             // Calculate M: (range(dstM)->range(srcM))
-            std::cerr << "dstM " << dstM << std::endl;
-            std::cerr << "srcM " << srcM << std::endl;
+            // std::cerr << "dstM " << dstM << std::endl;
+            // std::cerr << "srcM " << srcM << std::endl;
             Matrix2f inverse_dstM = dstM.inverse();
-            std::cerr << "inverse destination coordinate map = " << std::endl;
-            std::cerr << inverse_dstM << std::endl;
-            std::cerr << srcM * inverse_dstM << std::endl;
+            // std::cerr << "inverse destination coordinate map = " << std::endl;
+            // std::cerr << inverse_dstM << std::endl;
+            // std::cerr << srcM * inverse_dstM << std::endl;
             Matrix2i crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
             auto genOpFromAffineMap = [&](Matrix2i& M) {
-                std::cerr << "Enter genOpFromAffineMap" << std::endl;
-                std::cerr << M << std::endl;
+                // std::cerr << "Enter genOpFromAffineMap" << std::endl;
+                // std::cerr << M << std::endl;
                 for (int i = 0; i < 2; ++i) {
                     if (M(i,i) == 0) {
                         int st;
@@ -700,10 +725,10 @@ public:
                         }
                     }
                 }
-                std::cerr << M << std::endl;
+                // std::cerr << M << std::endl;
                 for (int i = 1; i >= 0; --i) {
                     if (M(i,i) != 1) {
-                        std::cerr << M(i,i) << std::endl;
+                        // std::cerr << M(i,i) << std::endl;
                         assert(M(i,i) == -1);
                         genFunc1R(negName, {prevRes, Const[i]});
                         need_move[i] = 1;
@@ -728,7 +753,7 @@ public:
                 }
             };
 
-            std::cerr << "crdRemapMap = " << std::endl << crdRemapMap << std::endl;
+            // std::cerr << "crdRemapMap = " << std::endl << crdRemapMap << std::endl;
 
             genOpFromAffineMap(crdRemapMap);
 
@@ -803,7 +828,7 @@ public:
                     need_move[i] = 0;
                 }
             }
-            std::cerr << "dst_mx_trim is " << dst_mx_trim << std::endl;
+            // std::cerr << "dst_mx_trim is " << dst_mx_trim << std::endl;
             genFunc1R(vectorizeName, {prevRes, Const[dst_mx_trim+1]});
         }
         for (unsigned i = 0; i < dstCrd.getNumResults(); ++i) {
@@ -829,7 +854,8 @@ class printStorageOpLowering : public OpConversionPattern<unisparse::printStorag
         Value candValue = adaptor.getOperands()[0];
         func::CallOp printOp;
 
-        StringRef funcName = "sptPrint";
+        static std::string _funcName = "sptPrint"+getTensorETSuffix(candValue.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
 
         SmallVector<Value, 1> printParams;
         printParams.push_back(candValue);
@@ -848,7 +874,8 @@ class copyOpLowering : public OpConversionPattern<unisparse::copyOp> {
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue = adaptor.getOperands()[0];
         func::CallOp copyOp;
-        StringRef funcName = "sptCopy";
+        static std::string _funcName = "sptCopy"+getTensorETSuffix(candValue.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
         SmallVector<Value, 1> params;
         params.push_back(candValue);
         rewriter.replaceOpWithNewOp<func::CallOp>(op, candValue.getType(), 
@@ -866,7 +893,8 @@ class checkOpLowering : public OpConversionPattern<unisparse::checkOp> {
         Value candValue1 = adaptor.getOperands()[0];
         Value candValue2 = adaptor.getOperands()[1];
         func::CallOp checkOp;
-        StringRef funcName = "sptCheck";
+        static std::string _funcName = "sptCheck"+getTensorETSuffix(candValue2.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
         SmallVector<Value, 2> params = {candValue1, candValue2};
         rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
@@ -980,7 +1008,7 @@ public:
     auto assembleWindow = [&]() {
         rmap = rewriteTileGenWindow(rmap, loc, op, rewriter, prevRes, prevType);
         auto M = toIntMatrix(toMatrix(rmap));
-        std::cerr << M << std::endl;
+        // std::cerr << M << std::endl;
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < 2; ++j) {
                 if (M(i,j)) {
@@ -1021,8 +1049,10 @@ public:
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getPtr"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getPtr", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1042,8 +1072,10 @@ public:
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getCrd"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getCrd", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1063,8 +1095,10 @@ public:
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getValue"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getValue", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1084,8 +1118,10 @@ public:
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getSize"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getSize", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -1122,7 +1158,7 @@ public:
     // Generate the call.
     Value src = adaptor.getOperands()[0];
     int64_t idx = *index;
-    rewriter.replaceOp(op, genUniSparseDimSizeCall(rewriter, op, enc, src, idx));
+    rewriter.replaceOp(op, genUniSparseDimSizeCall(rewriter, op, enc, src, idx, op.getSource().getType()));
     return success();
   }
 };
@@ -1175,7 +1211,8 @@ public:
     if (!enc) {
       return failure();
     }
-    StringRef name = "delUniSparseTensor";
+    static std::string _name = "delUniSparseTensor"+getTensorETSuffix(op.getTensor().getType().dyn_cast<TensorType>());
+    StringRef name(_name);
     rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
     return success();
@@ -1251,7 +1288,7 @@ public:
     // Determine the size for access expansion.
     auto enc = getUniSparseEncoding(srcType);
     Value src = adaptor.getOperands()[0];
-    Value sz = genUniSparseDimSizeCall(rewriter, op, enc, src, srcType.getRank() - 1);
+    Value sz = genUniSparseDimSizeCall(rewriter, op, enc, src, srcType.getRank() - 1, op.tensor().getType());
     // Allocate temporary buffers for values, filled-switch, and indices.
     // We do not use stack buffers for this, since the expanded size may
     // be rather large (as it envelops a single expanded dense dimension).
@@ -1290,7 +1327,8 @@ public:
     // access pattern.
 //    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
 //    std::cerr << "Enter the lowering CompressOp " << std::endl;
-    StringRef name = "expInsert";
+    static std::string _name = "expInsert"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef name(_name);
     TypeRange noTp;
     replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
     // Deallocate the buffers on exit of the loop nest.
