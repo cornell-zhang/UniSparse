@@ -1192,9 +1192,9 @@ public:
     // Generate the call to construct empty tensor. The sizes are
     // explicitly defined by the arguments to the alloc operator.
     SmallVector<Value, 8> params;
-    std::cerr << "Enter UniSparsenewParams" << std::endl;
+    // std::cerr << "Enter UniSparsenewParams" << std::endl;
     UniSparsenewParams(rewriter, params, op, enc, sizes, rank);
-    std::cerr << "Finish UniSparsenewParams" << std::endl;
+    // std::cerr << "Finish UniSparsenewParams" << std::endl;
     rewriter.replaceOp(op, genUniSparseNewCall(rewriter, op, params)); 
     return success();
   }
@@ -1211,10 +1211,10 @@ public:
     if (!enc) {
       return failure();
     }
-    static std::string _name = "delUniSparseTensor"+getTensorETSuffix(op.getTensor().getType().dyn_cast<TensorType>());
-    StringRef name(_name);
+    static std::string _funcName = "delUniSparseTensor"+getTensorETSuffix(op.getTensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
-            getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
+            getFunc(op, funcName, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
     return success();
   }
 };
@@ -1244,9 +1244,10 @@ public:
   matchAndRewrite(unisparse::LoadOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 //    std::cerr << "Enter the lowering LoadOp " << std::endl;
+    static std::string _name = "endInsert"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
     if (op.hasInserts()) {
       // Finalize any pending insertions.
-      StringRef name = "endInsert";
+      StringRef name(_name);
       TypeRange noTp;
       createFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
     }
@@ -1264,7 +1265,8 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
 //    std::cerr << "Enter the lowering InsertOp " << std::endl;
 //    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
-    StringRef name = "lexInsert";
+    static std::string _name = "lexInsert"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef name(_name);
     TypeRange noTp;
     replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
     return success();

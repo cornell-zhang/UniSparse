@@ -1548,7 +1548,7 @@ bool UniSparseStorage<V>::fuse(const int lv) {
       int saved_st_point = 0;
       assert(vLevel[cur_lv]->ptr[0] == 0);
       for (size_t i = 0; i < vLevel[cur_lv]->ptr.size()-1; ++i) {
-        int cnt = vLevel[cur_lv]->ptr[i+1] - saved_st_point;
+        int cnt = vLevel[cur_lv]->ptr[i+1] - saved_st_point; // vLevel[cur_lv]->ptr[i+1] - vLevel[cur_lv]->ptr[i]
         for (int j = saved_st_point; j < vLevel[cur_lv]->ptr[i+1]; ++j) {
           if (crd_deleted[j]) cnt--;
         }
@@ -2035,7 +2035,7 @@ bool UniSparseStorage<V>::cust_pad_opt(const int start_lv, const int end_lv) {
     high_level_size = 1;
   }
   int vector_size = 1;
-  for(size_t i = vLevel.size()-1; i > end_lv; i--) {
+  for(int i = vLevel.size()-1; i > end_lv; i--) {
     if(vLevel[i]->type == LVFUSE) {
       vector_size *= vLevel[i]->size;
     }
@@ -2062,7 +2062,7 @@ bool UniSparseStorage<V>::cust_pad_opt(const int start_lv, const int end_lv) {
       offset += this->vLevel[l]->crd[i] * strides[l-start_lv];
     }
 
-    for(auto l = end_lv+1; l < this->vLevel.size(); l++) {
+    for(int l = end_lv+1; l < (int) this->vLevel.size(); l++) {
       level_crds[l-end_lv-1][offset] = vLevel[l]->crd[i];
     }
 
@@ -2081,7 +2081,7 @@ bool UniSparseStorage<V>::cust_pad_opt(const int start_lv, const int end_lv) {
     }
   }
 
-  for(auto l = end_lv+1; l < vLevel.size(); l++) {
+  for(int l = end_lv+1; l < (int) vLevel.size(); l++) {
     this->vLevel[l]->crd = std::move(level_crds[l-end_lv-1]);
 
   }
@@ -2309,7 +2309,7 @@ bool UniSparseStorage<V>::pack(const int start_lv, const int end_lv) {
   for(int i = start_lv; i < end_lv; i++) {
     assert(vLevel[i]->type = LVTRIM);
   }
-  assert(end_lv < vLevel.size());
+  assert(end_lv < (int) vLevel.size());
   assert(end_lv - start_lv == 1);
   this->pack_vector.resize(vLevel[start_lv]->crd.size());
 
@@ -2809,7 +2809,7 @@ FOREVERY_V(IMPL_SPTSCHEDULE)
     return (void*)sparT; \
   }
 FOREVERY_V(IMPL_SPTTILESPLIT)
-#undef IMPL_SPLTTILESPLIT
+#undef IMPL_SPTTILESPLIT
 
 #define IMPL_SPTTILEMERGE(VNAME, V) \
   void* _mlir_ciface_sptTileMerge##VNAME(void* ptr, int lv, int factor) { \
@@ -3100,7 +3100,7 @@ FOREVERY_V(IMPL_LEXINSERT)
 FOREVERY_V(IMPL_EXPINSERT)
 #undef IMPL_EXPINSERT
 
-#define IMPL_newUniSparseTensor(VNAME, V) \
+#define IMPL_NEWUNISPARSETENSOR(VNAME, V) \
   void* _mlir_ciface_newUniSparseTensor##VNAME(StridedMemRefType<UniSparseDimLevelType, 1> *aref, \
                                StridedMemRefType<uint64_t, 1> *sref, \
                                StridedMemRefType<uint64_t, 1> *pref, void *ptr ) { \
@@ -3119,9 +3119,8 @@ FOREVERY_V(IMPL_EXPINSERT)
     auto *tensor = new UniSparseStorage<V>(vshape, perm, sparsity); \
     return tensor; \
   }
-FOREVERY_V(IMPL_newUniSparseTensor)
-#undef IMPL_newUniSparseTensor
-
+FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
+#undef IMPL_NEWUNISPARSETENSOR
 
     // void _mlir_ciface_release(void *ptr) {
     //     delete []ptr;
