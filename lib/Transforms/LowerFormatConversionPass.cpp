@@ -26,13 +26,14 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
+#include "mlir/../../lib/Dialect/SparseTensor/Transforms/CodegenUtils.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayTypes.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseOps.h"
+#include "IR/UniSparseTypes.h"
 #include "Transforms/Passes.h"
 #include "Eigen/Dense"
 
@@ -41,7 +42,7 @@
 #include <tuple>
 
 using namespace mlir;
-using namespace sparlay;
+using namespace unisparse;
 
 #define DEBUG_TYPE "lower-format-conversion"
 
@@ -72,12 +73,174 @@ static FlatSymbolRefAttr getFunc(Operation *op, StringRef name,
 // RewritePatterns: New operations
 //===----------------------------------------------------------------------===//
 
-class NewOpLowering : public OpConversionPattern<sparlay::NewOp> {
+static func::CallOp replaceOpWithFuncCall(RewriterBase &rewriter, Operation *op,
+                                          StringRef name, TypeRange resultType,
+                                          ValueRange operands,
+                                          bool emitCInterface) {
+  auto fn = getFunc(op, name, resultType, operands, emitCInterface);
+  return rewriter.replaceOpWithNewOp<func::CallOp>(op, resultType, fn,
+                                                   operands);
+}
+
+static func::CallOp createFuncCall(OpBuilder &builder, Operation *op,
+                                   StringRef name, TypeRange resultType,
+                                   ValueRange operands,
+                                   bool emitCInterface) {
+  auto fn = getFunc(op, name, resultType, operands, emitCInterface);
+  return builder.create<func::CallOp>(op->getLoc(), resultType, fn, operands);
+}
+
+static std::string getTensorETSuffix(TensorType t) {
+  if (!t) {
+    return "SthThatMustGoWrong";
+  }
+  if (auto et = t.getElementType().dyn_cast<FloatType>()) {
+    return (et.getWidth() == 32 ? "F32" : "F64");
+  } else {
+    assert(0);
+    return "Data types other than F32 or F64 are not supported yet.";
+  }
+  return "SthThatMustGoWrong"; //no warning
+}
+
+static Value genUniSparseDimSizeCall(OpBuilder &builder, Operation *op,
+                            UniSparseEncodingAttr &enc, Value src,
+                            int64_t idx, Type src_tensor_type) {
+  // Permute the index according to an optional dimension ordering.
+  if (AffineMap p = enc.getCrdMap())
+    idx = p.getPermutedPosition(idx);
+  // Generate the call.
+  static std::string _name = "sparseDimSize"+getTensorETSuffix(src_tensor_type.dyn_cast<TensorType>());
+  StringRef name(_name);
+  SmallVector<Value, 2> params{src, sparse_tensor::constantIndex(builder, op->getLoc(), idx)};
+  Type iTp = builder.getIndexType();
+  return createFuncCall(builder, op, name, iTp, params, true).getResult(0);
+}
+
+static Value genUniSparseAlloc(RewriterBase &rewriter, Location loc, Value sz, Type tp) {
+  auto memTp = MemRefType::get({ShapedType::kDynamicSize}, tp);
+  return rewriter.create<memref::AllocOp>(loc, memTp, ValueRange{sz});
+}
+
+static Value genUniSparseAlloca(OpBuilder &builder, Location loc, Value sz, Type tp) {
+  auto memTp = MemRefType::get({ShapedType::kDynamicSize}, tp);
+  return builder.create<memref::AllocaOp>(loc, memTp, ValueRange{sz});
+}
+
+static Value genUniSparseAlloca(OpBuilder &builder, Location loc, unsigned sz, Type tp) {
+  return genUniSparseAlloca(builder, loc, sparse_tensor::constantIndex(builder, loc, sz), tp);
+}
+
+static Value genUniSparseBuffer(OpBuilder &builder, Location loc, ValueRange values) {
+  unsigned sz = values.size();
+  assert(sz >= 1);
+  Value buffer = genUniSparseAlloca(builder, loc, sz, values[0].getType());
+  for (unsigned i = 0; i < sz; i++) {
+    Value idx = sparse_tensor::constantIndex(builder, loc, i);
+    builder.create<memref::StoreOp>(loc, values[i], buffer, idx);
+  }
+  return buffer;
+}
+
+std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> inferDimLevelType(UniSparseEncodingAttr enc, int64_t rank) {
+  std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> lt;
+  assert(enc);
+//  std::cerr << "rank is " << rank << std::endl;
+  auto crdmap = enc.getCrdMap();
+  auto compress = enc.getCompressMap();
+  auto trim = compress.getTrimIndex();
+  auto merge = compress.getFuseIndex();
+  std::vector<bool> trim_vec(rank, false); 
+  int trim_to = trim[0];
+  int trim_from = trim[1];
+  assert(trim_to <= trim_from);
+  for (int i = trim_to; i <= trim_from; i++) {
+    trim_vec[i] = true;
+  }
+  std::vector<bool> merge_vec(rank, false);
+  int end = merge[0];
+  for(int i = 0; i <= end; i++) {
+    merge_vec[i] = true;
+  }
+//  std::cerr << "start fill lt " << rank << std::endl;
+  for(int64_t d = 0; d < rank; d++) {
+    if(d == 0) {
+      if(trim_vec[d]) {
+        lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Compressed);
+        continue;
+      }
+    } else if (trim_vec[d] && merge_vec[d-1]) {
+      lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Compressed);
+      continue;
+    } else {
+      lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Singleton);
+      continue;
+    }
+    lt.push_back(sparse_tensor::SparseTensorEncodingAttr::DimLevelType::Dense);
+  }
+  return lt;
+}
+
+static void UniSparsenewParams(OpBuilder &builder, SmallVector<Value, 8> &params, Operation *op, 
+                             UniSparseEncodingAttr &enc, ValueRange szs, int64_t rank, Value ptr = Value()) {
+  Location loc = op->getLoc();
+  std::vector<sparse_tensor::SparseTensorEncodingAttr::DimLevelType> dlt = inferDimLevelType(enc, rank);
+//  std::cerr << "Finish infer DimLevelType " << std::endl;
+  unsigned sz = dlt.size();
+  // Sparsity annotations.
+  SmallVector<Value, 4> attrs;
+  for (unsigned i = 0; i < sz; i++)
+    attrs.push_back(constantDimLevelTypeEncoding(builder, loc, dlt[i]));
+  params.push_back(genUniSparseBuffer(builder, loc, attrs));
+// std::cerr << "Finish gen level attr buffer " << std::endl;
+  // Dimension sizes array of the enveloping tensor. Useful for either
+  // verification of external data, or for construction of internal data.
+  params.push_back(genUniSparseBuffer(builder, loc, szs));
+//  std::cerr << "Finish gen dimension size " << std::endl;
+  // Dimension order permutation array. This is the "identity" permutation by
+  // default, or otherwise the "reverse" permutation of a given ordering, so
+  // that indices can be mapped quickly to the right position.
+  SmallVector<Value, 4> rev(sz);
+  if (AffineMap p = enc.getCrdMap()) {
+    for (unsigned i = 0; i < sz; i++)
+      rev[p.getDimPosition(i)] = sparse_tensor::constantIndex(builder, loc, i);
+  } else {
+    for (unsigned i = 0; i < sz; i++)
+      rev[i] = sparse_tensor::constantIndex(builder, loc, i);
+  }
+  params.push_back(genUniSparseBuffer(builder, loc, rev));
+//  std::cerr << "Finish gen reverse permutation " << std::endl;
+  // Secondary and primary types encoding.
+//  Type elemTp = stp.getElementType();
+//  params.push_back(sparse_tensor::constantOverheadTypeEncoding(builder, loc, 32));
+//  params.push_back(sparse_tensor::constantOverheadTypeEncoding(builder, loc, 32));
+//  params.push_back(sparse_tensor::constantPrimaryTypeEncoding(builder, loc, elemTp));
+  // User action.
+//  params.push_back(constantAction(builder, loc, action));
+  // Payload pointer.
+  if (!ptr)
+    ptr = builder.create<LLVM::NullOp>(loc, LLVM::LLVMPointerType::get(builder.getI8Type()));
+  params.push_back(ptr);
+}
+
+static Value genUniSparseNewCall(OpBuilder &builder, bufferization::AllocTensorOp op,
+                        ArrayRef<Value> params) {
+  static std::string _name = "newUniSparseTensor"+getTensorETSuffix(op.getType().dyn_cast<TensorType>());
+  StringRef name(_name);
+  Type pTp = LLVM::LLVMPointerType::get(builder.getI8Type());
+  return createFuncCall(builder, op, name, pTp, params, true).getResult(0);
+}
+
+//===----------------------------------------------------------------------===//
+// RewritePatterns: New operations
+//===----------------------------------------------------------------------===//
+
+class NewOpLowering : public OpConversionPattern<unisparse::NewOp> {
 public:
-    using OpConversionPattern<sparlay::NewOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::NewOp>::OpConversionPattern;
 
     LogicalResult 
-        matchAndRewrite(sparlay::NewOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::NewOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         
@@ -128,25 +291,25 @@ public:
             valParams);
             
         // use struct_construct to construct them into the sparse data structure
-        // which will be folded with struct_access or eliminated with DCE in finalize_sparlay_lowering
+        // which will be folded with struct_access or eliminated with DCE in finalize_unisparse_lowering
         SmallVector<Value, 3> input_vec;
         for (unsigned i = 0; i < resSize; i++) {
             input_vec.push_back(indicesOp[i].getResult(0));
         }
         ValueRange input = llvm::makeArrayRef(input_vec);
 
-        Value crdStructOp = rewriter.create<sparlay::StructConstructOp>(loc, crdType, input);
-        rewriter.replaceOpWithNewOp<sparlay::StructConstructOp>(op, resType, 
+        Value crdStructOp = rewriter.create<unisparse::StructConstructOp>(loc, crdType, input);
+        rewriter.replaceOpWithNewOp<unisparse::StructConstructOp>(op, resType, 
             ValueRange({crdStructOp, valueOp.getResult(0)}));
         return success();
     }
 };
 
-class fromFileOpLowering : public OpConversionPattern<sparlay::fromFileOp> {
+class fromFileOpLowering : public OpConversionPattern<unisparse::fromFileOp> {
 public:
-    using OpConversionPattern<sparlay::fromFileOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::fromFileOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::fromFileOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::fromFileOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         
@@ -154,8 +317,8 @@ public:
         Type inputType = fileName.getType();
 
         func::CallOp readOp;
-
-        StringRef funcName =  "sptFromFile";
+        static std::string _funcName = "sptFromFile"+getTensorETSuffix(op.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
 
         SmallVector<Value, 1> readParams;
         readParams.push_back(fileName);
@@ -177,12 +340,12 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     ret(0,0)=ret(0,1)=ret(1,0)=ret(1,1) = 0;
     llvm::SmallBitVector projectedDims(2, 0);
     projectedDims[1] = 1;
-    std::cerr << projectedDims.size() << std::endl;
+    // std::cerr << projectedDims.size() << std::endl;
     auto proj1 = getProjectedMap(crdMap, projectedDims);
-    std::cerr << "done1" << std::endl;
+    // std::cerr << "done1" << std::endl;
     int curDim = 0;
     for (AffineExpr expr : proj1.getResults()) {
-        expr.dump();
+        // expr.dump();
         if (expr != getAffineConstantExpr(0, proj1.getContext())) {
             if (expr == getAffineDimExpr(0, proj1.getContext())) ret(curDim, 0) = 1;
             else ret(curDim, 0) = -1;
@@ -194,7 +357,7 @@ Matrix2f toMatrix(const AffineMap& crdMap) {
     auto proj0 = getProjectedMap(crdMap, projectedDims);
     curDim = 0;
     for (AffineExpr expr: proj0.getResults()) {
-        expr.dump();
+        // expr.dump();
         if (expr != getAffineConstantExpr(0, proj0.getContext())) {
             if (expr == getAffineDimExpr(0, proj0.getContext())) ret(curDim, 1) = 1;
             else ret(curDim, 1) = -1;
@@ -251,7 +414,7 @@ struct GeneralConversionOp {
 };
 
 std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(const AffineMap& crdMap, bool isSplit) {
-    std::cerr << "Enter Rewrite" << std::endl;
+    // std::cerr << "Enter Rewrite" << std::endl;
     std::vector<GeneralConversionOp> Ops;
     std::vector<AffineExpr> newExprs;
     std::vector<int> pendingMerge;
@@ -271,7 +434,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                 auto LHS = binExpr.getLHS();
                 auto RHS = binExpr.getRHS();
                 assert(RHS.isSymbolicOrConstant());
-                LHS.dump(), RHS.dump();
+                // LHS.dump(), RHS.dump();
                 auto targetKind = (exprs[i].getKind() == AffineExprKind::Mod ? AffineExprKind::FloorDiv : AffineExprKind::Mod);
                 for (int j = i+1; j < (int)exprs.size(); ++j) {
                     if (vis[j]) continue;
@@ -315,7 +478,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
                     }
                 }
                 for (size_t j = 0; j < exprs.size(); ++j) {
-                    exprs[j].dump();
+                    // exprs[j].dump();
                 }
             }
         }
@@ -328,7 +491,7 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getLHS());
             assert(exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS() == exprs[i+1].dyn_cast<AffineBinaryOpExpr>().getRHS());
             auto divNum = exprs[i].dyn_cast<AffineBinaryOpExpr>().getRHS().dyn_cast<AffineConstantExpr>().getValue();
-            assert(divNum < 5LL);
+//            assert(divNum < 5LL);
             Ops.push_back(GeneralConversionOp(TileMerge, "", {i, (int)divNum}));
             newExprs.push_back(exprs[i].dyn_cast<AffineBinaryOpExpr>().getLHS());
         } else if (exprs[i].getKind() != AffineExprKind::Mod) {
@@ -336,22 +499,22 @@ std::tuple<AffineMap, std::vector<GeneralConversionOp> > rewriteTileAndStashOp(c
         }
     }
     auto newCrdMap = AffineMap::get(crdMap.getNumDims(), 0, newExprs, crdMap.getContext());
-    std::cerr << "Leave Rewrite" << std::endl;
+    // std::cerr << "Leave Rewrite" << std::endl;
     return std::make_tuple(newCrdMap, Ops);
 }
 
-class ConvertOpLowering : public OpConversionPattern<sparlay::ConvertOp> {
+class ConvertOpLowering : public OpConversionPattern<unisparse::ConvertOp> {
 public:
-    using OpConversionPattern<sparlay::ConvertOp>::OpConversionPattern;
+    using OpConversionPattern<unisparse::ConvertOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::ConvertOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::ConvertOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op.getLoc();
         Type resType = op.getType();
         Value src = adaptor.getOperands()[0];
         Type srcType = src.getType();
-        auto encSrc = getSparlayEncoding(op->getOperand(0).getType());
-        auto encDst = getSparlayEncoding(resType);
+        auto encSrc = getUniSparseEncoding(op->getOperand(0).getType());
+        auto encDst = getUniSparseEncoding(resType);
 
         //handle swap only (quick round-about)
         auto srcCrd = encSrc.getCrdMap();
@@ -373,19 +536,33 @@ public:
         auto srcFuse = srcSecond.getFuseIndex();
         auto dstFuse = dstSecond.getFuseIndex();
 
-        StringRef fuseName = "sptFuse";
-        StringRef separateName = "sptSeparate";
-        StringRef trimName = "sptTrim";
-        StringRef growName = "sptGrow";
-        StringRef swapName = "sptSwap";
-        StringRef subName = "sptSub";
-        StringRef addName = "sptAdd";
-        StringRef negName = "sptNeg";
-        StringRef vectorizeName = "sptVectorize";
-        StringRef devectorizeName = "sptDevectorize";
-        StringRef tileMergeName = "sptTileMerge";
-        StringRef tileSplitName = "sptTileSplit";
-        StringRef moveName = "sptMove"; //partial sort
+        std::string suf = getTensorETSuffix(resType.dyn_cast<TensorType>());
+        static std::string names[13] = {
+          "Fuse", "Separate", "Trim", "Grow", "Swap", "Sub", "Add", "Neg", "Vectorize", "Devectorize",
+          "TileMerge", "TileSplit", "Move"
+        };
+        static bool first = 1;
+        if (first) {
+          for (int i = 0; i < 13; ++i) {
+            names[i] = "spt" + names[i];
+            names[i] += suf;
+          }
+          first = 0;
+        }
+
+        StringRef fuseName(names[0]);
+        StringRef separateName(names[1]);
+        StringRef trimName(names[2]);
+        StringRef growName(names[3]);
+        StringRef swapName(names[4]);
+        StringRef subName(names[5]);
+        StringRef addName(names[6]);
+        StringRef negName(names[7]);
+        StringRef vectorizeName(names[8]);
+        StringRef devectorizeName(names[9]);
+        StringRef tileMergeName(names[10]);
+        StringRef tileSplitName(names[11]);
+        StringRef moveName(names[12]); //partial sort
         // StringRef lazySortName = "sptLazySort";
 
         Type prevType = srcType;
@@ -410,19 +587,23 @@ public:
             const GeneralConversionOp& gco
         ) {
             switch (gco.type) {
-                case TileMerge: //tiling: merge
+                case TileMerge: { //tiling: merge
                     assert(gco.args.size() == 2);
                     assert(gco.args[0] < 6 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
-                    genFunc1R(tileMergeName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
-                break;
-                case TileSplit: //tiling: split
+//                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    mlir::arith::ConstantOp factor_merge = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(gco.args[1]));
+                    genFunc1R(tileMergeName, {prevRes, Const[gco.args[0]], factor_merge});
+                    break; 
+                }
+                case TileSplit: {//tiling: split
                     assert(gco.args.size() == 2);
                     assert(gco.args[0] < 6 && gco.args[0] >= 0);
-                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
-                    genFunc1R(tileSplitName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
-                break;
-                case Move: //move
+//                    assert(gco.args[1] < 6 && gco.args[1] >= 0);
+                    mlir::arith::ConstantOp factor_split = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32IntegerAttr(gco.args[1]));
+                    genFunc1R(tileSplitName, {prevRes, Const[gco.args[0]], factor_split});
+                    break;
+                }
+                case Move:  { //move
                     assert(gco.args.size() == 2);
                     assert(gco.args[0] < 6 && gco.args[0] >= 0);
                     assert(gco.args[1] < 6 && gco.args[1] >= 0);
@@ -433,10 +614,12 @@ public:
                     } else {
                         genFunc1R(moveName, {prevRes, Const[gco.args[0]], Const[gco.args[1]]});
                     }
-                break;
-                default:
+                    break;
+                }
+                default: {
                     assert(0);
-                break;
+                    break;
+                }
             }
         };
 
@@ -458,10 +641,8 @@ public:
         
         //devectorize first, could be optimized.
         if ((unsigned)src_mx_trim < (srcCrd.getNumResults()-1)) {
-            int delta = srcCrd.getNumResults()-1-src_mx_trim;
-            assert(delta <= 2);
-            //TODO: FIXME: change devectorize to support matrix devectorization
-            genFunc1R(devectorizeName, {prevRes});
+            assert(src_mx_trim < srcCrd.getNumResults());
+            genFunc1R(devectorizeName, {prevRes, Const[src_mx_trim+1]});
         }
 
         bool need_move[10] = {0};
@@ -499,19 +680,22 @@ public:
             Matrix2f dstM = toMatrix(flatDstCrd);
             Matrix2f srcM = toMatrix(flatSrcCrd);
 
-            flatSrcCrd.dump();
-            flatDstCrd.dump();
+            // flatSrcCrd.dump();
+            // flatDstCrd.dump();
 
-            // trivial Gaussian Elimination with functiion generation
+            // trivial Gaussian Elimination with function generation
             // Calculate M: (range(dstM)->range(srcM))
+            // std::cerr << "dstM " << dstM << std::endl;
+            // std::cerr << "srcM " << srcM << std::endl;
             Matrix2f inverse_dstM = dstM.inverse();
-            std::cerr << "inverse destination coordinate map = " << std::endl;
-            std::cerr << inverse_dstM << std::endl;
-            std::cerr << srcM * inverse_dstM << std::endl;
+            // std::cerr << "inverse destination coordinate map = " << std::endl;
+            // std::cerr << inverse_dstM << std::endl;
+            // std::cerr << srcM * inverse_dstM << std::endl;
             Matrix2i crdRemapMap = toIntMatrix(srcM * inverse_dstM);
 
             auto genOpFromAffineMap = [&](Matrix2i& M) {
-                std::cerr << M << std::endl;
+                // std::cerr << "Enter genOpFromAffineMap" << std::endl;
+                // std::cerr << M << std::endl;
                 for (int i = 0; i < 2; ++i) {
                     if (M(i,i) == 0) {
                         int st;
@@ -544,10 +728,10 @@ public:
                         }
                     }
                 }
-                std::cerr << M << std::endl;
+                // std::cerr << M << std::endl;
                 for (int i = 1; i >= 0; --i) {
                     if (M(i,i) != 1) {
-                        std::cerr << M(i,i) << std::endl;
+                        // std::cerr << M(i,i) << std::endl;
                         assert(M(i,i) == -1);
                         genFunc1R(negName, {prevRes, Const[i]});
                         need_move[i] = 1;
@@ -572,7 +756,7 @@ public:
                 }
             };
 
-            std::cerr << "crdRemapMap = " << std::endl << crdRemapMap << std::endl;
+            // std::cerr << "crdRemapMap = " << std::endl << crdRemapMap << std::endl;
 
             genOpFromAffineMap(crdRemapMap);
 
@@ -640,17 +824,15 @@ public:
             genFunc1R(growName, {prevRes, Const[dst_mn_trim-1]});
         }
         if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
-            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
+//            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
             for (unsigned i = 0; i < dstCrd.getNumResults()-1; ++i) {
                 if (need_move[i]) {
                     genFunc1R(moveName, {prevRes, Const[i], Const[i]});
                     need_move[i] = 0;
                 }
             }
-        }
-        if ((unsigned)dst_mx_trim < dstCrd.getNumResults()-1) {
-            assert((unsigned)dst_mx_trim == dstCrd.getNumResults()-2);
-            genFunc1R(vectorizeName, {prevRes, Const[dstCrd.getNumResults()-1]});
+            // std::cerr << "dst_mx_trim is " << dst_mx_trim << std::endl;
+            genFunc1R(vectorizeName, {prevRes, Const[dst_mx_trim+1]});
         }
         for (unsigned i = 0; i < dstCrd.getNumResults(); ++i) {
             if (need_move[i]) {
@@ -666,16 +848,17 @@ public:
     }
 };
 
-class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageOp> {
-    using OpConversionPattern<sparlay::printStorageOp>::OpConversionPattern;
+class printStorageOpLowering : public OpConversionPattern<unisparse::printStorageOp> {
+    using OpConversionPattern<unisparse::printStorageOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::printStorageOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::printStorageOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         
         Value candValue = adaptor.getOperands()[0];
         func::CallOp printOp;
 
-        StringRef funcName = "sptPrint";
+        static std::string _funcName = "sptPrint"+getTensorETSuffix(candValue.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
 
         SmallVector<Value, 1> printParams;
         printParams.push_back(candValue);
@@ -687,14 +870,15 @@ class printStorageOpLowering : public OpConversionPattern<sparlay::printStorageO
     }
 };
 
-class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
-    using OpConversionPattern<sparlay::copyOp>::OpConversionPattern;
+class copyOpLowering : public OpConversionPattern<unisparse::copyOp> {
+    using OpConversionPattern<unisparse::copyOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::copyOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::copyOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue = adaptor.getOperands()[0];
         func::CallOp copyOp;
-        StringRef funcName = "sptCopy";
+        static std::string _funcName = "sptCopy"+getTensorETSuffix(candValue.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
         SmallVector<Value, 1> params;
         params.push_back(candValue);
         rewriter.replaceOpWithNewOp<func::CallOp>(op, candValue.getType(), 
@@ -704,15 +888,16 @@ class copyOpLowering : public OpConversionPattern<sparlay::copyOp> {
     }
 };
 
-class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
-    using OpConversionPattern<sparlay::checkOp>::OpConversionPattern;
+class checkOpLowering : public OpConversionPattern<unisparse::checkOp> {
+    using OpConversionPattern<unisparse::checkOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::checkOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::checkOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue1 = adaptor.getOperands()[0];
         Value candValue2 = adaptor.getOperands()[1];
         func::CallOp checkOp;
-        StringRef funcName = "sptCheck";
+        static std::string _funcName = "sptCheck"+getTensorETSuffix(candValue2.getType().dyn_cast<TensorType>());
+        StringRef funcName(_funcName);
         SmallVector<Value, 2> params = {candValue1, candValue2};
         rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
             getFunc(op, funcName, llvm::None, params, /*emitCInterface=*/true),
@@ -721,10 +906,10 @@ class checkOpLowering : public OpConversionPattern<sparlay::checkOp> {
     }
 };
 
-class ticOpLowering : public OpConversionPattern<sparlay::ticOp> {
-    using OpConversionPattern<sparlay::ticOp>::OpConversionPattern;
+class ticOpLowering : public OpConversionPattern<unisparse::ticOp> {
+    using OpConversionPattern<unisparse::ticOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::ticOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::ticOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         func::CallOp ticOp;
         StringRef funcName = "sptTic";
@@ -736,10 +921,10 @@ class ticOpLowering : public OpConversionPattern<sparlay::ticOp> {
     }
 };
 
-class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
-    using OpConversionPattern<sparlay::tocOp>::OpConversionPattern;
+class tocOpLowering : public OpConversionPattern<unisparse::tocOp> {
+    using OpConversionPattern<unisparse::tocOp>::OpConversionPattern;
         LogicalResult 
-        matchAndRewrite(sparlay::tocOp op, OpAdaptor adaptor,
+        matchAndRewrite(unisparse::tocOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         func::CallOp tocOp;
         StringRef funcName = "sptToc";
@@ -751,10 +936,10 @@ class tocOpLowering : public OpConversionPattern<sparlay::tocOp> {
     }
 };
 
-class StructAccessOpLowering: public OpConversionPattern<sparlay::StructAccessOp> {
+class StructAccessOpLowering: public OpConversionPattern<unisparse::StructAccessOp> {
 public:
-    using OpConversionPattern<sparlay::StructAccessOp>::OpConversionPattern;
-    LogicalResult matchAndRewrite(sparlay::StructAccessOp op, OpAdaptor adaptor,
+    using OpConversionPattern<unisparse::StructAccessOp>::OpConversionPattern;
+    LogicalResult matchAndRewrite(unisparse::StructAccessOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
         Location loc = op->getLoc();
         Value inputPtr = adaptor.getOperands()[0];
@@ -771,7 +956,7 @@ public:
     }
 };
 
-AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const sparlay::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
+AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const unisparse::DecomposeOp& op, ConversionPatternRewriter &rewriter, Value& prevRes, Type& prevType) {
     std::vector<AffineExpr> exprs = crdMap.getResults();
     assert(exprs.size() <= (size_t)2);
     std::vector<AffineExpr> new_exprs = {};
@@ -805,11 +990,11 @@ AffineMap rewriteTileGenWindow(const AffineMap& crdMap, Location loc, const spar
     return AffineMap::get(crdMap.getNumDims(), 0, new_exprs, crdMap.getContext());
 }
 
-class DecompseOpLowering : public OpConversionPattern<sparlay::DecomposeOp> {
+class DecompseOpLowering : public OpConversionPattern<unisparse::DecomposeOp> {
 public:
-  using OpConversionPattern<sparlay::DecomposeOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::DecomposeOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::DecomposeOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::DecomposeOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
@@ -826,7 +1011,7 @@ public:
     auto assembleWindow = [&]() {
         rmap = rewriteTileGenWindow(rmap, loc, op, rewriter, prevRes, prevType);
         auto M = toIntMatrix(toMatrix(rmap));
-        std::cerr << M << std::endl;
+        // std::cerr << M << std::endl;
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < 2; ++j) {
                 if (M(i,j)) {
@@ -856,19 +1041,21 @@ public:
   }
 };
 
-class ToPtrOpLowering: public OpConversionPattern<sparlay::ToPtrOp> {
+class ToPtrOpLowering: public OpConversionPattern<unisparse::ToPtrOp> {
 public:
-  using OpConversionPattern<sparlay::ToPtrOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToPtrOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToPtrOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToPtrOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getPtr"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getPtr", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -877,19 +1064,21 @@ public:
   }
 };
 
-class ToCrdOpLowering: public OpConversionPattern<sparlay::ToCrdOp> {
+class ToCrdOpLowering: public OpConversionPattern<unisparse::ToCrdOp> {
 public:
-  using OpConversionPattern<sparlay::ToCrdOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToCrdOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToCrdOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToCrdOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getCrd"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getCrd", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -898,19 +1087,21 @@ public:
   }
 };
 
-class ToValueOpLowering: public OpConversionPattern<sparlay::ToValueOp> {
+class ToValueOpLowering: public OpConversionPattern<unisparse::ToValueOp> {
 public:
-  using OpConversionPattern<sparlay::ToValueOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToValueOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToValueOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToValueOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getValue"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getValue", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -919,19 +1110,21 @@ public:
   }
 };
 
-class ToSizeOpLowering: public OpConversionPattern<sparlay::ToSizeOp> {
+class ToSizeOpLowering: public OpConversionPattern<unisparse::ToSizeOp> {
 public:
-  using OpConversionPattern<sparlay::ToSizeOp>::OpConversionPattern;
+  using OpConversionPattern<unisparse::ToSizeOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(sparlay::ToSizeOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(unisparse::ToSizeOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const final {
     Location loc = op.getLoc();
     Value inputTensor = adaptor.getOperands()[0];
     Value index = adaptor.getOperands()[1];
     Type outputType = op->getResult(0).getType();
     std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "getSize"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "getSize", outputType, params, true),
+        getFunc(op, funcName, outputType, params, true),
         params
     );
     auto ret = callOp.getResult(0);
@@ -940,29 +1133,444 @@ public:
   }
 };
 
-class SparlayDeallocConverter
-    : public OpConversionPattern<bufferization::DeallocTensorOp> {
+class UniSparseReturnConverter : public OpConversionPattern<func::ReturnOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
   LogicalResult
+  matchAndRewrite(func::ReturnOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<func::ReturnOp>(op, adaptor.getOperands());
+    return success();
+  }
+};
+
+class UniSparseToDimSizeConverter
+    : public OpConversionPattern<tensor::DimOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(tensor::DimOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // Only rewrite annotated DimOp with constant index.
+    auto enc = getUniSparseEncoding(op.getSource().getType());
+    if (!enc)
+      return failure();
+    Optional<int64_t> index = op.getConstantIndex();
+    if (!index)
+      return failure();
+    // Generate the call.
+    Value src = adaptor.getOperands()[0];
+    int64_t idx = *index;
+    rewriter.replaceOp(op, genUniSparseDimSizeCall(rewriter, op, enc, src, idx, op.getSource().getType()));
+    return success();
+  }
+};
+
+class UniSparseAllocConverter
+    : public OpConversionPattern<bufferization::AllocTensorOp> {
+public:
+  using OpConversionPattern<bufferization::AllocTensorOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(bufferization::AllocTensorOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering AllocTensorOp " << std::endl;
+    if (op.getCopy())
+      return rewriter.notifyMatchFailure(op, "sparse tensor copy not implemented");
+    RankedTensorType resType = op.getType();
+    int64_t rank = resType.getRank();
+    auto enc = getUniSparseEncoding(resType);
+    if (!enc)
+      return failure();
+    // Gather all dimension sizes as SSA values.
+    SmallVector<Value> sizes;
+    unsigned int operandCtr = 0;
+    for (int64_t i = 0; i < rank; ++i) {
+      if (resType.isDynamicDim(i)) {
+        sizes.push_back(adaptor.getOperands()[operandCtr++]);
+      } else {
+        sizes.push_back(rewriter.create<arith::ConstantIndexOp>(
+            op.getLoc(), op.getStaticSize(i)));
+      }
+    }
+    // Generate the call to construct empty tensor. The sizes are
+    // explicitly defined by the arguments to the alloc operator.
+    SmallVector<Value, 8> params;
+    // std::cerr << "Enter UniSparsenewParams" << std::endl;
+    UniSparsenewParams(rewriter, params, op, enc, sizes, rank);
+    // std::cerr << "Finish UniSparsenewParams" << std::endl;
+    rewriter.replaceOp(op, genUniSparseNewCall(rewriter, op, params)); 
+    return success();
+  }
+};
+
+class UniSparseDeallocConverter
+    : public OpConversionPattern<bufferization::DeallocTensorOp> {
+public:
+  using OpConversionPattern<bufferization::DeallocTensorOp>::OpConversionPattern;
+  LogicalResult
   matchAndRewrite(bufferization::DeallocTensorOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {        
-    auto enc = getSparlayEncoding(op.getTensor().getType());
+    auto enc = getUniSparseEncoding(op.getTensor().getType());
     if (!enc) {
       return failure();
     }
-    StringRef name = "delSparlayTensor";
+    static std::string _funcName = "delUniSparseTensor"+getTensorETSuffix(op.getTensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
     rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
-            getFunc(op, name, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
+            getFunc(op, funcName, llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
+    return success();
+  }
+};
+
+//===----------------------------------------------------------------------===//
+// LowerFormatConversionPass
+//===----------------------------------------------------------------------===//
+class UniSparseTensorTypeConverter : public TypeConverter {
+public:
+  UniSparseTensorTypeConverter() {
+    addConversion([](Type type) { return type; });
+    addConversion(convertUniSparseTypes);
+  }
+  // Maps each sparse tensor type to an opaque pointer.
+  static Optional<Type> convertUniSparseTypes(Type type) {
+    if (getUniSparseEncoding(type) != nullptr)
+      return LLVM::LLVMPointerType::get(IntegerType::get(type.getContext(), 8));
+    return llvm::None;
+  }
+};
+
+/// Sparse conversion rule for tensor rematerialization.
+class UniSparseLoadConverter : public OpConversionPattern<unisparse::LoadOp> {
+public:
+  using OpConversionPattern<unisparse::LoadOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(unisparse::LoadOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering LoadOp " << std::endl;
+    static std::string _name = "endInsert"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    if (op.hasInserts()) {
+      // Finalize any pending insertions.
+      StringRef name(_name);
+      TypeRange noTp;
+      createFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
+    }
+    rewriter.replaceOp(op, adaptor.getOperands());
+    return success();
+  }
+};
+
+/// Sparse conversion rule for inserting in lexicographic index order.
+class UniSparseInsertConverter : public OpConversionPattern<unisparse::InsertOp> {
+public:
+  using OpConversionPattern<unisparse::InsertOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(unisparse::InsertOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering InsertOp " << std::endl;
+//    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
+    static std::string _name = "lexInsert"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef name(_name);
+    TypeRange noTp;
+    replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
+    return success();
+  }
+};
+
+class UniSparseExpandConverter : public OpConversionPattern<unisparse::ExpandOp> {
+public:
+  using OpConversionPattern<unisparse::ExpandOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(unisparse::ExpandOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+//    std::cerr << "Enter the lowering ExpandOp " << std::endl;
+    Location loc = op->getLoc();
+    ShapedType srcType = op.tensor().getType().cast<ShapedType>();
+    Type eltType = srcType.getElementType();
+    Type boolType = rewriter.getIntegerType(1);
+    Type idxType = rewriter.getIndexType();
+    // All initialization should be done on entry of the loop nest.
+    rewriter.setInsertionPointAfter(op.tensor().getDefiningOp());
+    // Determine the size for access expansion.
+    auto enc = getUniSparseEncoding(srcType);
+    Value src = adaptor.getOperands()[0];
+    Value sz = genUniSparseDimSizeCall(rewriter, op, enc, src, srcType.getRank() - 1, op.tensor().getType());
+    // Allocate temporary buffers for values, filled-switch, and indices.
+    // We do not use stack buffers for this, since the expanded size may
+    // be rather large (as it envelops a single expanded dense dimension).
+    Value values = genUniSparseAlloc(rewriter, loc, sz, eltType);
+    Value filled = genUniSparseAlloc(rewriter, loc, sz, boolType);
+    Value indices = genUniSparseAlloc(rewriter, loc, sz, idxType);
+    Value zero = mlir::sparse_tensor::constantZero(rewriter, loc, idxType);
+    // Reset the values/filled-switch to all-zero/false. Note that this
+    // introduces an O(N) operation into the computation, but this reset
+    // operation is amortized over the innermost loops for the access
+    // pattern expansion. As noted in the operation doc, we would like
+    // to amortize this setup cost even between kernels.
+    rewriter.create<linalg::FillOp>(
+        loc, ValueRange{mlir::sparse_tensor::constantZero(rewriter, loc, eltType)},
+        ValueRange{values});
+    rewriter.create<linalg::FillOp>(
+        loc, ValueRange{mlir::sparse_tensor::constantZero(rewriter, loc, boolType)},
+        ValueRange{filled});
+    // Replace expansion op with these buffers and initial index.
+    assert(op.getNumResults() == 4);
+    rewriter.replaceOp(op, {values, filled, indices, zero});
+    return success();
+  }
+};
+
+class UniSparseCompressConverter : public OpConversionPattern<unisparse::CompressOp> {
+public:
+  using OpConversionPattern<unisparse::CompressOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(unisparse::CompressOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Location loc = op->getLoc();
+    // Note that this method call resets the values/filled-switch back to
+    // all-zero/false by only iterating over the set elements, so the
+    // complexity remains proportional to the sparsity of the expanded
+    // access pattern.
+//    Type elemTp = op.tensor().getType().cast<ShapedType>().getElementType();
+//    std::cerr << "Enter the lowering CompressOp " << std::endl;
+    static std::string _name = "expInsert"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef name(_name);
+    TypeRange noTp;
+    replaceOpWithFuncCall(rewriter, op, name, noTp, adaptor.getOperands(), true);
+    // Deallocate the buffers on exit of the loop nest.
+    Operation *parent = op;
+    for (; isa<scf::ForOp>(parent->getParentOp()) ||
+           isa<scf::WhileOp>(parent->getParentOp()) ||
+           isa<scf::ParallelOp>(parent->getParentOp()) ||
+           isa<scf::IfOp>(parent->getParentOp());
+         parent = parent->getParentOp())
+      ;
+    rewriter.setInsertionPointAfter(parent);
+    rewriter.create<memref::DeallocOp>(loc, adaptor.getOperands()[2]);
+    rewriter.create<memref::DeallocOp>(loc, adaptor.getOperands()[3]);
+    rewriter.create<memref::DeallocOp>(loc, adaptor.getOperands()[4]);
+    return success();
+  }
+};
+
+class DiaSpmvOpLowering : public OpConversionPattern<unisparse::DiaSpmvOp> {
+public:
+    using OpConversionPattern<unisparse::DiaSpmvOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(unisparse::DiaSpmvOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        Value output = op->getResult(0);
+        auto outputType = output.getType();
+        Value input_A = adaptor.getOperands()[0];
+        Value input_B = adaptor.getOperands()[1];
+        Value input_C = adaptor.getOperands()[2];
+
+        std::vector<Value> params = {input_A, input_B, input_C};
+        func::CallOp SpmvOp = rewriter.create<func::CallOp>(loc, outputType, 
+            getFunc(op, "kernel_dia_spmv", outputType, params, /*emitCInterface=*/true), params);
+        auto ret = SpmvOp.getResult(0);
+        rewriter.replaceOp(op, ret);
+        return success();
+    }
+};
+
+class DiaSpmmOpLowering : public OpConversionPattern<unisparse::DiaSpmmOp> {
+public:
+    using OpConversionPattern<unisparse::DiaSpmmOp>::OpConversionPattern;
+
+    LogicalResult 
+        matchAndRewrite(unisparse::DiaSpmmOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+        Location loc = op->getLoc();
+        Value output = op->getResult(0);
+        auto outputType = output.getType();
+        Value input_A = adaptor.getOperands()[0];
+        Value input_B = adaptor.getOperands()[1];
+        Value input_C = adaptor.getOperands()[2];
+        
+        std::vector<Value> params = {input_A, input_B, input_C};
+        func::CallOp SpmmOp = rewriter.create<func::CallOp>(loc, outputType, 
+            getFunc(op, "kernel_dia_spmm", outputType, params, /*emitCInterface=*/true), params);
+        auto ret = SpmmOp.getResult(0);
+        rewriter.replaceOp(op, ret);
+        return success();
+    }
+};
+
+class COOSpMVOpLowering: public OpConversionPattern<unisparse::COOSpMVOp> {
+public:
+  using OpConversionPattern<unisparse::COOSpMVOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::COOSpMVOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value vec = adaptor.getOperands()[1];
+    Value out_vec = adaptor.getOperands()[2];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, vec, out_vec};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "calculateCOOSpMV", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class COOSpMMOpLowering: public OpConversionPattern<unisparse::COOSpMMOp> {
+public:
+  using OpConversionPattern<unisparse::COOSpMMOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::COOSpMMOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value vec = adaptor.getOperands()[1];
+    Value out_vec = adaptor.getOperands()[2];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, vec, out_vec};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "calculateCOOSpMM", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class BDIASpMVOpLowering: public OpConversionPattern<unisparse::BDIASpMVOp> {
+public:
+  using OpConversionPattern<unisparse::BDIASpMVOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::BDIASpMVOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor_CSR = adaptor.getOperands()[0];
+    Value inputTensor_BDIA = adaptor.getOperands()[1];
+    Value input_B = adaptor.getOperands()[2];
+    auto inputType_B = input_B.getType().dyn_cast<TensorType>();
+    Value input_C = adaptor.getOperands()[3];
+    auto inputType_C = input_C.getType().dyn_cast<TensorType>();
+    Value output = op->getResult(0);
+    auto outputType = output.getType();
+
+    // auto dynShape = {ShapedType::kDynamicSize};
+    auto mem_B_tp = MemRefType::get(inputType_B.getShape(), inputType_B.getElementType());
+    auto mem_C_tp = MemRefType::get(inputType_C.getShape(), inputType_C.getElementType());
+    Value mem_input_B = rewriter.create<bufferization::ToMemrefOp>(loc, mem_B_tp, input_B);
+    Value mem_input_C = rewriter.create<bufferization::ToMemrefOp>(loc, mem_C_tp, input_C);
+
+    std::vector<Value> params = {inputTensor_CSR, inputTensor_BDIA, mem_input_B, mem_input_C};
+    // auto out_tp = MemRefType::get(outputType.getShape(), outputType.getElementType());
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "kernel_hetero_bdia_spmv_iter", outputType, params, true),
+        params
+    );
+    rewriter.replaceOp(op, callOp.getResult(0));
+    // rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, outputType, 
+    //         ValueRange({callOp.getResult(0)}));
+    return success();
+  }
+};
+
+class BDIASpMMOpLowering: public OpConversionPattern<unisparse::BDIASpMMOp> {
+public:
+  using OpConversionPattern<unisparse::BDIASpMMOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::BDIASpMMOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor_CSR = adaptor.getOperands()[0];
+    Value inputTensor_BDIA = adaptor.getOperands()[1];
+    Value input_B = adaptor.getOperands()[2];
+    auto inputType_B = input_B.getType().dyn_cast<TensorType>();
+    Value input_C = adaptor.getOperands()[3];
+    auto inputType_C = input_C.getType().dyn_cast<TensorType>();
+    Value output = op->getResult(0);
+    auto outputType = output.getType();
+
+    // auto dynShape = {ShapedType::kDynamicSize};
+    auto mem_B_tp = MemRefType::get(inputType_B.getShape(), inputType_B.getElementType());
+    auto mem_C_tp = MemRefType::get(inputType_C.getShape(), inputType_C.getElementType());
+    Value mem_input_B = rewriter.create<bufferization::ToMemrefOp>(loc, mem_B_tp, input_B);
+    Value mem_input_C = rewriter.create<bufferization::ToMemrefOp>(loc, mem_C_tp, input_C);
+
+    std::vector<Value> params = {inputTensor_CSR, inputTensor_BDIA, mem_input_B, mem_input_C};
+    // auto out_tp = MemRefType::get(outputType.getShape(), outputType.getElementType());
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "kernel_bdia_spmm_iter", outputType, params, true),
+        params
+    );
+    rewriter.replaceOp(op, callOp.getResult(0));
+    // rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, outputType, 
+    //         ValueRange({callOp.getResult(0)}));
+    return success();
+  }
+};
+
+class DecomposeBDIAOpLowering: public OpConversionPattern<unisparse::DecomposeBDIAOp> {
+public:
+  using OpConversionPattern<unisparse::DecomposeBDIAOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::DecomposeBDIAOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value blockSize = adaptor.getOperands()[1];
+    Value thres = adaptor.getOperands()[2];
+    Type outputType = inputTensor.getType();
+    std::vector<Value> params = {inputTensor, blockSize, thres};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "decompose_BDIA", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class DecomposeBELLOpLowering: public OpConversionPattern<unisparse::DecomposeBELLOp> {
+public:
+  using OpConversionPattern<unisparse::DecomposeBELLOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::DecomposeBELLOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value blockSize = adaptor.getOperands()[1];
+    Value block_thres = adaptor.getOperands()[2];
+    Value col_thres = adaptor.getOperands()[3];
+    Type outputType = inputTensor.getType();
+    std::vector<Value> params = {inputTensor, blockSize, block_thres, col_thres};
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, "decompose_BELL_COO", outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
+class ReleaseOpLowering: public OpConversionPattern<unisparse::ReleaseOp> {
+public:
+  using OpConversionPattern<unisparse::ReleaseOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::ReleaseOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, llvm::None, 
+            getFunc(op, "release", llvm::None, adaptor.getOperands(), false), adaptor.getOperands());
     return success();
   }
 };
 
 } // end anonymous namespace
 
-//===----------------------------------------------------------------------===//
-// LowerFormatConversionPass
-//===----------------------------------------------------------------------===//
 
 
 class SparseTensorTypeConverter : public TypeConverter {
@@ -998,7 +1606,7 @@ void LowerFormatConversionPass::runOnOperation() {
     // The first thing to define is the conversion target. This will define the
     // final target for this lowering.
     ConversionTarget target(getContext());
-    SparseTensorTypeConverter converter;
+    UniSparseTensorTypeConverter converter;
 
     // We define the specific operations, or dialects, that are legal targets for
     // this lowering. In our case, we are lowering to a combination of the
@@ -1006,10 +1614,11 @@ void LowerFormatConversionPass::runOnOperation() {
     target.addLegalDialect<scf::SCFDialect, memref::MemRefDialect,
                            vector::VectorDialect, bufferization::BufferizationDialect,
                            arith::ArithmeticDialect, LLVM::LLVMDialect, func::FuncDialect>();
+    target.addIllegalDialect<unisparse::UniSparseDialect>();
 
-    // We also define the Sparlay dialect as Illegal so that the conversion will fail
+    // We also define the UniSparse dialect as Illegal so that the conversion will fail
     // if any of these operations are *not* converted. Given that we actually want
-    // a partial lowering, we explicitly mark the Sparlay operations that don't want
+    // a partial lowering, we explicitly mark the UniSparse operations that don't want
     // to lower as `legal`.
   
     target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
@@ -1042,27 +1651,31 @@ void LowerFormatConversionPass::runOnOperation() {
         [&](bufferization::AllocTensorOp op) {
           return converter.isLegal(op.getType());
         });
-    target.addIllegalDialect<sparlay::SparlayDialect>();
-        target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
-        [&](bufferization::DeallocTensorOp op) {
-          return converter.isLegal(op.getTensor().getType());
-       });
+
+    target.addDynamicallyLegalOp<bufferization::DeallocTensorOp>(
+    [&](bufferization::DeallocTensorOp op) {
+        return converter.isLegal(op.getTensor().getType());
+    });
 
     //target.addLegalOp<bufferization::DeallocTensorOp>();    
     target.addLegalOp<linalg::FillOp>();
 
     // Now that the conversion target has been defined, we just need to provide
-    // the set of patterns that will lower the Sparlay operations.
+    // the set of patterns that will lower the UniSparse operations.
     RewritePatternSet patterns(&getContext());
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
                                                                    converter);
     populateCallOpTypeConversionPattern(patterns, converter);
     //TODO: maybe add converter in this call? Need to figure out how converter works
-    patterns.add<NewOpLowering, 
-                 fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
+    patterns.add<NewOpLowering, fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
                  StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
-                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, SparlayDeallocConverter>(&getContext());
+                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, 
+                 UniSparseAllocConverter, UniSparseDeallocConverter, UniSparseToDimSizeConverter,
+                 UniSparseLoadConverter, UniSparseInsertConverter, UniSparseReturnConverter,
+                 UniSparseExpandConverter, UniSparseCompressConverter, 
+                 DiaSpmvOpLowering, DiaSpmmOpLowering, COOSpMVOpLowering, COOSpMMOpLowering,
+                 DecomposeBDIAOpLowering, DecomposeBELLOpLowering, BDIASpMVOpLowering, BDIASpMMOpLowering, ReleaseOpLowering>(&getContext());
     // LLVM_DEBUG(llvm::dbgs() << "Has the pattern rewrite applied?\n");
 
     // With the target and rewrite patterns defined, we can now attempt the
@@ -1073,6 +1686,6 @@ void LowerFormatConversionPass::runOnOperation() {
         signalPassFailure();
 }
 
-std::unique_ptr<Pass> mlir::sparlay::createLowerFormatConversionPass() {
+std::unique_ptr<Pass> mlir::unisparse::createLowerFormatConversionPass() {
     return std::make_unique<LowerFormatConversionPass>();
 }

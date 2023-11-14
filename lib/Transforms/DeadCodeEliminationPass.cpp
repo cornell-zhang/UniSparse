@@ -23,16 +23,16 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "Transforms/Passes.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayTypes.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseOps.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseTypes.h"
 
 #include <cstdio>
 #include <cstring>
 
 using namespace mlir;
-using namespace sparlay;
+using namespace unisparse;
 
 #define DEBUG_TYPE "dce"
 
@@ -44,12 +44,12 @@ namespace {
 //===----------------------------------------------------------------------===//
 // DeadCodeEliminationPass
 //===----------------------------------------------------------------------===//
-class DeadCodeElimination : public OpRewritePattern<sparlay::StructConstructOp> {
+class DeadCodeElimination : public OpRewritePattern<unisparse::StructConstructOp> {
 public:
-    using OpRewritePattern<sparlay::StructConstructOp>::OpRewritePattern;
+    using OpRewritePattern<unisparse::StructConstructOp>::OpRewritePattern;
 
     LogicalResult 
-        matchAndRewrite(sparlay::StructConstructOp op, PatternRewriter &rewriter) const override {
+        matchAndRewrite(unisparse::StructConstructOp op, PatternRewriter &rewriter) const override {
         rewriter.eraseOp(op);
         return success();
     }
@@ -65,7 +65,7 @@ public DeadCodeEliminationBase<DeadCodeEliminationPass> {
         RewritePatternSet patterns(ctx);
         patterns.add<DeadCodeElimination>(&getContext());
         ConversionTarget target(getContext());
-        target.addIllegalOp<sparlay::StructConstructOp>();
+        target.addIllegalOp<unisparse::StructConstructOp>();
         if (failed(
             applyPartialConversion(getOperation(), target, std::move(patterns))))
         signalPassFailure();
@@ -74,6 +74,6 @@ public DeadCodeEliminationBase<DeadCodeEliminationPass> {
 };
 }
 
-std::unique_ptr<Pass> mlir::sparlay::createDeadCodeEliminationPass() {
+std::unique_ptr<Pass> mlir::unisparse::createDeadCodeEliminationPass() {
     return std::make_unique<DeadCodeEliminationPass>();
 }

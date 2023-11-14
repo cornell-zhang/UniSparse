@@ -11,7 +11,7 @@ jobs:
           - { name: "Ubuntu-clang", os: ubuntu-latest, cc: "clang", cxx: "clang++" }
     
     container: 
-      image: sibylau/mlir-llvm
+      image: sibylau/mlir-llvm:omp
 
     steps:   
       - name: Check out repository code
@@ -23,6 +23,8 @@ jobs:
           export CPATH=/install/eigen-3.4.0:/install/llvm-project/mlir/lib:$CPATH
           export CPATH=/install/llvm-project/mlir/include/mlir:$CPATH
           export PATH=/install/llvm-project/build/bin:$PATH
+          export CPATH=/install/llvm-project/openmp/build/runtime/src:$CPATH
+          export LD_LIBRARY_PATH=/install/llvm-project/openmp/build/runtime/src:$LD_LIBRARY_PATH
           cmake .. \
             -DMLIR_DIR="/install/llvm-project/build/lib/cmake/mlir" \
             -DLLVM_DIR="/install/llvm-project/build/lib/cmake/llvm" \

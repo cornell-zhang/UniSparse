@@ -6,13 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This header file defines a set of transforms specific for the Sparlay
+// This header file defines a set of transforms specific for the UniSparse
 // dialect.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SPARLAY_TRANSFORMS_PASSES_H
-#define SPARLAY_TRANSFORMS_PASSES_H
+#ifndef UNISPARSE_TRANSFORMS_PASSES_H
+#define UNISPARSE_TRANSFORMS_PASSES_H
 
 #include "mlir/Pass/Pass.h"
 
@@ -52,15 +52,15 @@ namespace LLVM {
 class LLVMDialect;
 }
 
-namespace sparlay {
+namespace unisparse {
 
-void populateSparlayCodegenPatterns(RewritePatternSet &patterns);
+void populateUniSparseCodegenPatterns(RewritePatternSet &patterns);
 
 std::unique_ptr<mlir::Pass> createDeadCodeEliminationPass();
 std::unique_ptr<mlir::Pass> createLowerStructConvertPass();
 std::unique_ptr<mlir::Pass> createLowerFormatConversionPass();
 std::unique_ptr<mlir::Pass> createLowerStructPass();
-std::unique_ptr<mlir::Pass> createSparlayCodegenPass();
+std::unique_ptr<mlir::Pass> createUniSparseCodegenPass();
 std::unique_ptr<mlir::Pass> createTmpGenBuffer();
 
 
@@ -73,7 +73,7 @@ std::unique_ptr<mlir::Pass> createTmpGenBuffer();
 #define GEN_PASS_REGISTRATION
 #include "Transforms/Passes.h.inc"
 
-} // namespace sparlay
+} // namespace unisparse
 } // namespace mlir
 
-#endif // SPARLAY_TRANSFORMS_PASSES_H
+#endif // UNISPARSE_TRANSFORMS_PASSES_H

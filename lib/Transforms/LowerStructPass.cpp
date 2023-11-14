@@ -24,16 +24,16 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "Transforms/Passes.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayOps.h"
-#include "IR/SparlayDialect.h"
-#include "IR/SparlayTypes.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseOps.h"
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseTypes.h"
 
 #include <cstdio>
 #include <cstring>
 
 using namespace mlir;
-using namespace sparlay;
+using namespace unisparse;
 
 #define DEBUG_TYPE "lower-struct"
 
@@ -46,12 +46,12 @@ namespace {
 // RewritePatterns: StructAccessOp 
 //===----------------------------------------------------------------------===//
 
-// class StructLowering : public OpRewritePattern<sparlay::StructAccessOp> {
+// class StructLowering : public OpRewritePattern<unisparse::StructAccessOp> {
 // public:
-//     using OpRewritePattern<sparlay::StructAccessOp>::OpRewritePattern;
+//     using OpRewritePattern<unisparse::StructAccessOp>::OpRewritePattern;
 
 //     LogicalResult 
-//         matchAndRewrite(sparlay::StructAccessOp op, PatternRewriter &rewriter) const override {
+//         matchAndRewrite(unisparse::StructAccessOp op, PatternRewriter &rewriter) const override {
 //         // Location loc = op->getLoc();
 //         Value input = op->getOperand(0);
 //         Value output = op->getResult(0);
@@ -81,13 +81,13 @@ public LowerStructBase<LowerStructPass> {
 
     void runOnOperation() override {
         getOperation().walk([](Operation *op) {
-            if (auto accessOp = dyn_cast<sparlay::StructAccessOp>(op)) {
+            if (auto accessOp = dyn_cast<unisparse::StructAccessOp>(op)) {
                 Value input = accessOp->getOperand(0);
                 Value output = accessOp->getResult(0);
                 uint64_t index = accessOp.index();
                 Operation* defOp = input.getDefiningOp();
                 Value replaceInput;
-                if (!dyn_cast<sparlay::StructConstructOp>(defOp)) return;
+                if (!dyn_cast<unisparse::StructConstructOp>(defOp)) return;
                 replaceInput = defOp->getOperand(index);
                 // if (!replaceInput.getType().isa<mlir::MemRefType>()) {
                 //     Operation* defOp_1 = replaceInput.getDefiningOp();
@@ -113,6 +113,6 @@ public LowerStructBase<LowerStructPass> {
 };
 }
 
-std::unique_ptr<Pass> mlir::sparlay::createLowerStructPass() {
+std::unique_ptr<Pass> mlir::unisparse::createLowerStructPass() {
     return std::make_unique<LowerStructPass>();
 }
