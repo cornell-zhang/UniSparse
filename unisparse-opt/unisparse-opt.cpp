@@ -96,11 +96,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   }
 
   if (dce) {
-<<<<<<< HEAD:sparlay-opt/sparlay-opt.cpp
-    optPM.addPass(mlir::sparlay::createDeadCodeEliminationPass());
-=======
     optPM.addPass(mlir::unisparse::createDeadCodeEliminationPass());
->>>>>>> sparlay-codegen:unisparse-opt/unisparse-opt.cpp
   }
 
   if(unisparseCodegen) {
@@ -108,11 +104,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   }
 
   if (lowerFormatConversion) {
-<<<<<<< HEAD:sparlay-opt/sparlay-opt.cpp
-    optPM.addPass(mlir::sparlay::createLowerFormatConversionPass());
-=======
     optPM.addPass(mlir::unisparse::createLowerFormatConversionPass());
->>>>>>> sparlay-codegen:unisparse-opt/unisparse-opt.cpp
   }
 
   if (mlir::failed(pm.run(*module)))
