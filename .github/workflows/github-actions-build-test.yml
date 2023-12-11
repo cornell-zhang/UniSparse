@@ -1,7 +1,7 @@
 name: GitHub Actions Build Test
 on: [push, pull_request]
 jobs:
-  Build-Sparlay-Dialect:
+  Build-UniSparse-Dialect:
     name: Build and Test
     runs-on: ${{ matrix.config.os }}
     
@@ -17,7 +17,7 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v3
 
-      - name: Build Sparlay
+      - name: Build UniSparse
         run: |
           mkdir -p build && cd build
           export CPATH=/install/eigen-3.4.0:/install/llvm-project/mlir/lib:$CPATH
@@ -39,6 +39,6 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++
           cmake --build . -j $(nproc)
 
-      # - name: Check Sparlay
+      # - name: Check UniSparse
       #   run: |
-      #     cmake --build . --target check-sparlay -j $(nproc)
+      #     cmake --build . --target check-unisparse -j $(nproc)
