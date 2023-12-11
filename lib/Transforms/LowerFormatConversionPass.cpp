@@ -1110,6 +1110,29 @@ public:
   }
 };
 
+class To2DValueOpLowering: public OpConversionPattern<unisparse::To2DValueOp> {
+public:
+  using OpConversionPattern<unisparse::To2DValueOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(unisparse::To2DValueOp op, OpAdaptor adaptor,
+                        ConversionPatternRewriter &rewriter) const final {
+    Location loc = op.getLoc();
+    Value inputTensor = adaptor.getOperands()[0];
+    Value index = adaptor.getOperands()[1];
+    Type outputType = op->getResult(0).getType();
+    std::vector<Value> params = {inputTensor, index};
+    static std::string _funcName = "get2DValue"+getTensorETSuffix(op.tensor().getType().dyn_cast<TensorType>());
+    StringRef funcName(_funcName);
+    auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+        getFunc(op, funcName, outputType, params, true),
+        params
+    );
+    auto ret = callOp.getResult(0);
+    rewriter.replaceOp(op, ret);
+    return success();
+  }
+};
+
 class ToSizeOpLowering: public OpConversionPattern<unisparse::ToSizeOp> {
 public:
   using OpConversionPattern<unisparse::ToSizeOp>::OpConversionPattern;
@@ -1572,21 +1595,6 @@ public:
 } // end anonymous namespace
 
 
-
-class SparseTensorTypeConverter : public TypeConverter {
-public:
-  SparseTensorTypeConverter() {
-    addConversion([](Type type) { return type; });
-    addConversion(convertSparseTensorTypes);
-  }
-  // Maps each sparse tensor type to an opaque pointer.
-  static Optional<Type> convertSparseTensorTypes(Type type) {
-    if (getSparlayEncoding(type) != nullptr)
-      return LLVM::LLVMPointerType::get(IntegerType::get(type.getContext(), 8));
-    return llvm::None;
-  }
-};
-
 namespace {
 
 struct LowerFormatConversionPass : 
@@ -1670,7 +1678,7 @@ void LowerFormatConversionPass::runOnOperation() {
     patterns.add<NewOpLowering, fromFileOpLowering, ConvertOpLowering, printStorageOpLowering,
                  checkOpLowering, copyOpLowering, ticOpLowering, tocOpLowering,
                  StructAccessOpLowering, DecompseOpLowering, ToCrdOpLowering, 
-                 ToPtrOpLowering, ToValueOpLowering, ToSizeOpLowering, 
+                 ToPtrOpLowering, ToValueOpLowering, To2DValueOpLowering, ToSizeOpLowering, 
                  UniSparseAllocConverter, UniSparseDeallocConverter, UniSparseToDimSizeConverter,
                  UniSparseLoadConverter, UniSparseInsertConverter, UniSparseReturnConverter,
                  UniSparseExpandConverter, UniSparseCompressConverter, 

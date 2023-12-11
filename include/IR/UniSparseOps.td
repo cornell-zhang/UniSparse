@@ -188,6 +188,18 @@ def UniSparse_ToValueOp: UniSparse_Op<"value", [NoSideEffect]> {
     }];
 }
 
+def UniSparse_To2DValueOp: UniSparse_Op<"2d_value", [NoSideEffect]> {
+    let summary = "Extracts values array at given dimension from a tensor";
+    let description = [{
+        Example:
+    }];
+    let arguments = (ins AnyTensor: $tensor, Index: $dim);
+    let results = (outs AnyStridedMemRefOfRank<2>: $result);
+    let assemblyFormat = [{
+        $tensor `,` $dim attr-dict `:` type($tensor) `to` type($result)
+    }];
+}
+
 def UniSparse_ToSizeOp: UniSparse_Op<"size", [NoSideEffect]> {
     let summary = "Extracts size of coordinate at given dimension from a tensor";
     let description = [{

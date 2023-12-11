@@ -16,7 +16,7 @@
 
 // #ifdef MLIR_CRUNNERUTILS_DEFINE_FUNCTIONS
 // #define DEBUG
-//#define PRINT
+#define PRINT false
 //#define PARALLEL
 
 #include <omp.h>
@@ -689,9 +689,9 @@ void UniSparseStorage<V>::Print(std::ostream& fout, bool verbose) {
     }
     fout << std::endl;
   } else if (vectorPointer.size()) {
-    for (int j = 0; j < this->singleVectorSize; ++j) {
-      fout << "values: ";
-      for (size_t i = 0; i < vectorPointer.size(); ++i) {
+    fout << "values: \n";
+    for (size_t i = 0; i < vectorPointer.size(); ++i) {
+      for (int j = 0; j < this->singleVectorSize; ++j) {
         fout << std::setw(8) << vectorPointer[i][j];
       }
       fout << std::endl;
@@ -1748,7 +1748,7 @@ bool UniSparseStorage<V>::vectorize(const int lv) {
     int prev_ptr = 0;
     assert(vectorPointer.size() == 0);
     vectorPointer.resize(father_crd.size(),{});
-    std::cerr << "Need to have " << father_crd.size() << " vectors" << std::endl;
+    // std::cerr << "Need to have " << father_crd.size() << " vectors" << std::endl;
     assert(valueArray.size() == vLevel[lv]->crd.size());
     V* new_obj = (V*)calloc(cur_lv_size * father_crd.size(), sizeof(V));
     for (size_t i = 0; i < father_crd.size(); ++i) {
@@ -2706,6 +2706,10 @@ FOREVERY_V(IMPL_SPTSWAP)
   void* _mlir_ciface_sptSub##VNAME(void* ptr, int Ltarget, int Lsrc) { \
       UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr); \
       sparT->sub(Ltarget+1, Lsrc+1);                            \
+      if (PRINT) { \
+        std::cerr << "Print after sub" << std::endl; \
+        sparT->Print(std::cerr, 1); \
+      } \
       return (void*)sparT;                                      \
   }
 FOREVERY_V(IMPL_SPTSUB)
@@ -2724,6 +2728,10 @@ FOREVERY_V(IMPL_SPTADD)
   void* _mlir_ciface_sptNeg##VNAME(void* ptr, int lv) {         \
       UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr); \
       sparT->neg(lv+1);                                         \
+      if (PRINT) { \
+        std::cerr << "Print after neg" << std::endl; \
+        sparT->Print(std::cerr, 1); \
+      } \
       return (void*)sparT;                                      \
   }
 FOREVERY_V(IMPL_SPTNEG)
@@ -2824,6 +2832,10 @@ FOREVERY_V(IMPL_SPTTILEMERGE)
   void* _mlir_ciface_sptMove##VNAME(void* ptr, int srcLv, int dstLv) { \
     UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr); \
     sparT->moveLv(srcLv+1, dstLv+1); \
+    if (PRINT) { \
+      std::cerr << "Print after move" << std::endl; \
+      sparT->Print(std::cerr, 1); \
+    } \
     return (void*)sparT; \
   }
 FOREVERY_V(IMPL_SPTMOVE)
@@ -2833,6 +2845,10 @@ FOREVERY_V(IMPL_SPTMOVE)
   void* _mlir_ciface_sptVectorize##VNAME(void* ptr, int lv) { \
     UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr); \
     sparT->vectorize(lv+1); \
+    if (PRINT) { \
+      std::cerr << "Print after vectorize" << std::endl; \
+      sparT->Print(std::cerr, 1); \
+    } \
     return (void*)sparT; \
   }
 FOREVERY_V(IMPL_SPTVECTORIZE)
@@ -2986,6 +3002,19 @@ FOREVERY_V(IMPL_GETPTR)
   }
 FOREVERY_V(IMPL_GETVALUE)
 #undef IMPL_GETVALUE
+
+#define IMPL_GET2DVALUE(VNAME,V)\
+  void _mlir_ciface_get2DValue##VNAME(StridedMemRefType<V, 2>* ref, void* ptr, uint64_t dim) {\
+    UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr);\
+    ref->basePtr = ref->data = sparT->vectorPointer.data()[0];\
+    ref->offset = 0;\
+    ref->sizes[0] = sparT->vectorPointer.size();\
+    ref->sizes[1] = sparT->singleVectorSize;\
+    ref->strides[0] = sparT->singleVectorSize;\
+    ref->strides[1] = 1;\
+  }
+FOREVERY_V(IMPL_GET2DVALUE)
+#undef IMPL_GET2DVALUE
 
 #define IMPL_GETSIZE(VNAME, V)\
   uint64_t _mlir_ciface_getSize##VNAME(void* ptr, uint64_t dim) {\
