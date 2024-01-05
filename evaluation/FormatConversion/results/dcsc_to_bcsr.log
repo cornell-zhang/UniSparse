@@ -1,0 +1,82 @@
+wiki-Vote_row_major.mtx
+Size of the matrix: 8297 8297 103689
+Need to have 72429 vectors
+0.0187249
+0.017252
+Enter the check function
+Check Success
+email-Eu-core_row_major.mtx
+Size of the matrix: 1005 1005 25571
+Need to have 7717 vectors
+0.00273395
+0.0025351
+Enter the check function
+Check Success
+nemeth21_row_major.mtx
+Size of the matrix: 9506 9506 591626
+Need to have 13087 vectors
+0.0379701
+0.0351081
+Enter the check function
+Check Success
+crystm02_row_major.mtx
+Size of the matrix: 13965 13965 168435
+Need to have 21599 vectors
+0.0143211
+0.013422
+Enter the check function
+Check Success
+cant_row_major.mtx
+Size of the matrix: 62451 62451 2034917
+Need to have 93938 vectors
+0.151369
+0.139039
+Enter the check function
+Check Success
+ML_Laplace_row_major.mtx
+Size of the matrix: 377002 377002 27689972
+Need to have 961128 vectors
+2.63381
+2.47106
+Enter the check function
+Check Success
+Transport_row_major.mtx
+Size of the matrix: 1602111 1602111 23500731
+Need to have 2942580 vectors
+2.33455
+free(): corrupted unsorted chunks
+Aborted (core dumped)
+TSOPF_RS_b2383_row_major.mtx
+Size of the matrix: 38120 38120 16171169
+Need to have 294897 vectors
+1.65078
+1.50392
+Enter the check function
+Check Success
+chem_master1_row_major.mtx
+Size of the matrix: 40401 40401 201201
+Need to have 70401 vectors
+0.0174191
+0.0157928
+Enter the check function
+Check Success
+majorbasis_row_major.mtx
+Size of the matrix: 160000 160000 1750416
+Need to have 434016 vectors
+0.129597
+0.118244
+Enter the check function
+Check Success
+shyy161_row_major.mtx
+Size of the matrix: 76480 76480 329762
+Need to have 94802 vectors
+0.0230448
+0.019253
+Enter the check function
+Check Success
+Baumann_row_major.mtx
+Size of the matrix: 112211 112211 760631
+Need to have 301357 vectors
+0.0538981
+corrupted double-linked list
+Aborted (core dumped)

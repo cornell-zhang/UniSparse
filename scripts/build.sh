@@ -13,3 +13,5 @@ export SPLHOME=/install/UniSparse
 export LD_LIBRARY_PATH=/install/UniSparse/build/lib:$LD_LIBRARY_PATH
 export PATH=/install/UniSparse/build/bin:$PATH
 
+cd ..
+

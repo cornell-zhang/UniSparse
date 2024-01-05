@@ -1,0 +1,100 @@
+wiki-Vote_row_major.mtx
+Size of the matrix: 8297 8297 103689
+Need to have 11437 vectors
+0.16821
+Need to have 11437 vectors
+0.0649641
+Enter the check function
+Check Success
+email-Eu-core_row_major.mtx
+Size of the matrix: 1005 1005 25571
+Need to have 1844 vectors
+0.00460196
+Need to have 1844 vectors
+0.00380087
+Enter the check function
+Check Success
+nemeth21_row_major.mtx
+Size of the matrix: 9506 9506 591626
+Need to have 85 vectors
+0.051688
+Need to have 85 vectors
+0.030143
+Enter the check function
+Check Success
+crystm02_row_major.mtx
+Size of the matrix: 13965 13965 168435
+Need to have 14 vectors
+0.0171359
+Need to have 14 vectors
+0.00914288
+Enter the check function
+Check Success
+cant_row_major.mtx
+Size of the matrix: 62451 62451 2034917
+Need to have 50 vectors
+0.211323
+Need to have 50 vectors
+0.169342
+Enter the check function
+Check Success
+ML_Laplace_row_major.mtx
+Size of the matrix: 377002 377002 27689972
+Need to have 4695 vectors
+6.42603
+Need to have 4695 vectors
+4.35208
+Enter the check function
+Check Success
+Transport_row_major.mtx
+Size of the matrix: 1602111 1602111 23500731
+Need to have 15 vectors
+6.0742
+Need to have 15 vectors
+5.58429
+Enter the check function
+Check Failed
+dia1_to_csb: /work/shared/users/staff/zz546/Sparse_Layout_Dialect/lib/Runtime/SparlayUtils.cpp:2005: void _mlir_ciface_sptCheck(void*, void*): Assertion `0' failed.
+Aborted (core dumped)
+TSOPF_RS_b2383_row_major.mtx
+Size of the matrix: 38120 38120 16171169
+Need to have 23364 vectors
+3.34976
+Need to have 23364 vectors
+2.31887
+Enter the check function
+Check Success
+chem_master1_row_major.mtx
+Size of the matrix: 40401 40401 201201
+Need to have 5 vectors
+0.0214641
+Need to have 5 vectors
+0.0116808
+Enter the check function
+Check Success
+majorbasis_row_major.mtx
+Size of the matrix: 160000 160000 1750416
+Need to have 22 vectors
+0.184214
+Need to have 22 vectors
+0.152837
+Enter the check function
+Check Success
+shyy161_row_major.mtx
+Size of the matrix: 76480 76480 329762
+Need to have 7 vectors
+0.033411
+Need to have 7 vectors
+0.0172439
+Enter the check function
+Check Success
+Baumann_row_major.mtx
+Size of the matrix: 112211 112211 760631
+Need to have 7 vectors
+0.0783799
+Need to have 7 vectors
+0.0595851
+Enter the check function
+Check Failed
+dia1_to_csb: /work/shared/users/staff/zz546/Sparse_Layout_Dialect/lib/Runtime/SparlayUtils.cpp:2092: void _mlir_ciface_sptCheck(void*, void*): Assertion `0' failed.
+Aborted (core dumped)

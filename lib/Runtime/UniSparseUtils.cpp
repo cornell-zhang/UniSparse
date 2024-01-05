@@ -1050,12 +1050,12 @@ std::vector<int> UniSparseStorage<V>::lowerPtr(int st_lv, int ed_lv) {
   for (size_t i = 1; i < ret.size(); ++i) {
     if (ret[i] == -1) ret[i] = ret[i-1];
   }
-#ifdef PRINT
- Print(std::cerr, 1);
- std::cerr << "ret: ";
- for (size_t i = 0; i < ret.size(); ++i) std::cerr << std::setw(8) << ret[i];
- std::cerr << std::endl;
-#endif
+  if (PRINT) {
+    Print(std::cerr, 1);
+    std::cerr << "ret: ";
+    for (size_t i = 0; i < ret.size(); ++i) std::cerr << std::setw(8) << ret[i];
+    std::cerr << std::endl;
+  }
   return ret;
 }
 
@@ -2813,7 +2813,6 @@ FOREVERY_V(IMPL_SPTSCHEDULE)
   void* _mlir_ciface_sptTileSplit##VNAME(void* ptr, int lv, int factor) { \
     UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr); \
     sparT->tile_split(lv+1, factor); \
-    sparT->Print(std::cerr, 1); \
     return (void*)sparT; \
   }
 FOREVERY_V(IMPL_SPTTILESPLIT)

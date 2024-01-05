@@ -1,0 +1,504 @@
+wiki-Vote_row_major.mtx
+Size of the matrix: 8297 8297 103689
+
+Read from file done, time = 0.052193(s)
+
+Fuse done, time = 0.000645(s)
+
+Grow done, time = 7.6e-05(s)
+0.000735998
+
+Fused Transpose done, time = 0.00077(s)
+0.000777006
+
+Fused Transpose done, time = 0.00075(s)
+0.000754833
+
+Separate done, time = 2e-06(s)
+
+Trim done, time = 0.000692(s)
+0.000702858
+Enter the check function
+Check Success
+
+Swap done, time = 4e-06(s)
+
+Move done, time = 0.001289(s)
+
+Fuse done, time = 0.000604(s)
+
+Grow done, time = 5.6e-05(s)
+0.00552988
+
+Trim done, time = 7.1e-05(s)
+
+Separate done, time = 0.000199(s)
+
+Swap done, time = 3e-06(s)
+
+Move done, time = 0.00135(s)
+0.00167322
+Enter the check function
+Check Success
+email-Eu-core_row_major.mtx
+Size of the matrix: 1005 1005 25571
+
+Read from file done, time = 0.017532(s)
+
+Fuse done, time = 0.000158(s)
+
+Grow done, time = 1.3e-05(s)
+0.000188112
+
+Fused Transpose done, time = 0.000143(s)
+0.000149012
+
+Fused Transpose done, time = 0.000137(s)
+0.000141144
+
+Separate done, time = 4e-06(s)
+
+Trim done, time = 0.000139(s)
+0.000159979
+Enter the check function
+Check Success
+
+Swap done, time = 4e-06(s)
+
+Move done, time = 0.000255(s)
+
+Fuse done, time = 0.000154(s)
+
+Grow done, time = 1.2e-05(s)
+0.00125813
+
+Trim done, time = 1.9e-05(s)
+
+Separate done, time = 5.5e-05(s)
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.000217(s)
+0.000314951
+Enter the check function
+Check Success
+nemeth21_row_major.mtx
+Size of the matrix: 9506 9506 591626
+
+Read from file done, time = 0.349836(s)
+
+Fuse done, time = 0.003116(s)
+
+Grow done, time = 6e-05(s)
+0.00318885
+
+Fused Transpose done, time = 0.001874(s)
+0.001894
+
+Fused Transpose done, time = 0.00205(s)
+0.00205398
+
+Separate done, time = 2e-06(s)
+
+Trim done, time = 0.001723(s)
+0.00173306
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.005488(s)
+
+Fuse done, time = 0.002738(s)
+
+Grow done, time = 5.5e-05(s)
+0.0198748
+
+Trim done, time = 0.000126(s)
+
+Separate done, time = 0.000885(s)
+
+Swap done, time = 1e-06(s)
+
+Move done, time = 0.003884(s)
+0.0049119
+Enter the check function
+Check Success
+crystm02_row_major.mtx
+Size of the matrix: 13965 13965 168435
+
+Read from file done, time = 0.10402(s)
+
+Fuse done, time = 0.000965(s)
+
+Grow done, time = 0.000109(s)
+0.00109196
+
+Fused Transpose done, time = 0.000696(s)
+0.000703096
+
+Fused Transpose done, time = 0.000772(s)
+0.000776052
+
+Separate done, time = 2e-06(s)
+
+Trim done, time = 0.000916(s)
+0.000931025
+Enter the check function
+Check Success
+
+Swap done, time = 3e-06(s)
+
+Move done, time = 0.00151(s)
+
+Fuse done, time = 0.000952(s)
+
+Grow done, time = 0.000103(s)
+0.00700498
+
+Trim done, time = 0.000203(s)
+
+Separate done, time = 0.000314(s)
+
+Swap done, time = 4e-06(s)
+
+Move done, time = 0.001285(s)
+0.00182796
+Enter the check function
+Check Success
+cant_row_major.mtx
+Size of the matrix: 62451 62451 2034917
+
+Read from file done, time = 1.00914(s)
+
+Fuse done, time = 0.009118(s)
+
+Grow done, time = 0.000368(s)
+0.00950098
+
+Fused Transpose done, time = 0.007979(s)
+0.00798583
+
+Fused Transpose done, time = 0.007869(s)
+0.00787401
+
+Separate done, time = 1e-06(s)
+
+Trim done, time = 0.010805(s)
+0.0108161
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.019562(s)
+
+Fuse done, time = 0.008945(s)
+
+Grow done, time = 0.000377(s)
+0.074507
+
+Trim done, time = 0.000707(s)
+
+Separate done, time = 0.003439(s)
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.014815(s)
+0.0189781
+Enter the check function
+Check Success
+ML_Laplace_row_major.mtx
+Size of the matrix: 377002 377002 27689972
+
+Read from file done, time = 13.4615(s)
+
+Fuse done, time = 0.120762(s)
+
+Grow done, time = 0.002249(s)
+0.123032
+
+Fused Transpose done, time = 0.185128(s)
+0.185151
+
+Fused Transpose done, time = 0.205758(s)
+0.20583
+
+Separate done, time = 1e-06(s)
+
+Trim done, time = 0.147737(s)
+0.147758
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.420264(s)
+
+Fuse done, time = 0.123515(s)
+
+Grow done, time = 0.002272(s)
+1.34369
+
+Trim done, time = 0.004344(s)
+
+Separate done, time = 0.074981(s)
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.423102(s)
+0.502456
+Enter the check function
+Check Success
+Transport_row_major.mtx
+Size of the matrix: 1602111 1602111 23500731
+
+Read from file done, time = 11.5384(s)
+
+Fuse done, time = 0.100622(s)
+
+Grow done, time = 0.009978(s)
+0.110624
+
+Fused Transpose done, time = 0.131085(s)
+0.131115
+
+Fused Transpose done, time = 0.156554(s)
+0.156564
+
+Separate done, time = 1e-06(s)
+
+Trim done, time = 0.122018(s)
+0.12205
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.278544(s)
+
+Fuse done, time = 0.102026(s)
+
+Grow done, time = 0.011501(s)
+1.02704
+
+Trim done, time = 0.018148(s)
+
+Separate done, time = 0.064998(s)
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.29382(s)
+0.377037
+Enter the check function
+Check Success
+TSOPF_RS_b2383_row_major.mtx
+Size of the matrix: 38120 38120 16171169
+
+Read from file done, time = 7.68853(s)
+
+Fuse done, time = 0.06816(s)
+
+Grow done, time = 0.000238(s)
+0.068418
+
+Fused Transpose done, time = 0.151661(s)
+0.151672
+
+Fused Transpose done, time = 0.209837(s)
+0.209862
+
+Separate done, time = 1e-06(s)
+
+Trim done, time = 0.083963(s)
+0.083986
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.447827(s)
+
+Fuse done, time = 0.068878(s)
+
+Grow done, time = 0.000244(s)
+1.10993
+
+Trim done, time = 0.000437(s)
+
+Separate done, time = 0.04247(s)
+
+Swap done, time = 1e-06(s)
+
+Move done, time = 0.311088(s)
+0.354023
+Enter the check function
+Check Success
+chem_master1_row_major.mtx
+Size of the matrix: 40401 40401 201201
+
+Read from file done, time = 0.125404(s)
+
+Fuse done, time = 0.001207(s)
+
+Grow done, time = 0.000294(s)
+0.00151396
+
+Fused Transpose done, time = 0.000997(s)
+0.00100613
+
+Fused Transpose done, time = 0.000891(s)
+0.000895023
+
+Separate done, time = 2e-06(s)
+
+Trim done, time = 0.001413(s)
+0.00142407
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.001895(s)
+
+Fuse done, time = 0.001201(s)
+
+Grow done, time = 0.000291(s)
+0.00936913
+
+Trim done, time = 0.000585(s)
+
+Separate done, time = 0.00042(s)
+
+Swap done, time = 3e-06(s)
+
+Move done, time = 0.001696(s)
+0.00272584
+Enter the check function
+Check Success
+majorbasis_row_major.mtx
+Size of the matrix: 160000 160000 1750416
+
+Read from file done, time = 0.857452(s)
+
+Fuse done, time = 0.007438(s)
+
+Grow done, time = 0.000944(s)
+0.0083971
+
+Fused Transpose done, time = 0.00759(s)
+0.00759792
+
+Fused Transpose done, time = 0.008167(s)
+0.00817204
+
+Separate done, time = 1e-06(s)
+
+Trim done, time = 0.009137(s)
+0.00914884
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.015579(s)
+
+Fuse done, time = 0.007598(s)
+
+Grow done, time = 0.00096(s)
+0.0654631
+
+Trim done, time = 0.001802(s)
+
+Separate done, time = 0.002867(s)
+
+Swap done, time = 1e-06(s)
+
+Move done, time = 0.014649(s)
+0.0193338
+Enter the check function
+Check Success
+shyy161_row_major.mtx
+Size of the matrix: 76480 76480 329762
+
+Read from file done, time = 0.201514(s)
+
+Fuse done, time = 0.002019(s)
+
+Grow done, time = 0.000556(s)
+0.00258994
+
+Fused Transpose done, time = 0.001602(s)
+0.00161004
+
+Fused Transpose done, time = 0.001503(s)
+0.001508
+
+Separate done, time = 2e-06(s)
+
+Trim done, time = 0.002591(s)
+0.00260282
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.003095(s)
+
+Fuse done, time = 0.001999(s)
+
+Grow done, time = 0.000551(s)
+0.0158329
+
+Trim done, time = 0.00111(s)
+
+Separate done, time = 0.000713(s)
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.00283(s)
+0.00467086
+Enter the check function
+Check Success
+Baumann_row_major.mtx
+Size of the matrix: 112211 112211 760631
+
+Read from file done, time = 0.429256(s)
+
+Fuse done, time = 0.003419(s)
+
+Grow done, time = 0.000682(s)
+0.00411701
+
+Fused Transpose done, time = 0.002542(s)
+0.00254607
+
+Fused Transpose done, time = 0.002884(s)
+0.00288701
+
+Separate done, time = 1e-06(s)
+
+Trim done, time = 0.004012(s)
+0.00402117
+Enter the check function
+Check Success
+
+Swap done, time = 2e-06(s)
+
+Move done, time = 0.00558(s)
+
+Fuse done, time = 0.003545(s)
+
+Grow done, time = 0.000657(s)
+0.02665
+
+Trim done, time = 0.001283(s)
+
+Separate done, time = 0.00123(s)
+
+Swap done, time = 1e-06(s)
+
+Move done, time = 0.004679(s)
+0.00720477
+Enter the check function
+Check Success
