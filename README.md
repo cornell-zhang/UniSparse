@@ -16,7 +16,7 @@ In the Step-by-Step Instructions section below, we provide instructions on how t
 
 ## Hardware Dependencies
 1. To support claim 1 and run experiments in Section 7.3 and 7.4, an Intel CPU will work;
-2. To support claim 2 and run experiments in Section 7.2, we require a 48-core Intel Xeon Gold 6248R CPU at 3.00GHz and an NVIDIA RTX A6000 GPU.
+2. To support claim 2 and run experiments in Section 7.2, our original experiments use a 48-core Intel Xeon Gold 6248R CPU at 3.00GHz and an NVIDIA RTX A6000 GPU. But to support claim 2, we believe a multi-core Intel CPU and an NVIDIA GPU will work.
 
 ## Getting Started
 
