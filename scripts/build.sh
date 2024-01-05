@@ -1,4 +1,6 @@
 export LLVM_ROOT=/install/llvm-project
+export CPATH=$LLVM_ROOT/openmp/build/runtime/src:$CPATH
+export LD_LIBRARY_PATH=$LLVM_ROOT/openmp/build/runtime/src:$LD_LIBRARY_PATH
 
 cmake -B build \
 -DMLIR_DIR=$LLVM_ROOT/build/lib/cmake/mlir \
