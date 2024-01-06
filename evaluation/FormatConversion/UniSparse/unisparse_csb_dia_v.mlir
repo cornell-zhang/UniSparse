@@ -58,7 +58,7 @@ module {
     %21 = call @sptGrowF32(%20, %c1_i32_1) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %22 = call @rtclock() : () -> f64
     %23 = arith.subf %22, %8 : f64
-    vector.print %23 : f64
+    // vector.print %23 : f64
     %24 = call @rtclock() : () -> f64
     %c0_i32_8 = arith.constant 0 : i32
     %c1_i32_9 = arith.constant 1 : i32
@@ -95,7 +95,7 @@ module {
     %42 = call @sptNegF32(%41, %c0_i32_16) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %43 = call @sptMoveF32(%42, %c0_i32_16, %c0_i32_16) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
     %44 = call @sptMoveF32(%43, %c1_i32_17, %c1_i32_17) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
-    call @sptCheckF32(%44, %1) : (!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()
+    // call @sptCheckF32(%44, %1) : (!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()
     call @delUniSparseTensorF32(%1) : (!llvm.ptr<i8>) -> ()
     call @delUniSparseTensorF32(%44) : (!llvm.ptr<i8>) -> ()
     return

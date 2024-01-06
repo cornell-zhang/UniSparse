@@ -73,7 +73,7 @@ module {
     %31 = call @sptFuseF32(%30, %c0_i32_8) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %32 = call @rtclock() : () -> f64
     %33 = arith.subf %32, %20 : f64
-    vector.print %33 : f64
+    // vector.print %33 : f64
     %c0_i32_16 = arith.constant 0 : i32
     %c1_i32_17 = arith.constant 1 : i32
     %c2_i32_18 = arith.constant 2 : i32
