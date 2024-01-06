@@ -351,7 +351,7 @@ void clear_cache() {
 float test_csr_dia(char* file_name) {
   Tensor<double> I = taco::read(file_name, csr);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   std::vector<int> bufferDim = {B->dimensions[1]+B->dimensions[0], B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1, 2}; //should not matter
   std::vector<taco_mode_t> bufferModeType = {taco_mode_dia1, taco_mode_sparse, taco_mode_sparse};
@@ -465,7 +465,7 @@ int evaluate_coo_ellpack(taco_tensor_t *A, taco_tensor_t *B) {
 float test_csr_unsorted_dia(char* file_name) {
   Tensor<double> I = taco::read(file_name, csr);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   std::vector<int> bufferDim = {B->dimensions[1]+B->dimensions[0], B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1, 2}; //should not matter
   std::vector<taco_mode_t> bufferModeType = {taco_mode_dia1, taco_mode_sparse, taco_mode_sparse};
@@ -487,7 +487,7 @@ float test_csr_unsorted_dia(char* file_name) {
 float test_csc_dia(char* file_name) {
   Tensor<double> I = taco::read(file_name, csc);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   std::vector<int> bufferDim = {B->dimensions[1]+B->dimensions[0], B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1, 2}; //should not matter
   std::vector<taco_mode_t> bufferModeType = {taco_mode_dia1, taco_mode_sparse, taco_mode_sparse};
@@ -509,7 +509,7 @@ float test_csc_dia(char* file_name) {
 float test_csr_csc(char* file_name) {
   Tensor<double> I = taco::read(file_name, csr);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   std::vector<int> bufferDim = {B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {1, 0}; //should not matter
   std::vector<taco_mode_t> bufferModeType = {taco_mode_dense, taco_mode_sparse};
@@ -531,7 +531,7 @@ float test_csr_csc(char* file_name) {
 float test_coo_csr(char* file_name) {
   Tensor<double> I = taco::read(file_name, coo);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   std::vector<int> bufferDim = {B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1}; //should not matter
   std::vector<taco_mode_t> bufferModeType = {taco_mode_dense, taco_mode_sparse};
@@ -553,12 +553,12 @@ float test_coo_csr(char* file_name) {
 float test_coo_dia(char* file_name) {
   Tensor<double> I = taco::read(file_name, coo);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   std::vector<int> bufferDim = {B->dimensions[1]+B->dimensions[0], B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1, 2}; //should not matter
   std::vector<taco_mode_t> bufferModeType = {taco_mode_dia1, taco_mode_sparse, taco_mode_sparse};
   taco_tensor_t* A = init_taco_tensor_t(3, 8, bufferDim.data(), bufferModeOrdering.data(), bufferModeType.data(), nullptr);
-  std::cerr << "after init " << std::endl;
+  // std::cerr << "after init " << std::endl;
   float acc_time = 0;
   for (int i = 0; i < 1; ++i) {
     clear_cache();
@@ -576,7 +576,7 @@ float test_coo_dia(char* file_name) {
 float test_dcsr_ell(char* file_name) {
   Tensor<double> I = taco::read(file_name, dcsr);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   // only need B->dimensions[0] in the kernel (row dimension).
   std::vector<int> bufferDim = {1, B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1, 2}; //should not matter
@@ -599,7 +599,7 @@ float test_dcsr_ell(char* file_name) {
 float test_coo_ell(char* file_name) {
   Tensor<double> I = taco::read(file_name, coo);
   taco_tensor_t* B = I.getTacoTensorT();
-  std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
+  // std::cerr << B->dimensions[0] << ' ' << B->dimensions[1] << std::endl;
   // only need B->dimensions[0] in the kernel (row dimension).
   std::vector<int> bufferDim = {1, B->dimensions[0], B->dimensions[1]};
   std::vector<int> bufferModeOrdering = {0, 1, 2}; //should not matter
@@ -647,6 +647,7 @@ int main(int argc, char* argv[]) {
   } else if (test_case == 7) {
     acc_time = test_coo_ell(argv[1]);
   }
-  std::cerr << "average among 1 runs = " << (float)acc_time << "(s)" << std::endl;
+  // std::cerr << "average among 1 runs = " << (float)acc_time << "(s)" << std::endl;
+  std::cerr << (float)acc_time << "(s)" << std::endl;
   return 0;
 }

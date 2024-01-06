@@ -32,7 +32,7 @@ module {
     %5 = call @sptGrowF32(%4, %c0_i32) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %6 = call @rtclock() : () -> f64
     %7 = arith.subf %6, %3 : f64
-    vector.print %7 : f64
+    // vector.print %7 : f64
     %8 = call @rtclock() : () -> f64
     %c0_i32_0 = arith.constant 0 : i32
     %c1_i32_1 = arith.constant 1 : i32
@@ -54,7 +54,7 @@ module {
     %18 = call @sptFusedTransposeF32(%10, %c0_i32_0) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %24 = call @rtclock() : () -> f64
     %25 = arith.subf %24, %17 : f64
-    vector.print %25 : f64
+    // vector.print %25 : f64
     %26 = call @rtclock() : () -> f64
     %c0_i32_12 = arith.constant 0 : i32
     %c1_i32_13 = arith.constant 1 : i32
@@ -66,8 +66,8 @@ module {
     %28 = call @sptTrimF32(%27, %c0_i32_12) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %29 = call @rtclock() : () -> f64
     %30 = arith.subf %29, %26 : f64
-    vector.print %30 : f64
-    call @sptCheckF32(%28, %1) : (!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()
+    // vector.print %30 : f64
+    // call @sptCheckF32(%28, %1) : (!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()
     %31 = call @rtclock() : () -> f64
     %c0_i32_18 = arith.constant 0 : i32
     %c1_i32_19 = arith.constant 1 : i32
@@ -81,7 +81,7 @@ module {
     %35 = call @sptGrowF32(%34, %c0_i32_18) : (!llvm.ptr<i8>, i32) -> !llvm.ptr<i8>
     %36 = call @rtclock() : () -> f64
     %37 = arith.subf %36, %3 : f64
-    vector.print %37 : f64
+    // vector.print %37 : f64
     %38 = call @rtclock() : () -> f64
     %c0_i32_24 = arith.constant 0 : i32
     %c1_i32_25 = arith.constant 1 : i32
@@ -95,8 +95,8 @@ module {
     %42 = call @sptMoveF32(%41, %c0_i32_24, %c0_i32_24) : (!llvm.ptr<i8>, i32, i32) -> !llvm.ptr<i8>
     %43 = call @rtclock() : () -> f64
     %44 = arith.subf %43, %38 : f64
-    vector.print %44 : f64
-    call @sptCheckF32(%42, %1) : (!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()
+    // vector.print %44 : f64
+    // call @sptCheckF32(%42, %1) : (!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()
     call @delUniSparseTensorF32(%1) : (!llvm.ptr<i8>) -> ()
     call @delUniSparseTensorF32(%42) : (!llvm.ptr<i8>) -> ()
     return
