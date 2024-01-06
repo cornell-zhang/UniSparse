@@ -19,7 +19,7 @@ do
     echo $dataset
     export TENSOR0=$DATASET_PATH0/$dataset
 
-    echo COO_BCSC UniSparse
+    echo CSR_DIA_V UniSparse
     ./csr_dia_v
 
     echo CSC_SpMM UniSparse
