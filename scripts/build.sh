@@ -1,4 +1,7 @@
 export LLVM_ROOT=/install/llvm-project
+export PATH=$LLVM_ROOT/build/bin:$PATH
+export LD_LIBRARY_PATH=$LLVM_ROOT/build/lib:$LD_LIBRARY_PATH
+export CPATH=$HOME/eigen-3.4.0:$HOME/llvm-project/mlir/lib:$HOME/llvm-project/mlir/include/mlir:$CPATH
 export CPATH=$LLVM_ROOT/openmp/build/runtime/src:$CPATH
 export LD_LIBRARY_PATH=$LLVM_ROOT/openmp/build/runtime/src:$LD_LIBRARY_PATH
 
