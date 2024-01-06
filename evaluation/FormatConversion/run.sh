@@ -19,6 +19,8 @@ mlir-opt ./UniSparse/unisparse_csb_dia_v.mlir -one-shot-bufferize="bufferize-fun
 clang++ csb_dia_v.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils -L$LLVM_ROOT/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o csb_dia_v
 mlir-opt ./UniSparse/unisparse_coo_c2sr.mlir -one-shot-bufferize="bufferize-function-boundaries=1 allow-return-allocs unknown-type-conversion=identity-layout-map function-boundary-type-conversion=identity-layout-map" -finalizing-bufferize -convert-linalg-to-loops -convert-vector-to-scf -convert-scf-to-cf -lower-affine -convert-vector-to-llvm -convert-memref-to-llvm -convert-complex-to-standard -convert-math-to-llvm -convert-math-to-libm -convert-complex-to-libm -convert-complex-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o coo_c2sr.o
 clang++ coo_c2sr.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils -L$LLVM_ROOT/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o coo_c2sr
+mlir-opt ./UniSparse/unisparse_coo_cisr.mlir -one-shot-bufferize="bufferize-function-boundaries=1 allow-return-allocs unknown-type-conversion=identity-layout-map function-boundary-type-conversion=identity-layout-map" -finalizing-bufferize -convert-linalg-to-loops -convert-vector-to-scf -convert-scf-to-cf -lower-affine -convert-vector-to-llvm -convert-memref-to-llvm -convert-complex-to-standard -convert-math-to-llvm -convert-math-to-libm -convert-complex-to-libm -convert-complex-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts  | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o coo_cisr.o
+clang++ coo_cisr.o -L$SPLHOME/build/lib -lmlir_unisparse_runner_utils -L$LLVM_ROOT/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o coo_cisr
 
 mlir-opt ./sparse_tensor_dialect/sparse_tensor_csr_to_csc.mlir -sparse-compiler | mlir-translate -mlir-to-llvmir | opt -O3 -S | llc -O3 -relocation-model=pic -filetype=obj -o sparse_tensor_csr_csc.o
 clang++ sparse_tensor_csr_csc.o -L$LLVM_ROOT/build/lib -lmlir_runner_utils -lmlir_c_runner_utils -o sparse_tensor_csr_csc
@@ -56,4 +58,7 @@ do
 
     echo COO_C2SR UniSparse 
     ./coo_c2sr
+
+    echo COO_CISR UniSparse 
+    ./coo_cisr
 done
