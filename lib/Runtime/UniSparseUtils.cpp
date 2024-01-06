@@ -946,7 +946,7 @@ bool UniSparseStorage<V>::tile_split(int lv, int factor) {
       if (lv != 1) (vLevel[lv]->same_path[i]) = (vLevel[lv]->same_path[i]) && (vLevel[lv-1]->same_path[i]);
     }
   }
-  std::cerr << "After loop" << std::endl;
+  // std::cerr << "After loop" << std::endl;
 #endif
 
   vLevel[lv]->size = ceil((V)vLevel[lv]->size/factor);

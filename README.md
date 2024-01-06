@@ -40,6 +40,7 @@ We do not use the docker image. Please directly clone the zenedo repo:
 
 
 ### Experiment 2
+cd 
 
 ### Experiment 3
 
