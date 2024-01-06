@@ -3132,7 +3132,6 @@ FOREVERY_V(IMPL_EXPINSERT)
   void* _mlir_ciface_newUniSparseTensor##VNAME(StridedMemRefType<UniSparseDimLevelType, 1> *aref, \
                                StridedMemRefType<uint64_t, 1> *sref, \
                                StridedMemRefType<uint64_t, 1> *pref, void *ptr ) { \
-    // std::cout << "Start newUniSparseTensor " << std::endl; \
     assert(aref && sref && pref); \
     assert(aref->strides[0] == 1 && sref->strides[0] == 1 && pref->strides[0] == 1); \
     assert(aref->sizes[0] == sref->sizes[0] && sref->sizes[0] == pref->sizes[0]); \
