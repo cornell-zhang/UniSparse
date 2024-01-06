@@ -71,7 +71,7 @@ module {
     %a1 = unisparse.convert (%A_1): tensor<?x?xf64, #COO> to tensor<?x?xf64, #CSC>
     %t_end0 = call @rtclock() : () -> f64
     %t_0 = arith.subf %t_end0, %t_start0: f64
-    vector.print %t_0 : f64
+    // vector.print %t_0 : f64
 
     // Initialize output sparse matrix.
     
@@ -84,8 +84,8 @@ module {
     %out_val = unisparse.value %0, %c0 : tensor<?x?xf64, #CSC> to memref<?xf64>
     %v0 = vector.transfer_read %out_val[%c0], %i0: memref<?xf64>, vector<8xf64>
     %nnz = memref.dim %out_val, %c0 : memref<?xf64>
-    vector.print %v0 : vector<8xf64>
-    vector.print %nnz : index
+    // vector.print %v0 : vector<8xf64>
+    // vector.print %nnz : index
 
     //Release the resources 
     bufferization.dealloc_tensor %A_0 : tensor<?x?xf64, #COO>
