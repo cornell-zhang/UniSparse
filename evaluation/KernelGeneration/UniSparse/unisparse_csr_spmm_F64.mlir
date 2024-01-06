@@ -63,7 +63,7 @@ module {
     %a0 = unisparse.convert (%A_0): tensor<?x?xf64, #COO> to tensor<?x?xf64, #CSR>
     %t_end0 = call @rtclock() : () -> f64
     %t_0 = arith.subf %t_end0, %t_start0: f64
-    vector.print %t_0 : f64
+    // vector.print %t_0 : f64
 
     // Initialize dense matrix.
     %init_256_4 = bufferization.alloc_tensor(%c256, %c4) : tensor<?x?xf64>
@@ -95,7 +95,7 @@ module {
     %t_4 = arith.subf %t_end4, %t_start4: f64
     vector.print %t_4 : f64
     %v0 = vector.transfer_read %0[%c0, %c0], %i0: tensor<?x?xf64>, vector<4x4xf64>
-    vector.print %v0 : vector<4x4xf64>
+    // vector.print %v0 : vector<4x4xf64>
 
     //Release the resources 
     bufferization.dealloc_tensor %A_0 : tensor<?x?xf64, #COO>

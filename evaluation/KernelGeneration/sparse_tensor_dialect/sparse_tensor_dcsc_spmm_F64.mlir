@@ -51,7 +51,7 @@ module {
     %c256 = tensor.dim %a3, %c1 : tensor<?x?xf64, #DCSC>
     %t_end3 = call @rtclock() : () -> f64
     %t_3 = arith.subf %t_end3, %t_start3: f64
-    vector.print %t_3 : f64
+    // vector.print %t_3 : f64
 
     // Initialize dense matrix.
     %init_256_4 = bufferization.alloc_tensor(%c256, %c4) : tensor<?x?xf64>
@@ -82,7 +82,7 @@ module {
     %t_7 = arith.subf %t_end7, %t_start7: f64
     vector.print %t_7 : f64
     %v3 = vector.transfer_read %3[%c0, %c0], %i0: tensor<?x?xf64>, vector<4x4xf64>
-    vector.print %v3 : vector<4x4xf64>
+    // vector.print %v3 : vector<4x4xf64>
 
     //Release the resources 
     bufferization.dealloc_tensor %a3 : tensor<?x?xf64, #DCSC>

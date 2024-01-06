@@ -62,8 +62,8 @@ module {
     %out_val = sparse_tensor.values %0 : tensor<?x?xf64, #CSR> to memref<?xf64>
     %v0 = vector.transfer_read %out_val[%c0], %i0: memref<?xf64>, vector<8xf64>
     %nnz = memref.dim %out_val, %c0 : memref<?xf64>
-    vector.print %v0 : vector<8xf64>
-    vector.print %nnz : index
+    // vector.print %v0 : vector<8xf64>
+    // vector.print %nnz : index
 
     //Release the resources 
     bufferization.dealloc_tensor %a0 : tensor<?x?xf64, #CSR>
