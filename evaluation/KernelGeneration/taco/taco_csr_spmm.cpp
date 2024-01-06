@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
   Tensor<double> A = read(file_name, csr);
   auto t2 = std::chrono::high_resolution_clock::now();
   double convert_time = double(std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count()) / 1000000;
-  std::cout << "Convert to CSR time : " << convert_time << " seconds" << std::endl;
+  // std::cout << "Convert to CSR time : " << convert_time << " seconds" << std::endl;
 
   Tensor<double> x({A.getDimension(1), 1000}, dm);
   for (int i = 0; i < x.getDimension(0); ++i) {
@@ -35,7 +35,8 @@ int main(int argc, char* argv[]) {
   y.compute();
   auto t4 = std::chrono::high_resolution_clock::now();
   double compute_time = double(std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count()) / 1000000;
-  std::cout << "Compute CSR SpMM time : " << compute_time << " seconds" << std::endl;
+  // std::cout << "Compute CSR SpMM time : " << compute_time << " seconds" << std::endl;
+  std::cout << compute_time << " (s)" << std::endl;
 
 //  write("y.tns", y);
 }

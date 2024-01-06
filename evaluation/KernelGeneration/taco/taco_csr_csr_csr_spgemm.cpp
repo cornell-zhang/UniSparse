@@ -26,7 +26,8 @@ int main(int argc, char* argv[]) {
 
   auto t4 = std::chrono::high_resolution_clock::now();
   double compute_time = double(std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count()) / 1000000;
-  std::cout << "Compute CSR SpGEMM time : " << compute_time << " seconds" << std::endl;
+  // std::cout << "Compute CSR SpGEMM time : " << compute_time << " seconds" << std::endl;
+  std::cout << compute_time << " (s)" << std::endl;
 
 //  write("y.tns", y);
 }
