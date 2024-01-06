@@ -1,4 +1,5 @@
 DATASET_PATH0=/install/datasets/row_major
+DATASET_PATH1=/install/datasets/replicate
 DATASETS=( 
             "p2p-Gnutella31_row_major.mtx"
             "wiki-Vote_row_major.mtx"
@@ -53,7 +54,7 @@ do
     echo CSR_CSR_CSR_SpGEMM SparseTensor
     ./sparse_tensor_csr_csr_csr_spgemm_F64
     echo CSR_CSR_CSR_SpGEMM TACO
-    ./taco_csr_csr_csr_spgemm $DATASET_PATH0/$dataset $DATASET_PATH1/$dataset$PFIX1
+    ./taco_csr_csr_csr_spgemm $DATASET_PATH0/$dataset $DATASET_PATH1/$dataset
 
     echo CSC_CSC_CSC_SpGEMM UniSparse
     ./unisparse_csc_csc_csc_spgemm_F64

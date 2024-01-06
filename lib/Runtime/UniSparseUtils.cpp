@@ -712,7 +712,7 @@ UniSparseStorage<V>* readFromFile(std::istream& fin) {
   int H, W, N_ele;
   SS >> H >> W >> N_ele;
 
-  std::cerr << "Size of the matrix: " << H << ' ' << W << ' ' << N_ele << std::endl;
+  // std::cerr << "Size of the matrix: " << H << ' ' << W << ' ' << N_ele << std::endl;
 
   LevelStorage* rowStore = new LevelStorage();
   LevelStorage* colStore = new LevelStorage();
@@ -3132,7 +3132,7 @@ FOREVERY_V(IMPL_EXPINSERT)
   void* _mlir_ciface_newUniSparseTensor##VNAME(StridedMemRefType<UniSparseDimLevelType, 1> *aref, \
                                StridedMemRefType<uint64_t, 1> *sref, \
                                StridedMemRefType<uint64_t, 1> *pref, void *ptr ) { \
-    std::cout << "Start newUniSparseTensor " << std::endl; \
+    // std::cout << "Start newUniSparseTensor " << std::endl; \
     assert(aref && sref && pref); \
     assert(aref->strides[0] == 1 && sref->strides[0] == 1 && pref->strides[0] == 1); \
     assert(aref->sizes[0] == sref->sizes[0] && sref->sizes[0] == pref->sizes[0]); \
@@ -3197,6 +3197,348 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
   void release(void *tensor) {
     delete static_cast<UniSparseStruct *>(tensor);
   }
+
+  void* _mlir_ciface_decompose_BDIA_opt2(void* ptr, int32_t blockSize, float thres) {
+    UniSparseStorage<float>* sparT = (UniSparseStorage<float>*)ptr;
+    
+    uint64_t row_size = sparT->dimSizes.data()[0];
+    uint64_t col_size = sparT->dimSizes.data()[1];
+    uint64_t nnz = sparT->vLevel[2]->crd.size();
+    std::vector<int> row_crd(sparT->vLevel[1]->crd);
+    std::vector<int> col_crd(sparT->vLevel[2]->crd);
+    std::vector<float> values(sparT->valueArray);
+    sparT->vLevel[0]->ptr.pop_back();
+    sparT->vLevel[1]->crd.clear();
+    sparT->vLevel[1]->same_path.clear();
+    sparT->vLevel[2]->crd.clear();
+    sparT->vLevel[2]->same_path.clear();
+    sparT->valueArray.clear();
+    std::cout << "blockSize = " << blockSize << ", thres = " << thres << std::endl;
+    assert(col_size >= row_size);
+    
+    // step 1: initialize vectorArray
+    auto T_BDIA = new UniSparseStorage<float>();
+    for (unsigned i = 0; i <= 3; i++) 
+      T_BDIA->vLevel.push_back(std::shared_ptr<LevelStorage>(new LevelStorage));
+    T_BDIA->vLevel[1]->type = LVFUSE ;
+    T_BDIA->vLevel[1]->ptr.resize(((row_size-1)/blockSize)+2, 0);
+    T_BDIA->vLevel[2]->type = LVTRIM ;
+    T_BDIA->vLevel[3]->size = blockSize;
+    T_BDIA->dimSizes.push_back(row_size);
+    T_BDIA->dimSizes.push_back(col_size);
+    
+    // assume read-in data is in row-major order
+    double start = omp_get_wtime();
+
+    std::vector<int> diag_block_count(((row_size-1)/blockSize)+1, 0);
+    // std::cout<<"diag_block_count size="<<diag_block_count.size()<<std::endl;
+    uint64_t diag_nnz_count = 0;
+    double mem_0 = omp_get_wtime();
+    std::vector<unsigned> row_ptr(((row_size-1)/blockSize)+2, 0);
+    // row_ptr.push_back(0);
+    double mem_1 = omp_get_wtime();
+    std::vector<unsigned> dia_row_ptr(((row_size-1)/blockSize)+2, 0);
+    double mem_2 = omp_get_wtime();
+    
+    double mem_3 = omp_get_wtime();
+    // std::vector<int> diag_nnz((((row_size-1)/blockSize)+1)*(blockSize+col_size-1), 0);
+    std::vector<std::vector<int>> diag_off(((row_size-1)/blockSize)+1);
+
+    double mem_4 = omp_get_wtime();
+
+    int first_dim1 = row_crd[0]/blockSize;
+    for (int m = 0; m < first_dim1; m++)
+      row_ptr[m+1]=0;
+    int prev_dim1, new_dim1, init_j;
+    unsigned init_i;
+    double end_0 = omp_get_wtime();
+    #pragma omp parallel for private(prev_dim1, new_dim1, init_j, init_i)
+    for(init_i = 1; init_i < nnz; init_i++) {
+      prev_dim1 = row_crd[init_i-1]/blockSize;
+      new_dim1 = row_crd[init_i]/blockSize;
+      if (new_dim1 != prev_dim1) {
+        for (init_j = prev_dim1; init_j < new_dim1; init_j++)
+          row_ptr[init_j+1]=init_i;
+      } 
+    }
+    // std::cout << "new_dim1 = "<<new_dim1<<std::endl;
+    for (unsigned m = row_crd[nnz-1]/blockSize; m < ((row_size-1)/blockSize)+1; m++)
+      row_ptr[m+1] = nnz;
+    assert(row_ptr.size() == ((row_size-1)/blockSize)+2);
+    // std::sort(row_ptr.begin(), row_ptr.end());
+    // std::cout << "row_ptr = ";
+    // for (unsigned m = 0; m < ((row_size-1)/blockSize)+2; m++)
+    //   std::cout << row_ptr[m] << "  ";
+    // std::cout << std::endl;
+
+    //parallelize
+    double end_1 = omp_get_wtime();
+    unsigned iter1_i, iter1_pos, iter1_j;
+    int iter1_dim2;
+    std::vector<int> diag_nnz;
+    for(unsigned time = 0; time < 1; time++) {
+    #pragma omp parallel for private(diag_nnz, iter1_i, iter1_pos, iter1_j, iter1_dim2)
+    for (iter1_i = 0; iter1_i < ((row_size-1)/blockSize)+1; iter1_i++) {
+      diag_nnz.clear();
+      diag_nnz.resize(blockSize+col_size-1, 0);
+      diag_block_count[iter1_i] = 0;
+      dia_row_ptr[iter1_i+1] = 0;
+      std::vector<int>().swap(diag_off[iter1_i]);
+      for(iter1_pos = row_ptr[iter1_i]; iter1_pos < row_ptr[iter1_i+1]; iter1_pos++) {
+        // iter1_dim1 = row_crd[iter1_pos]/blockSize;
+        iter1_dim2 = col_crd[iter1_pos]-row_crd[iter1_pos];
+        // iter1_dim3 = row_crd[iter1_pos]%blockSize;
+        diag_nnz[iter1_dim2+(iter1_i+1)*blockSize-1] += 1;
+      }
+      // std::cout<<"row block="<<iter1_i<<", diag_nnz=";
+      // for (auto elm: diag_nnz)
+      //   std::cout<<elm<<"  ";
+      // std::cout<<std::endl;
+      for (iter1_j = 0; iter1_j < blockSize+col_size-1; iter1_j++) {
+        if (diag_nnz[iter1_j] > blockSize*thres) {
+          diag_block_count[iter1_i] += 1;
+          dia_row_ptr[iter1_i+1] += diag_nnz[iter1_j];
+          int offset = (int)iter1_j-(iter1_i+1)*blockSize+1;
+          diag_off[iter1_i].push_back(offset);
+          // if (iter1_i==0)
+            // std::cout<<"dia_row_ptr["<<iter1_i+1<<  "] = "<<dia_row_ptr[iter1_i+1]<<std::endl;
+          // diag_nnz_count += diag_nnz[iter1_i][iter1_j];
+        }
+      }
+    }
+    }
+
+    double end_2 = omp_get_wtime();
+    
+
+    int total_dia_block = 0;
+    // std::cout<<"((row_size-1)/blockSize)+1="<<((row_size-1)/blockSize)+1<<std::endl;
+    for (unsigned init = 0; init < ((row_size-1)/blockSize)+1; init++) {
+      dia_row_ptr[init+1] += dia_row_ptr[init];
+      total_dia_block += diag_block_count[init];
+      T_BDIA->vLevel[1]->ptr[init+1] = total_dia_block;
+      // std::cout<<"init="<<init<<", dia_row_ptr[init+1]="<<dia_row_ptr[init+1]<<", diag_block_count[init]="<<diag_block_count[init]<<std::endl;
+      // std::cout << "T_BDIA->vLevel[1]->ptr["<<init+1<<"]="<<T_BDIA->vLevel[1]->ptr[init+1]<<std::endl;
+      
+    }
+      // std::cout << "T_BDIA->vLevel[1]->ptr.size()="<<T_BDIA->vLevel[1]->ptr.size()<<std::endl;
+      
+    diag_nnz_count = dia_row_ptr[((row_size-1)/blockSize)+1];
+    T_BDIA->vLevel[2]->crd.reserve(total_dia_block);
+    for (unsigned init = 0; init < ((row_size-1)/blockSize)+1; init++) {
+      for (auto elm: diag_off[init])
+        T_BDIA->vLevel[2]->crd.push_back(elm);
+      std::vector<int>().swap(diag_off[init]);
+    }
+    std::vector<std::vector<int>>().swap(diag_off);
+    std::vector<int>().swap(diag_block_count);
+    
+    
+    assert(T_BDIA->vLevel[2]->crd.size()==(unsigned)total_dia_block);
+    T_BDIA->vector_1d.resize(total_dia_block*blockSize, 0.0);
+
+    // unsigned iter3_i, iter3_j;
+    // #pragma omp parallel for private(iter3_i, iter3_j)
+    // for (iter3_i = 0; iter3_i < ((row_size-1)/blockSize)+1; iter3_i++) {
+    //   for (iter3_j = 0; iter3_j < blockSize+col_size-1; iter3_j++) {
+    //     if (diag_nnz[iter3_i*(blockSize+col_size-1) + iter3_j] > blockSize*thres) {
+    //       int64_t offset = iter3_j-(iter3_i+1)*blockSize+1;
+    //       unsigned pos = T_BDIA->vLevel[1]->ptr[iter3_i];
+    //       T_BDIA->vLevel[2]->crd[pos] = offset;
+    //     }
+    //   }
+    // }
+
+    // parallelize
+    int* dim1_ptr = T_BDIA->vLevel[1]->ptr.data();
+    int* dim2_crd = T_BDIA->vLevel[2]->crd.data();
+    // std::cout << "T_BDIA->vLevel[2]->crd:"<<std::endl;
+    // // for(unsigned init = 0; init < ((row_size-1)/blockSize)+1; init++) {
+    //   for (auto elm: T_BDIA->vLevel[2]->crd)
+    //     std::cout << elm <<"  ";
+    //   std::cout<<std::endl;
+    // // }
+    // std::cout << "nnz-diag_nnz_count: "<<nnz-diag_nnz_count<< ", sparT->vLevel[1]->crd.maxsize="<<
+    // sparT->vLevel[1]->crd.max_size()<<std::endl;
+
+    sparT->vLevel[1]->crd.resize(nnz-diag_nnz_count);
+    sparT->vLevel[1]->same_path.resize(nnz-diag_nnz_count);
+    sparT->vLevel[1]->same_path[0]=0;
+    sparT->vLevel[2]->crd.resize(nnz-diag_nnz_count);
+    sparT->vLevel[2]->same_path.resize(nnz-diag_nnz_count);
+    sparT->vLevel[2]->same_path[0]=0;
+    sparT->valueArray.resize(nnz-diag_nnz_count);
+    sparT->vLevel[0]->ptr.push_back(nnz-diag_nnz_count);
+    unsigned i, pos;
+    int iter2_dim1, iter2_dim2, iter2_dim3, start_pos, end_pos, insert_pos;
+    unsigned COO_pos;
+    bool is_BDIA;
+    double end_3 = omp_get_wtime();
+    for (unsigned time = 0; time < 1; time++) {
+    #pragma omp parallel for private(i, pos,iter2_dim1, iter2_dim2, \
+          iter2_dim3, start_pos, end_pos, insert_pos, COO_pos, is_BDIA)
+    for (i = 0; i < ((row_size-1)/blockSize)+1; i++) {
+      COO_pos=row_ptr[i]-dia_row_ptr[i];
+      for(pos = row_ptr[i]; pos < row_ptr[i+1]; pos++) {
+        iter2_dim1 = row_crd[pos]/blockSize;
+        iter2_dim2 = col_crd[pos]-row_crd[pos];
+        iter2_dim3 = row_crd[pos]%blockSize;
+        start_pos = dim1_ptr[iter2_dim1];
+        end_pos = dim1_ptr[iter2_dim1+1];
+        // std::cout<<"start_pos="<<start_pos<<", end_pos="<<end_pos<<std::endl;
+        is_BDIA=false;
+        for (insert_pos = start_pos; 
+            insert_pos < end_pos; insert_pos++) {
+          if (iter2_dim2 == dim2_crd[insert_pos]) {
+            is_BDIA = true;
+            break;
+          }
+        }
+        if (is_BDIA) {
+          T_BDIA->vector_1d[insert_pos*blockSize+iter2_dim3] = values[pos];
+          // std::cout<<"T_BDIA->vector_1d["<<insert_pos*blockSize+iter2_dim3<<"] = "<<values[pos]<<std::endl;
+        } else {
+          // COO_pos = COO_start_pos+COO_pos_iter;
+          if (COO_pos > 0) {
+            sparT->vLevel[1]->same_path[COO_pos]=(row_crd[pos] == sparT->vLevel[1]->crd[COO_pos-1]);
+            sparT->vLevel[2]->same_path[COO_pos]=(
+                (row_crd[pos] == sparT->vLevel[1]->crd[COO_pos-1]) && (col_crd[pos] == sparT->vLevel[2]->crd[COO_pos-1]));
+          }
+          sparT->vLevel[1]->crd[COO_pos]=(row_crd[pos]);
+          sparT->vLevel[2]->crd[COO_pos]=(col_crd[pos]);
+          sparT->valueArray[COO_pos]=(values[pos]);
+          // std::cout<<"COO_pos="<<COO_pos<<", crd[1] size="<<sparT->vLevel[1]->crd.size()
+          // <<", crd="<<sparT->vLevel[1]->crd[COO_pos]<<", value="<<sparT->valueArray[COO_pos]<< std::endl;
+          COO_pos++;
+        }
+      }
+    }
+    }
+    // std::cout << "sparT->vLevel[1]->crd.size() = " << sparT->vLevel[1]->crd.size() <<  std::endl;
+    // std::cout << "sparT->vLevel[0]->ptr[1] = " << sparT->vLevel[0]->ptr[1] <<  std::endl;
+    // std::cout << "sparT->vLevel[1]->same_path: ";
+    // for (auto elm: sparT->vLevel[1]->same_path)
+    //   std::cout<<elm<<"  ";
+    // std::cout<<std::endl;
+    // std::cout << "sparT->vLevel[2]->same_path: ";
+    // for (auto elm: sparT->vLevel[2]->same_path)
+    //   std::cout<<elm<<"  ";
+    // std::cout<<std::endl;
+    // std::cout << "sparT->vLevel[1]->crd: ";
+    // for (auto elm: sparT->vLevel[1]->crd)
+    //   std::cout<<elm<<"  ";
+    // std::cout<<std::endl;
+    // std::cout << "sparT->vLevel[2]->crd: ";
+    // for (auto elm: sparT->vLevel[2]->crd)
+    //   std::cout<<elm<<"  ";
+    // std::cout<<std::endl;
+    // std::cout << "sparT->valueArray: ";
+    // for (auto elm: sparT->valueArray)
+    //   std::cout<<elm<<"  ";
+    // std::cout<<std::endl;
+    double end = omp_get_wtime();
+    std::cout << "mem_0-start time = " << mem_0-start << " s"<< std::endl;
+    std::cout << "mem_1-mem_0 time = " << mem_1-mem_0 << " s"<< std::endl;
+    std::cout << "mem_2-mem_1 time = " << mem_2-mem_1 << " s"<< std::endl;
+    std::cout << "mem_3-mem_2 time = " << mem_3-mem_2 << " s"<< std::endl;
+    std::cout << "mem_4-mem_3 time = " << mem_4-mem_3 << " s"<< std::endl;
+    std::cout << "end_0-mem_4 time = " << end_0-mem_4 << " s"<< std::endl;
+    std::cout << "decompose end_0 - start time = " << end_0 - start << " s"<< std::endl;
+    std::cout << "decompose end_1 - end_0 time = " << end_1 - end_0 << " s"<< std::endl;
+    std::cout << "decompose end_2 - end_1 time = " << end_2 - end_1 << " s"<< std::endl;
+    std::cout << "decompose end_3 - end_2 time = " << end_3 - end_2 << " s"<< std::endl;
+    std::cout << "decompose end - end_3 time = " << end - end_3 << " s"<< std::endl;
+    std::cout << "decompose end_3 - start time = " << end_3-start << " s"<< std::endl;
+    std::cout << "decompose total time = " << (end-end_3)/1000+end_3-end_2 + (end_2-end_1)/1000+(end_1-start)<< " s"<< std::endl;
+    std::cout << "root_ptr[1] = " << sparT->vLevel[0]->ptr[1] <<  std::endl;
+    std::cout << "diag_nnz_count = " << diag_nnz_count <<  std::endl;
+
+    UniSparseStruct* ret = new UniSparseStruct;
+    ret->vec.push_back((void*)sparT);
+    ret->vec.push_back((void*)T_BDIA);
+    return (void*) ret;
+  }
+
+  void _mlir_ciface_kernel_bdia_spmv_iter(StridedMemRefType<float, 1> *outC,
+                                      void* inA_CSR, 
+                                      void* inA_BDIA, 
+                                      StridedMemRefType<float, 1> *inB, 
+                                      StridedMemRefType<float, 1> *inC) {
+        
+        int ib, i, k, diag, is, ie;
+        float sum;
+        UniSparseStorage<float>* spA_CSR = (UniSparseStorage<float>*)inA_CSR;
+        UniSparseStorage<float>* spA_BDIA = (UniSparseStorage<float>*)inA_BDIA;
+        int32_t* BDIA_dim1_ptr = spA_BDIA->vLevel[1]->ptr.data();
+        int n_blocks = spA_BDIA->vLevel[1]->ptr.size();
+        int32_t* BDIA_dim2_crd = spA_BDIA->vLevel[2]->crd.data();
+        int32_t* CSR_dim1_ptr = spA_CSR->vLevel[1]->ptr.data();
+        int32_t* CSR_dim2_crd = spA_CSR->vLevel[2]->crd.data();
+        float* CSR_value = spA_CSR->valueArray.data();
+        
+        // float* inB_data = inB->data;
+        // float* inC_data = inC->data;
+        int blockSize = spA_BDIA->vLevel[3]->size;
+        std::vector<float> BDIA_vector = spA_BDIA->vector_1d;
+        int64_t iSize = inC->sizes[0];
+        // int64_t jSize = inB->sizes[0];
+        // double csr_time = 0.0;
+        // double bdia_time = 0.0;
+        unsigned runs = 50;
+        std::cout << inC->data[0] << " " << inC->data[1] << " " << inC->data[2] << " " << inC->data[3] << std::endl;
+
+        double start0 = omp_get_wtime();
+        for (unsigned time = 0; time < runs; time++) {
+          #pragma omp parallel for private(ib,i,k,sum,diag,is,ie) 
+          for (ib = 0; ib < n_blocks-1; ib++) {
+            for (i = ib*blockSize; i < std::min((ib+1)*blockSize, (int)iSize); i++) {
+              sum=0;
+              #pragma omp simd reduction(+:sum)
+              for(k=CSR_dim1_ptr[i]; k<CSR_dim1_ptr[i+1]; k++) {
+                sum+=CSR_value[k]*(inB->data[CSR_dim2_crd[k]]);
+                // if(i==0) {
+                  // std::cout << "i="<<i<<", k="<<k<<", CSR_value="<<CSR_value[k]<<", crd="<<CSR_dim2_crd[k]
+                  // <<", inB->data="<<inB->data[CSR_dim2_crd[k]]<<std::endl;
+                // }
+              }
+              inC->data[i] = sum;
+              // if(i==0)
+                // std::cout<<"sum="<< sum<<", inC->data["<<i<<"]="<<inC->data[i]<<std::endl;
+            }
+            // std::cout << "tid = " << omp_get_thread_num() << std::endl;
+            for (k = BDIA_dim1_ptr[ib]; k < BDIA_dim1_ptr[ib+1]; k++) {
+              diag = BDIA_dim2_crd[k];
+              is = std::max(ib*blockSize, -diag);
+              ie = std::min({(ib+1)*blockSize, (int)iSize-diag, (int)iSize});
+              #pragma omp simd
+              for (i = is; i < ie; i++) {
+                inC->data[i] += BDIA_vector[k*blockSize+i-ib*blockSize] * inB->data[i+diag];
+                // if(i==0) {
+                //   std::cout << "i="<<i<<", i+diag="<<i+diag<<", BDIA_vector="<<BDIA_vector[k*blockSize+i-ib*blockSize]
+                //     << ", inB->data="<< inB->data[i+diag] << ", inC->data["<<i<<"]="<<inC->data[i]<<std::endl;
+                // }
+              }
+              // for (i = 0; i < blockSize; i++) {
+              //   if ((i+ib*blockSize+diag >=0) && (i+ib*blockSize+diag < jSize))
+              //     inC->data[i+ib*blockSize] += BDIA_vector[k*blockSize+i] * inB->data[i+ib*blockSize+diag];
+              // }
+            }
+          }
+        }
+        double end0 = omp_get_wtime();
+        std::cout << "Hybrid total time = " << (end0-start0) << " s"<< std::endl;
+        std::cout << "Hybrid avg time = " << (end0-start0)*1000/runs << " ms"<< std::endl;
+
+
+        outC->data = inC->data;
+        outC->basePtr = inC->basePtr;
+        outC->offset = inC->offset;  
+        outC->sizes[0] = inC->sizes[0];
+        outC->strides[0] = inC->strides[0];
+        for(unsigned i = 0; i <4; i++ )
+          std::cout <<"outC->data["<<i<<"]=" << outC->data[i]<<std::endl;
+
+    }
 
 } // extern C
 
