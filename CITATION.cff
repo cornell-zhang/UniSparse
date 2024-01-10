@@ -1,0 +1,26 @@
+cff-version: 1.0.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Liu"
+  given-names: "Jie"
+  orcid: "https://orcid.org/0000-0003-1534-3500"
+- family-names: "Zhao"
+  given-names: "Zhongyuan"
+  orcid: "https://orcid.org/0000-0002-6637-553X"
+- family-names: "Ding"
+  given-names: "Zijian"
+  orcid: "https://orcid.org/0009-0000-4555-2077"
+- family-names: "Brock"
+  given-names: "Benjamin"
+  orcid: "https://orcid.org/0000-0003-1488-1622"
+- family-names: "Rong"
+  given-names: "Hongbo"
+  orcid: "https://orcid.org/0000-0002-3275-7791"
+- family-names: "Zhang"
+  given-names: "Zhiru"
+  orcid: "https://orcid.org/0000-0002-0778-0308"
+title: "UniSparse: An Intermediate Language for General Sparse Format Customization"
+version: 1.0.0
+doi: 10.5281/zenodo.10464499
+date-released: 2024-01-05
+url: "https://github.com/cornell-zhang/UniSparse"

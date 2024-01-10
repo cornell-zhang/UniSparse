@@ -38,30 +38,30 @@
 #include <memory>
 #include <iomanip>
 #include <chrono>
-#include <cuda_runtime.h>
-#include <cusparse.h>
+// #include <cuda_runtime.h>
+// #include <cusparse.h>
 #include "Eigen/Dense"
 #define THREAD_NUM 48
 
-#define CHECK_CUDA(func)                                                       \
-{                                                                              \
-    cudaError_t status = (func);                                               \
-    if (status != cudaSuccess) {                                               \
-        printf("CUDA API failed at line %d with error: %s (%d)\n",             \
-               __LINE__, cudaGetErrorString(status), status);                  \
-        return EXIT_FAILURE;                                                   \
-    }                                                                          \
-}
+// #define CHECK_CUDA(func)                                                       \
+// {                                                                              \
+//     cudaError_t status = (func);                                               \
+//     if (status != cudaSuccess) {                                               \
+//         printf("CUDA API failed at line %d with error: %s (%d)\n",             \
+//                __LINE__, cudaGetErrorString(status), status);                  \
+//         return EXIT_FAILURE;                                                   \
+//     }                                                                          \
+// }
 
-#define CHECK_CUSPARSE(func)                                                   \
-{                                                                              \
-    cusparseStatus_t status = (func);                                          \
-    if (status != CUSPARSE_STATUS_SUCCESS) {                                   \
-        printf("CUSPARSE API failed at line %d with error: %s (%d)\n",         \
-               __LINE__, cusparseGetErrorString(status), status);              \
-        return EXIT_FAILURE;                                                   \
-    }                                                                          \
-}
+// #define CHECK_CUSPARSE(func)                                                   \
+// {                                                                              \
+//     cusparseStatus_t status = (func);                                          \
+//     if (status != CUSPARSE_STATUS_SUCCESS) {                                   \
+//         printf("CUSPARSE API failed at line %d with error: %s (%d)\n",         \
+//                __LINE__, cusparseGetErrorString(status), status);              \
+//         return EXIT_FAILURE;                                                   \
+//     }                                                                          \
+// }
 
 using namespace mlir;
 extern "C" {
@@ -712,7 +712,7 @@ UniSparseStorage<V>* readFromFile(std::istream& fin) {
   int H, W, N_ele;
   SS >> H >> W >> N_ele;
 
-  std::cerr << "Size of the matrix: " << H << ' ' << W << ' ' << N_ele << std::endl;
+  // std::cerr << "Size of the matrix: " << H << ' ' << W << ' ' << N_ele << std::endl;
 
   LevelStorage* rowStore = new LevelStorage();
   LevelStorage* colStore = new LevelStorage();
@@ -946,7 +946,7 @@ bool UniSparseStorage<V>::tile_split(int lv, int factor) {
       if (lv != 1) (vLevel[lv]->same_path[i]) = (vLevel[lv]->same_path[i]) && (vLevel[lv-1]->same_path[i]);
     }
   }
-  std::cerr << "After loop" << std::endl;
+  // std::cerr << "After loop" << std::endl;
 #endif
 
   vLevel[lv]->size = ceil((V)vLevel[lv]->size/factor);
@@ -1050,12 +1050,12 @@ std::vector<int> UniSparseStorage<V>::lowerPtr(int st_lv, int ed_lv) {
   for (size_t i = 1; i < ret.size(); ++i) {
     if (ret[i] == -1) ret[i] = ret[i-1];
   }
-#ifdef PRINT
- Print(std::cerr, 1);
- std::cerr << "ret: ";
- for (size_t i = 0; i < ret.size(); ++i) std::cerr << std::setw(8) << ret[i];
- std::cerr << std::endl;
-#endif
+  if (PRINT) {
+    Print(std::cerr, 1);
+    std::cerr << "ret: ";
+    for (size_t i = 0; i < ret.size(); ++i) std::cerr << std::setw(8) << ret[i];
+    std::cerr << std::endl;
+  }
   return ret;
 }
 
@@ -2813,7 +2813,6 @@ FOREVERY_V(IMPL_SPTSCHEDULE)
   void* _mlir_ciface_sptTileSplit##VNAME(void* ptr, int lv, int factor) { \
     UniSparseStorage<V>* sparT = (UniSparseStorage<V>*)(ptr); \
     sparT->tile_split(lv+1, factor); \
-    sparT->Print(std::cerr, 1); \
     return (void*)sparT; \
   }
 FOREVERY_V(IMPL_SPTTILESPLIT)
@@ -3133,7 +3132,6 @@ FOREVERY_V(IMPL_EXPINSERT)
   void* _mlir_ciface_newUniSparseTensor##VNAME(StridedMemRefType<UniSparseDimLevelType, 1> *aref, \
                                StridedMemRefType<uint64_t, 1> *sref, \
                                StridedMemRefType<uint64_t, 1> *pref, void *ptr ) { \
-    std::cout << "Start newUniSparseTensor " << std::endl; \
     assert(aref && sref && pref); \
     assert(aref->strides[0] == 1 && sref->strides[0] == 1 && pref->strides[0] == 1); \
     assert(aref->sizes[0] == sref->sizes[0] && sref->sizes[0] == pref->sizes[0]); \
@@ -3198,6 +3196,7 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
   void release(void *tensor) {
     delete static_cast<UniSparseStruct *>(tensor);
   }
+
 
 } // extern C
 

@@ -1,0 +1,28 @@
+wiki-Vote_row_major.mtx
+CSR_DIA_V UniSparse
+0.066685
+CSC_SpMM UniSparse
+0.115291
+CSR_CSC_CSC_SpGEMM UniSparse
+8.22384
+email-Eu-core_row_major.mtx
+CSR_DIA_V UniSparse
+0.00568819
+CSC_SpMM UniSparse
+0.0207629
+CSR_CSC_CSC_SpGEMM UniSparse
+0.376283
+crystm02_row_major.mtx
+CSR_DIA_V UniSparse
+0.007406
+CSC_SpMM UniSparse
+0.146814
+CSR_CSC_CSC_SpGEMM UniSparse
+26.8299
+nemeth21_row_major.mtx
+CSR_DIA_V UniSparse
+0.0298648
+CSC_SpMM UniSparse
+0.468524
+CSR_CSC_CSC_SpGEMM UniSparse
+44.6911

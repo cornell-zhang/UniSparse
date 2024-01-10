@@ -1,0 +1,120 @@
+wiki-Vote_row_major.mtx
+CSR_CSC UniSparse
+Size of the matrix: 8297 8297 103689
+0.00233984
+CSR_CSC SparseTensor
+0.00692987
+CSR_CSC TACO
+0.003658(s)
+COO_DIA UniSparse
+Size of the matrix: 8297 8297 103689
+0.0677412
+COO_DIA TACO
+0.150222(s)
+COO_ELL UniSparse
+Size of the matrix: 8297 8297 103689
+0.017961
+COO_ELL TACO
+0.022383(s)
+DCSC_BCSR UniSparse
+Size of the matrix: 8297 8297 103689
+0.0220902
+CSB_DIA_V UniSparse
+Size of the matrix: 8297 8297 103689
+0.216771
+COO_C2SR UniSparse
+Size of the matrix: 8297 8297 103689
+0.00874305
+COO_CISR UniSparse
+Size of the matrix: 8297 8297 103689
+0.00664592
+email-Eu-core_row_major.mtx
+CSR_CSC UniSparse
+Size of the matrix: 1005 1005 25571
+0.000365973
+CSR_CSC SparseTensor
+0.00125694
+CSR_CSC TACO
+0.000478(s)
+COO_DIA UniSparse
+Size of the matrix: 1005 1005 25571
+0.00357389
+COO_DIA TACO
+0.003676(s)
+COO_ELL UniSparse
+Size of the matrix: 1005 1005 25571
+0.00309896
+COO_ELL TACO
+0.003041(s)
+DCSC_BCSR UniSparse
+Size of the matrix: 1005 1005 25571
+0.00510502
+CSB_DIA_V UniSparse
+Size of the matrix: 1005 1005 25571
+0.00582194
+COO_C2SR UniSparse
+Size of the matrix: 1005 1005 25571
+0.00153899
+COO_CISR UniSparse
+Size of the matrix: 1005 1005 25571
+0.00179195
+crystm02_row_major.mtx
+CSR_CSC UniSparse
+Size of the matrix: 13965 13965 168435
+0.00195408
+CSR_CSC SparseTensor
+0.0149548
+CSR_CSC TACO
+0.003449(s)
+COO_DIA UniSparse
+Size of the matrix: 13965 13965 168435
+0.00334096
+COO_DIA TACO
+0.004621(s)
+COO_ELL UniSparse
+Size of the matrix: 13965 13965 168435
+0.00642109
+COO_ELL TACO
+0.004248(s)
+DCSC_BCSR UniSparse
+Size of the matrix: 13965 13965 168435
+0.0245421
+CSB_DIA_V UniSparse
+Size of the matrix: 13965 13965 168435
+0.0990119
+COO_C2SR UniSparse
+Size of the matrix: 13965 13965 168435
+0.00964808
+COO_CISR UniSparse
+Size of the matrix: 13965 13965 168435
+0.01104
+nemeth21_row_major.mtx
+CSR_CSC UniSparse
+Size of the matrix: 9506 9506 591626
+0.00622821
+CSR_CSC SparseTensor
+0.0690989
+CSR_CSC TACO
+0.022672(s)
+COO_DIA UniSparse
+Size of the matrix: 9506 9506 591626
+0.010097
+COO_DIA TACO
+0.023704(s)
+COO_ELL UniSparse
+Size of the matrix: 9506 9506 591626
+0.0211241
+COO_ELL TACO
+0.03477(s)
+DCSC_BCSR UniSparse
+Size of the matrix: 9506 9506 591626
+0.079057
+CSB_DIA_V UniSparse
+Size of the matrix: 9506 9506 591626
+0.103504
+COO_C2SR UniSparse
+Size of the matrix: 9506 9506 591626
+0.032166
+COO_CISR UniSparse
+Size of the matrix: 9506 9506 591626
+0.0347331
