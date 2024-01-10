@@ -1,4 +1,5 @@
 # UniSparse: An Intermediate Language for General Sparse Format Customization
+[![DOI](https://zenodo.org/badge/452907292.svg)](https://zenodo.org/doi/10.5281/zenodo.10464499)
 
 ## Introduction  
 UniSparse is an intermediate language and compiler that provides a unified abstraction for representing and customizing sparse formats. Compared to prior sparse linear algebra compilers, UniSparse decouples the logical representation of the sparse tensor (i.e., the data structure) from its low-level memory layout, enabling the customization of both. UniSparse improves over current programming models that only provide limited support for customized sparse formats.
@@ -17,14 +18,17 @@ To run experiments 1 and 2, an Intel CPU will work.
 ## Getting Started
 We first pull a docker image from dockerhub:  
 `$docker pull sibylau/mlir-llvm:oopsla24-ae`  
-It may take ~5mins to download the docker image.  
+Note that this docker image is 14.5GB and it may take time to download it.  
 Then we run a container from this docker image:  
 `$docker run -it --entrypoint bash sibylau/mlir-llvm:oopsla24-ae`  
 Inside this container, we clone the UniSparse repo:  
 `$git clone https://github.com/cornell-zhang/UniSparse.git -b oopsla24-ae`  
 Source the bash file under the UniSparse project directory path:  
-`$cd UniSparse && source script/build.sh`  
+`$cd UniSparse && source script/build.sh`    
+Please also export environment variable    
+`$export LD_LIBRARY_PATH=/install/taco/build/lib:$LD_LIBRARY_PATH`  
 
+Please try to run `$cd evaluation/KernelGeneration && bash run.sh` and let us know if there are any issues.
 
 ## Step-by-Step Instructions
 ### Experiment 1
