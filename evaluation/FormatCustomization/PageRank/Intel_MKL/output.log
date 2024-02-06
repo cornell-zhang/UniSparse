@@ -1,0 +1,113 @@
+./build/mkl_pagerank email-Eu-core_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/email-Eu-core_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/email-Eu-core_col_norm.mtx
+num_runs = 8363
+total time: 68.4676
+average_time = 8.18696 ms
+THROUGHPUT = 0.00624676 GOPS
+./build/mkl_pagerank gplus_108K_13M_csr_float32_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/gplus_108K_13M_csr_float32_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/gplus_108K_13M_csr_float32_row_major_col_norm.mtx
+num_runs = 4
+total time: 0.159106
+average_time = 39.7765 ms
+THROUGHPUT = 0.687514 GOPS
+./build/mkl_pagerank pokec_1633K_31M_csr_float32_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/pokec_1633K_31M_csr_float32_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/pokec_1633K_31M_csr_float32_row_major_col_norm.mtx
+num_runs = 5
+total time: 0.252179
+average_time = 50.4358 ms
+THROUGHPUT = 1.21432 GOPS
+./build/mkl_pagerank live_journal_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/live_journal_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/live_journal_row_major_col_norm.mtx
+num_runs = 6
+total time: 0.573081
+average_time = 95.5135 ms
+THROUGHPUT = 1.43384 GOPS
+./build/mkl_pagerank wiki-Vote_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/wiki-Vote_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/wiki-Vote_row_major_col_norm.mtx
+num_runs = 23
+total time: 0.230467
+average_time = 10.0203 ms
+THROUGHPUT = 0.0206958 GOPS
+./build/mkl_pagerank web-Google_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/web-Google_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/web-Google_row_major_col_norm.mtx
+num_runs = 4
+total time: 0.099081
+average_time = 24.7703 ms
+THROUGHPUT = 0.412191 GOPS
+./build/mkl_pagerank amazon0312_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/amazon0312_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/amazon0312_row_major_col_norm.mtx
+num_runs = 6
+total time: 0.116176
+average_time = 19.3627 ms
+THROUGHPUT = 0.330578 GOPS
+./build/mkl_pagerank p2p-Gnutella31_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/p2p-Gnutella31_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/p2p-Gnutella31_row_major_col_norm.mtx
+num_runs = 3
+total time: 0.054864
+average_time = 18.288 ms
+THROUGHPUT = 0.0161737 GOPS
+
+./build/mkl_pagerank ML_Geer_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/ML_Geer_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/ML_Geer_row_major_col_norm.mtx
+num_runs = 18638
+total time: 205.94
+average_time = 11.0495 ms
+THROUGHPUT = 20.0698 GOPS
+./build/mkl_pagerank ss_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/ss_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/ss_row_major_col_norm.mtx
+num_runs = 220
+total time: 3.33963
+average_time = 15.1801 ms
+THROUGHPUT = 4.57882 GOPS
+./build/mkl_pagerank ML_Laplace_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/ML_Laplace_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/ML_Laplace_row_major_col_norm.mtx
+num_runs = 4629
+total time: 14.1679
+average_time = 3.06068 ms
+THROUGHPUT = 18.094 GOPS
+./build/mkl_pagerank Transport_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/Transport_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/Transport_row_major_col_norm.mtx
+num_runs = 33
+total time: 0.324893
+average_time = 9.84524 ms
+THROUGHPUT = 4.77403 GOPS
+./build/mkl_pagerank rajat31_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/rajat31_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/rajat31_row_major_col_norm.mtx
+num_runs = 5
+total time: 0.284035
+average_time = 56.807 ms
+THROUGHPUT = 0.715273 GOPS
+./build/mkl_pagerank TSOPF_RS_b2383_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/TSOPF_RS_b2383_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/TSOPF_RS_b2383_row_major_col_norm.mtx
+num_runs = 35
+total time: 0.620586
+average_time = 17.731 ms
+THROUGHPUT = 1.82405 GOPS
+./build/mkl_pagerank memchip_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/memchip_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/memchip_row_major_col_norm.mtx
+num_runs = 6
+total time: 0.181731
+average_time = 30.2885 ms
+THROUGHPUT = 0.977942 GOPS
+./build/mkl_pagerank vas_stokes_1M_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/vas_stokes_1M_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/vas_stokes_1M_row_major_col_norm.mtx
+num_runs = 32
+total time: 1.76579
+average_time = 55.1811 ms
+THROUGHPUT = 1.26011 GOPS

@@ -477,7 +477,7 @@ def UniSparse_COOSpMMOp: UniSparse_Op<"coo_spmm", [NoSideEffect]> {
 def UniSparse_DecomposeBDIAOp: UniSparse_Op<"decompose_BDIA", [NoSideEffect]> {
     let summary = "A COO SpMM runtime";
     let description = [{
-        Example: %0 = unisparse.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+        Example: %0 = unisparse.decompose_BDIA %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
     }];
     let arguments = (ins AnyTensor: $tensor, AnyType: $blockSize, AnyType: $thres);
     let results = (outs UniSparse_StructType: $output);
@@ -489,7 +489,7 @@ def UniSparse_DecomposeBDIAOp: UniSparse_Op<"decompose_BDIA", [NoSideEffect]> {
 def UniSparse_DecomposeBELLOp: UniSparse_Op<"decompose_BELL", [NoSideEffect]> {
     let summary = "A COO SpMM runtime";
     let description = [{
-        Example: %0 = unisparse.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+        Example: %0 = unisparse.decompose_BELL %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
     }];
     let arguments = (ins AnyTensor: $tensor, AnyType: $blockSize, AnyType: $block_thres, AnyType: $col_thres);
     let results = (outs UniSparse_StructType: $output);
@@ -501,7 +501,7 @@ def UniSparse_DecomposeBELLOp: UniSparse_Op<"decompose_BELL", [NoSideEffect]> {
 def UniSparse_BDIASpMVOp: UniSparse_Op<"bdia_spmv", [NoSideEffect]> {
     let summary = "A COO SpMM runtime";
     let description = [{
-        Example: %0 = unisparse.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+        Example: %0 = unisparse.bdia_spmv %tensor, %matrix : <?x?xf32, #COO>, memref<?xf32> to memref<?x?xf32>
     }];
     let arguments = (ins AnyTensor: $tensor_CSR, AnyTensor: $tensor_BDIA, AnyTensor: $vector, AnyTensor: $out_vec);
     let results = (outs AnyStridedMemRefOfRank<1>: $result);
@@ -513,7 +513,7 @@ def UniSparse_BDIASpMVOp: UniSparse_Op<"bdia_spmv", [NoSideEffect]> {
 def UniSparse_BDIASpMMOp: UniSparse_Op<"bdia_spmm", [NoSideEffect]> {
     let summary = "A COO SpMM runtime";
     let description = [{
-        Example: %0 = unisparse.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+        Example: %0 = unisparse.bdia_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
     }];
     let arguments = (ins AnyTensor: $tensor_CSR, AnyTensor: $tensor_BDIA, AnyTensor: $in_mat, AnyTensor: $out_mat);
     let results = (outs AnyStridedMemRefOfRank<2>: $result);
@@ -525,7 +525,7 @@ def UniSparse_BDIASpMMOp: UniSparse_Op<"bdia_spmm", [NoSideEffect]> {
 def UniSparse_ReleaseOp: UniSparse_Op<"release"> {
     let summary = "A COO SpMM runtime";
     let description = [{
-        Example: %0 = unisparse.coo_spmm %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
+        Example: %0 = unisparse.release %tensor, %matrix : <?x?xf32, #COO>, memref<?x?xf32> to memref<?x?xf32>
     }];
     let arguments = (ins AnyType: $tensor);
     let assemblyFormat = [{

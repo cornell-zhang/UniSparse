@@ -1490,9 +1490,13 @@ public:
     std::vector<Value> params = {inputTensor_CSR, inputTensor_BDIA, mem_input_B, mem_input_C};
     // auto out_tp = MemRefType::get(outputType.getShape(), outputType.getElementType());
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "kernel_hetero_bdia_spmv_iter", outputType, params, true),
+        getFunc(op, "kernel_bdia_spmv_iter", outputType, params, true),
         params
     );
+    // auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+    //     getFunc(op, "kernel_hetero_bdia_spmv_iter", outputType, params, true),
+    //     params
+    // );
     rewriter.replaceOp(op, callOp.getResult(0));
     // rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, outputType, 
     //         ValueRange({callOp.getResult(0)}));
@@ -1548,9 +1552,13 @@ public:
     Type outputType = inputTensor.getType();
     std::vector<Value> params = {inputTensor, blockSize, thres};
     auto callOp = rewriter.create<func::CallOp>(loc, outputType,
-        getFunc(op, "decompose_BDIA", outputType, params, true),
+        getFunc(op, "decompose_BDIA_opt2", outputType, params, true),
         params
     );
+    // auto callOp = rewriter.create<func::CallOp>(loc, outputType,
+    //     getFunc(op, "decompose_BDIA", outputType, params, true),
+    //     params
+    // );
     auto ret = callOp.getResult(0);
     rewriter.replaceOp(op, ret);
     return success();

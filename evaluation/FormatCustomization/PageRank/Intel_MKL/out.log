@@ -1,0 +1,115 @@
+mkdir -p ./build
+g++ -std=c++11 -O3 -I/opt/intel/oneapi/mkl/latest/include \
+	 \
+	-Wl,--no-as-needed \
+	mkl_pagerank.cpp -o ./build/mkl_pagerank \
+	-Wl,--start-group /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_intel_lp64.a \
+	/opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_core.a /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group \
+	-fopenmp -lpthread -lm -ldl 
+./build/mkl_pagerank email-Eu-core_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/email-Eu-core_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/email-Eu-core_col_norm.mtx
+max_diff = 0.477613
+max_diff = 0.521485
+max_diff = 0.000873562
+max_diff = 2.72988e-05
+max_diff = 8.53088e-07
+max_diff = 2.6659e-08
+max_diff = 8.33094e-10
+num_runs = 7
+total time: 0.119094
+average_time = 17.0134 ms
+THROUGHPUT = 0.00465997 GOPS
+./build/mkl_pagerank amazon0312_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/amazon0312_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/amazon0312_row_major_col_norm.mtx
+max_diff = 0.985002
+max_diff = 0.0149889
+max_diff = 4.57502e-06
+max_diff = 3.32729e-06
+max_diff = 8.31821e-07
+max_diff = 0
+num_runs = 6
+total time: 0.114899
+average_time = 19.1498 ms
+THROUGHPUT = 0.334253 GOPS
+./build/mkl_pagerank p2p-Gnutella31_row_major_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/p2p-Gnutella31_row_major_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/p2p-Gnutella31_row_major_col_norm.mtx
+max_diff = 0.999457
+max_diff = 0.000543252
+max_diff = 0
+num_runs = 3
+total time: 0.252962
+average_time = 84.3207 ms
+THROUGHPUT = 0.453304 GOPS
+./build/mkl_pagerank soc-Slashdot0811_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/soc-Slashdot0811_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/soc-Slashdot0811_col_norm.mtx
+max_diff = 0.919567
+max_diff = 0.922795
+max_diff = 0.988043
+max_diff = 0.00643886
+max_diff = 1.14182e-05
+max_diff = 4.76752e-08
+max_diff = 1.99036e-10
+num_runs = 7
+total time: 0.096358
+average_time = 13.7654 ms
+THROUGHPUT = 0.131557 GOPS
+./build/mkl_pagerank email-Enron_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/email-Enron_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/email-Enron_col_norm.mtx
+max_diff = 0.776423
+max_diff = 0.223474
+max_diff = 7.52208e-05
+max_diff = 2.72383e-05
+max_diff = 1.08993e-06
+max_diff = 1.55705e-08
+max_diff = 2.22435e-10
+num_runs = 7
+total time: 0.126683
+average_time = 18.0976 ms
+THROUGHPUT = 0.0406311 GOPS
+./build/mkl_pagerank ca-CondMat_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/ca-CondMat_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/ca-CondMat_col_norm.mtx
+max_diff = 0.50435
+max_diff = 0.619213
+max_diff = 2.88189e-05
+max_diff = 0
+num_runs = 4
+total time: 0.05815
+average_time = 14.5375 ms
+THROUGHPUT = 0.0257178 GOPS
+./build/mkl_pagerank ca-HepTh_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/ca-HepTh_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/ca-HepTh_col_norm.mtx
+max_diff = 0.596145
+max_diff = 0.403787
+max_diff = 6.74969e-05
+max_diff = 0
+num_runs = 4
+total time: 0.083615
+average_time = 20.9037 ms
+THROUGHPUT = 0.00497241 GOPS
+./build/mkl_pagerank loc-Brightkite_col_norm.mtx
+filename /work/shared/common/datasets/UniSparse_dataset/loc-Brightkite_col_norm.mtx
+read MTX filename /work/shared/common/datasets/UniSparse_dataset/loc-Brightkite_col_norm.mtx
+max_diff = 0.00156438
+max_diff = 0.00413032
+max_diff = 0.0216047
+max_diff = 0.0923027
+max_diff = 0.170001
+max_diff = 0.176793
+max_diff = 0.290136
+max_diff = 0.378285
+max_diff = 0.451992
+max_diff = 0.0610746
+max_diff = 0.000729923
+max_diff = 5.98949e-06
+max_diff = 0
+num_runs = 13
+total time: 0.157434
+average_time = 12.1103 ms
+THROUGHPUT = 0.0707093 GOPS
