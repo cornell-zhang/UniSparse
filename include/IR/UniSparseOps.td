@@ -23,6 +23,20 @@ include "mlir/Interfaces/CastInterfaces.td"
 class UniSparse_Op<string mnemonic, list<Trait> traits = []> :
         Op<UniSparse_Dialect, mnemonic, traits>;
 
+def UniSparse_DeviceOp : UniSparse_Op<"device", [NoSideEffect, NoTerminator]> {
+    let summary = "Runs on device";
+    let arguments = (ins Variadic<AnyTensor>:$input,
+                        StrAttr:$target);
+    let results = (outs AnyTensor:$output);
+    let regions = (region SizedRegion<1>:$body);
+    // let assemblyFormat = [{
+    //    `(` $input `)` attr-dict `:` type($input) `to` type($output) $body
+    // }];
+    let assemblyFormat = [{
+       `(` $input `)` attr-dict $body `:` type($input) `->` type($output)
+    }];
+}
+
 def UniSparse_NewOp : UniSparse_Op<"new", [NoSideEffect]> {
     let summary = "Construct a unisparse tensor type from .";
     let description = [{

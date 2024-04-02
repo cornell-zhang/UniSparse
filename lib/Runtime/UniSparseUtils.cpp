@@ -20,7 +20,6 @@
 //#define PARALLEL
 #define DataType float
 
-
 #include <omp.h>
 #include <algorithm>
 #include <cassert>
@@ -40,10 +39,13 @@
 #include <memory>
 #include <iomanip>
 #include <chrono>
+#include <ctime>
+// #include <cnpy.h>
 // #include <cuda_runtime.h>
 // #include <cusparse.h>
 #include "Eigen/Dense"
-#define THREAD_NUM 48
+#define THREAD_NUM 24
+#define TI (double)clock()/CLOCKS_PER_SEC
 
 // #define CHECK_CUDA(func)                                                       \
 // {                                                                              \
@@ -2243,16 +2245,20 @@ bool UniSparseStorage<V>::fuse_transpose(const int mode) {
   int size_0 = vLevel[1]->size;
   int size_1 = vLevel[2]->size;
   size_t nnz = vLevel[2]->crd.size();
+  // auto t0 = TI;
   int32_t* temp = (int32_t*)calloc(size_1, sizeof(int32_t));
 
   if(vLevel[1]->type == (LVFUSE ^ LVINFO)) {
     // Source format is csr
+  // auto t001 = TI;
     for(int i = 0; i < size_0; i++) {
       for(int j = vLevel[1]->ptr[i]; j < vLevel[1]->ptr[i+1]; j++) {
         int col_idx = vLevel[2]->crd[j];
         temp[col_idx] += 1;
       }
     }
+  // auto t002 = TI;
+  // std::cout << "t002-t001="<< (double)(t002-t001)<<std::endl; 
   } else if(vLevel[1]->type == (LVFUSE ^ LVTRIM)) {
     //TODO: Add support for DCSR
   } else if(vLevel[1]->type == LVTRIM) {
@@ -2264,6 +2270,7 @@ bool UniSparseStorage<V>::fuse_transpose(const int mode) {
 
   std::vector<int32_t> crds(nnz);
   std::vector<V> values(nnz);
+  // auto t00 = TI;
   if(mode == 0) { //CSR -> CSC or CSC -> CSR
     std::vector<int32_t> ptrs(size_1+2);
     ptrs[0] = 0;
@@ -2271,6 +2278,7 @@ bool UniSparseStorage<V>::fuse_transpose(const int mode) {
     for(int i = 1; i <size_1+1; i++) {
       ptrs[i+1] = ptrs[i] + temp[i-1];
     }
+    // auto t1 = TI;
     for(int i = 0; i < size_0; i++) {
       for(int j = vLevel[1]->ptr[i]; j < vLevel[1]->ptr[i+1]; j++) {
         int col_idx = vLevel[2]->crd[j];
@@ -2280,7 +2288,9 @@ bool UniSparseStorage<V>::fuse_transpose(const int mode) {
         ptrs[col_idx+1]++;
       }
     }
+    free(temp);
 
+    // auto t2 = TI;
     vLevel[1]->crd.clear();
     vLevel[1]->ptr.clear();
     vLevel[1]->same_path.clear();
@@ -2288,13 +2298,22 @@ bool UniSparseStorage<V>::fuse_transpose(const int mode) {
     ptrs.pop_back();
     vLevel[1]->ptr = std::move(ptrs);
 
+    // auto t3 = TI;
     vLevel[2]->crd.clear();
     vLevel[2]->ptr.clear();
     vLevel[2]->size = size_0;
     vLevel[2]->crd = std::move(crds);
 
+    // auto t4 = TI;
     this->valueArray.clear();
     this->valueArray = std::move(values);
+
+    // std::cout << "t00-t0="<< (double)(t00-t0)<<std::endl; 
+    // std::cout << "t1-t00="<< (double)(t1-t00)<<std::endl; 
+    // std::cout << "t1-t0="<< (double)(t1-t0)<<std::endl; 
+    // std::cout << "t2-t1="<< (double)(t2-t1)<<std::endl; 
+    // std::cout << "t3-t2="<< (double)(t3-t2)<<std::endl; 
+    // std::cout << "t4-t3="<< (double)(t4-t3)<<std::endl; 
     
   } else if(mode == 2) { // COO row-major -> CSC or COO col-major -> CSR 
   
@@ -4065,6 +4084,7 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
     sparT->vLevel[2]->same_path.clear();
     sparT->valueArray.clear();
     std::cout << "blockSize = " << blockSize << ", thres = " << thres << std::endl;
+    std::cout << "col_size = " << col_size << ", row_size = " << row_size << std::endl;
     assert(col_size >= row_size);
     
     // step 1: initialize vectorArray
@@ -4340,6 +4360,8 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
     T_BELL->dimSizes.push_back(row_size);
     T_BELL->dimSizes.push_back(col_size);
     
+    
+    double start = omp_get_wtime();
     // step 2: assume read-in data is in row-major order
     std::vector<unsigned> row_block_ptr(((row_size-1)/blockSize)+2, 0);
     int prev_dim0, new_dim0, init_j;
@@ -4390,6 +4412,7 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
     unsigned level1_size = unsigned(std::ceil(max_nnz * col_thres));
     for (unsigned i = 0; i < level1_size; i++)
       T_BELL->vLevel[1]->crd.push_back(i);
+    
     // std::cout << "col_blocks = ";
     // for (unsigned n = 0; n < col_blocks.size(); n++) {
     //   std::cout << col_blocks[n] << "  ";
@@ -4423,6 +4446,7 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
         }
       }
     }
+    
     // std::cout << "level3_crd = ";
     // for (unsigned n = 0; n < T_BELL->vLevel[3]->crd.size(); n++) {
     //   std::cout << T_BELL->vLevel[3]->crd[n] << "  ";
@@ -4465,6 +4489,7 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
         }
       }
     }
+    
     // std::cout << "vectorArray = ";
     // for (unsigned n = 0; n < T_BELL->vectorArray.size(); n++) {
     //   std::cout << "\n";
@@ -4514,6 +4539,10 @@ FOREVERY_V(IMPL_NEWUNISPARSETENSOR)
       }
     }    
     sparT->vLevel[1]->ptr.push_back(COO_nnz);
+    double end = omp_get_wtime();
+    std::cout << "conversion time = " << end-start << " s"<< std::endl;
+    std::cout << "conversion time = " << (end-start)*1000 << " ms"<< std::endl;
+
     // std::cout << "COO level1 crd = ";
     // for (unsigned n = 0; n < sparT->vLevel[1]->crd.size(); n++) {
     //   std::cout << sparT->vLevel[1]->crd[n] << "  ";

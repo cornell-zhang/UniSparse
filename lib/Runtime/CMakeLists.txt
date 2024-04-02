@@ -27,8 +27,13 @@ add_mlir_library(mlir_unisparse_runner_utils
   EXCLUDE_FROM_LIBMLIR
 )
 
+# add_compile_options(-frtti) 
+# find_library(CNPY_LIB cnpy REQUIRED)
 set_property(TARGET mlir_unisparse_runner_utils PROPERTY CXX_STANDARD 14)
 target_compile_definitions(mlir_unisparse_runner_utils PRIVATE mlir_unisparse_runner_utils_EXPORTS)
 target_link_libraries(mlir_unisparse_runner_utils PRIVATE OpenMP::OpenMP_CXX)
+# target_include_directories(mlir_unisparse_runner_utils PRIVATE "${CNPY_INCLUDE_LIB}")
+# target_link_libraries(mlir_unisparse_runner_utils PRIVATE "${CNPY_LIB/libcnpy.so}")
+# target_compile_options(mlir_unisparse_runner_utils PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
 # target_include_directories(mlir_unisparse_runner_utils PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 # target_link_libraries(mlir_unisparse_runner_utils PRIVATE OpenMP::OpenMP_CXX PRIVATE ${CUDA_LIBRARIES} PRIVATE ${CUDA_cusparse_LIBRARY})

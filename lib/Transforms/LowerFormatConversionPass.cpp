@@ -877,7 +877,8 @@ class copyOpLowering : public OpConversionPattern<unisparse::copyOp> {
                         ConversionPatternRewriter &rewriter) const final {
         Value candValue = adaptor.getOperands()[0];
         func::CallOp copyOp;
-        static std::string _funcName = "sptCopy"+getTensorETSuffix(candValue.getType().dyn_cast<TensorType>());
+        // static std::string _funcName = "sptCopy"+getTensorETSuffix(candValue.getType().dyn_cast<TensorType>());
+        static std::string _funcName = "sptCopyF32";
         StringRef funcName(_funcName);
         SmallVector<Value, 1> params;
         params.push_back(candValue);

@@ -714,12 +714,12 @@ void UniSparseEncodingAttr::print(AsmPrinter &printer) const {
 }
 
 void UniSparseCompressAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseCompressAttr";
   return;
 }
 
 void UniSparseCrdAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseCrdAttr";
   return;
 }
 
@@ -798,27 +798,27 @@ void UniSparseIndirectAttr::print(AsmPrinter &printer) const {
 }
 
 void UniSparseSumAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseSumAttr";
   return;
 }
 
 void UniSparseEnumerateAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseEnumerateAttr";
   return;
 }
 
 void UniSparseScheduleAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseScheduleAttr";
   return;
 }
 
 void UniSparseReorderAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseReorderAttr";
   return;
 }
 
 void UniSparseLayoutAttr::print(AsmPrinter &printer) const {
-  printer << "HII";
+  printer << "UniSparseLayoutAttr";
   return;
 }
 
