@@ -310,23 +310,34 @@ void printS3IndexCalculation(linalg::GenericOp &op, HLSEmitter &emitter) {
 
 LogicalResult printS4MulOp(linalg::GenericOp &op, HLSEmitter &emitter) {
   raw_indented_ostream &os = emitter.ostream();
-  string funcName = "PEMul";
-  emitter.taskList[funcName].push_back("detach");
-  std::vector<tuple</*name*/string, /*type*/string, StreamAttr>> inFifos;
-  std::vector<string> sizes;
-  for(auto iter = emitter.fifoStg.begin(); iter != emitter.fifoStg.end(); iter++) {
-    if (iter->second == 4) {
-      string inFifoName = get<0>(iter->first);
-      string size = get<1>(iter->first);
-      StreamAttr streamAttr = get<2>(iter->first);
-      string inFifoType = emitter.topFifos[inFifoName];
-      inFifos.push_back({inFifoName, inFifoType, streamAttr});
-      sizes.push_back(size);
-    }
-  }
-  emitter.fifoStg[{"out_"+inFifoName, size, streamAttr}]=5;
-  emitter.topFifos["out_"+inFifoName]=inFifoType;
-  emitter.taskList[funcName].push_back(inFifoName);
+  // string funcName = "PE_Mul";
+  // emitter.taskList[funcName].push_back("join");
+  // std::vector<tuple</*name*/string, /*type*/string, StreamAttr>> inFifos;
+  // std::vector<string> sizes;
+  // for(auto iter = emitter.fifoStg.begin(); iter != emitter.fifoStg.end(); iter++) {
+  //   if (iter->second == 4) {
+  //     string inFifoName = get<0>(iter->first);
+  //     string size = get<1>(iter->first);
+  //     StreamAttr streamAttr = get<2>(iter->first);
+  //     string inFifoType = emitter.topFifos[inFifoName];
+  //     inFifos.push_back({inFifoName, inFifoType, streamAttr});
+  //     sizes.push_back(size);
+  //     emitter.taskList[funcName].push_back(inFifoName);
+  //   }
+  // }
+  // pair</*name*/string,/*type*/string> outFifoCrd = {"out_crd", "OUT_CRD_T"};
+  // pair</*name*/string,/*type*/string> outFifoData = {"out_val", "OUT_VAL_T"};
+  // os << emitter.fix_modules.PEMul(funcName, inFifos, outFifoCrd, outFifoData, sizes);
+  // emitter.fifoStg[{"out_crd", size, streamAttr}]=5;
+  // emitter.fifoStg[{"out_val", size, streamAttr}]=5;
+  // emitter.topFifos["out_crd"]="OUT_CRD_T";
+  // emitter.topFifos["out_val"]="OUT_VAL_T";
+  // emitter.taskList[funcName].push_back("out_crd");
+  // emitter.taskList[funcName].push_back("out_val");
+  // for (auto size: sizes) {
+  //   emitter.taskList[funcName].push_back(size);
+  // }
+  return success();
 }
 
 LogicalResult printS5AddOp(linalg::GenericOp &op, HLSEmitter &emitter) {
@@ -334,6 +345,7 @@ LogicalResult printS5AddOp(linalg::GenericOp &op, HLSEmitter &emitter) {
   string outputType;
 
   string funcName = "PEAdd";
+  return success();
 }
 
 static LogicalResult printOperation(HLSEmitter &emitter, unisparse::DeviceOp deviceOp) {

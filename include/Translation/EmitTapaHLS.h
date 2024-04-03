@@ -214,6 +214,8 @@ void )"+funcName+R"(()";
                       pair</*name*/string,/*type*/string> &outFifoData,
                       std::vector<std::string> &sizes) {
         return R"(
+)";
+};
 
 }; // class FixModules
 
