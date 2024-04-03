@@ -12,14 +12,33 @@
 #include <cctype>
 #include <string>
 #include <vector>
+#include <tuple>
 #include <queue>
 #include <map>
+
+#include "IR/UniSparseDialect.h"
+#include "IR/UniSparseOps.h"
+#include "IR/UniSparseTypes.h"
+
+using namespace std;
 
 namespace mlir {
 namespace unisparse {
 
 LogicalResult emitTapaHLS(Operation *op, llvm::raw_ostream &os);
 void registerEmitTapaHLSTranslation();
+
+class StreamAttr {
+public:
+    AffineMap indMap;
+    CrdMap crdMap;
+    CompressMap compressMap;
+    int level;
+    bool val;
+    StreamAttr(): indMap(nullptr), crdMap(nullptr), compressMap(nullptr), level(0), val(false) {};
+    StreamAttr(AffineMap indMap, CrdMap crdMap, CompressMap compressMap, int level, bool val): 
+        indMap(indMap), crdMap(crdMap), compressMap(compressMap), level(level), val(val) {};
+};
 
 class FixModules {
 public:
@@ -109,7 +128,95 @@ void read_)"+funcName+R"((
 })";
 };
 
+    std::string repeater(const std::string &funcName, 
+                         const std::string &inFifoType,
+                         const std::string &inFifoName,
+                         const std::string &outFifoType,
+                         const std::string &outFifoName,
+                         const std::string &size) {
+        return R"(
+void )"+funcName+R"((
+    tapa::istream<)"+inFifoType+R"(>& )"+inFifoName+R"(,
+    tapa::ostream<)"+outFifoType+R"(>& )"+outFifoName+R"(,
+    const int )"+size+R"() {
+    auto start = )"+inFifoName+R"(.read();
+    for (int i = 0; i < )"+size+R"(; i++) {
+        auto end = )"+inFifoName+R"(.read();
+        for (int j = start; j < end;) {
+#pragma HLS pipeline II=1
+            if (!)"+outFifoName+R"(.full()) {
+                )"+outFifoName+R"(.try_write(i);
+                j++;
+            }
+        }
+        start = end;
+    }
+})";
 };
+
+    std::string index_calc(const std::string &funcName,
+                           std::vector<pair<string, string>> &fifos) {
+        std::string index_calc_program = "";
+        index_calc_program += R"(
+void )"+funcName+R"(()";
+    for (auto &fifo : fifos) {
+        index_calc_program += R"(
+    tapa::istream<)"+fifo.second+R"(>& )"+fifo.first+R"(,)"; 
+    }
+    for (auto &fifo : fifos) {
+        index_calc_program += R"(
+    tapa::ostream<)"+fifo.second+R"(>& out_)"+fifo.first+R"(,)"; 
+    }
+    /// remove the last `,`
+    index_calc_program.pop_back();
+    index_calc_program += R"(
+){
+    for (;;) {
+#pragma HLS pipeline II=1
+        bool enable = )";
+    for (auto &fifo : fifos) {[]
+        index_calc_program += R"(
+            !)"+fifo.first+R"(.empty() &)"; 
+    }
+    for (auto &fifo : fifos) {
+        index_calc_program += R"(
+            !out_)"+fifo.first+R"(.full() &)"; 
+    }
+    /// remove the last `&`
+    index_calc_program.pop_back();
+    index_calc_program += R"(;
+    )";
+    for (auto &fifo : fifos) {
+        index_calc_program += R"(
+        )" + fifo.second + R"( )" + fifo.first + R"(_v, out_)" + fifo.first + R"(_v;)";
+    }
+    index_calc_program += R"(
+        if (enable) {)";
+    for (auto &fifo : fifos) {
+        index_calc_program += R"(
+            )"+fifo.first+R"(.try_read()"+fifo.first+R"(_v);)";
+    }
+    for (auto &fifo : fifos) {
+        index_calc_program += R"(
+            out_)"+fifo.first+R"(.try_read(out_)"+fifo.first+R"(_v);)";
+    }
+    index_calc_program += R"(
+        }
+    }
+}
+)";
+    return index_calc_program;
+};
+
+    std::string PEMul(const std::string &funcName,
+                      std::vector<tuple</*name*/string, /*type*/string, StreamAttr>> &inFifos,
+                      pair</*name*/string,/*type*/string> &outFifoCrd,
+                      pair</*name*/string,/*type*/string> &outFifoData,
+                      std::vector<std::string> &sizes) {
+        return R"(
+
+}; // class FixModules
+
 } // namespace unisparse
 } // namespace mlir
 
