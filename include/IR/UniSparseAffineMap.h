@@ -14,6 +14,8 @@ public:
 
   CompressMap(): AffineMap(), trimIndex({}), fuseIndex({}) {}
 
+  // CompressMap(const CompressMap& A) = default;
+
   explicit CompressMap(const std::vector<int>& _trimIndex, const std::vector<int>& _fuseIndex): 
     AffineMap(), trimIndex(_trimIndex), fuseIndex(_fuseIndex) {}
   
@@ -28,6 +30,11 @@ public:
     for (size_t i = 0; i < fuseIndex.size(); ++i) {
       if (fuseIndex[i] != dstFuse[i]) return 0;
     }
+    return 1;
+  }
+
+  bool operator != (const CompressMap& A) const {
+    if (*this == A) return 0;
     return 1;
   }
 
@@ -55,7 +62,9 @@ private:
 class CrdMap: public AffineMap {
   public:
 
-  CrdMap(): AffineMap(), isIndirect({}), indirectExpr({}) {}
+  CrdMap(): AffineMap(), isIndirect({}), indirectExpr({}) {};
+
+  // CrdMap(const CrdMap& A) = default;
 
   explicit CrdMap(const AffineMap& amap, 
                   const std::vector<bool>& _isIndirect,
@@ -81,6 +90,10 @@ class CrdMap: public AffineMap {
   std::vector<bool> getIsIndirect() const { return this->isIndirect; }
   std::vector< std::vector<AffineExpr> > getIndirectExpr() const { return this->indirectExpr; }
 
+  void setAffineMap(const AffineMap& amap) {
+    AffineMap::operator=(amap);
+  }
+
   void Print() {
     this->dump();
     std::cout << "isIndirect: (";
@@ -99,7 +112,7 @@ class SumPrim: public AffineMap {
 public:
 
   SumPrim(): AffineMap(), groupBy({}), valMap({}), is_empty(true) {}
-
+  SumPrim(const SumPrim& A): groupBy(A.groupBy), valMap(A.valMap), is_empty(A.is_empty) {}
   explicit SumPrim(const std::vector<unsigned>& _groupBy, const std::map<std::string, int>& _valMap): 
     AffineMap(), groupBy(_groupBy), valMap(_valMap) {
       is_empty = false;
