@@ -1,7 +1,7 @@
 ## Copyright UniSparse authors. All Rights Reserved.
 
 ## Install Eigen library
-wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz -P $EIGEN_ROOT
+wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz -P $EIGEN_PATH
 cd $EIGEN_PATH && tar -xzf eigen-3.4.0.tar.gz
 
 ## Install LLVM/MLIR
