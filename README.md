@@ -1,5 +1,6 @@
 # UniSparse: An Intermediate Language for General Sparse Format Customization
 [![DOI](https://zenodo.org/badge/452907292.svg)](https://zenodo.org/doi/10.5281/zenodo.10464499)
+![GitHub](https://img.shields.io/github/license/cornell-zhang/unisparse)
 
 UniSparse is an intermediate language and compiler that provides a unified abstraction for representing and customizing sparse formats. Compared to prior sparse linear algebra compilers, UniSparse decouples the logical representation of the sparse tensor (i.e., the data structure) from its low-level memory layout, enabling the customization of both. UniSparse improves over current programming models that only provide limited support for customized sparse formats.
 
