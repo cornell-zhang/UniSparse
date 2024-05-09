@@ -5,7 +5,7 @@ wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz -P $EI
 cd $EIGEN_PATH && tar -xzf eigen-3.4.0.tar.gz
 
 ## Install LLVM/MLIR
-git clone --depth 1 --branch llvmorg-15.0.0 https://github.com/llvm/llvm-project.git
+git clone --depth 1 --branch llvmorg-15.0.0 https://github.com/llvm/llvm-project.git $LLVM_PATH/llvm-project
 mkdir -p $LLVM_PATH/llvm_project/build && cd $LLVM_PATH/llvm_project/build
 cmake ../llvm -DLLVM_ENABLE_PROJECTS="clang;lld;mlir" \
     -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="host;NVPTX" \

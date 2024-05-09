@@ -12,16 +12,26 @@ We provide two ways to install UniSparse:
   - Build from source. We provide a bash script that builds LLVM/MLIR and UniSparse to your local environment. Note that it requires 11GB memory space.
 ### Docker
 We first pull a docker image from dockerhub:  
-`$docker pull sibylau/mlir-llvm:oopsla24-ae`  
+```
+$docker pull sibylau/mlir-llvm:oopsla24-ae
+``` 
 Note that this docker image is 14.5GB and it may take time to download it.  
 Then we run a container from this docker image:  
-`$ docker run -it --entrypoint bash sibylau/mlir-llvm:oopsla24-ae`  
+``` 
+$ docker run -it --entrypoint bash sibylau/mlir-llvm:oopsla24-ae
+``` 
 Inside this container, we install UniSparse:  
-`$ git clone https://github.com/cornell-zhang/UniSparse.git -b oopsla24-ae`  
+``` 
+$ git clone https://github.com/cornell-zhang/UniSparse.git -b oopsla24-ae
+``` 
 Source the bash file under the UniSparse project directory path:  
-`$ cd UniSparse && source script/build.sh`    
+```
+$ cd UniSparse && source script/build.sh
+```  
 Please also export environment variable    
-`$ export LD_LIBRARY_PATH=/install/taco/build/lib:$LD_LIBRARY_PATH`  
+```
+$ export LD_LIBRARY_PATH=/install/taco/build/lib:$LD_LIBRARY_PATH
+```
 
 For a test run, generate sparse kernels and run them via `$cd evaluation/KernelGeneration && bash run.sh`.
 
@@ -32,10 +42,10 @@ For a test run, generate sparse kernels and run them via `$cd evaluation/KernelG
 
 Please clone the UniSparse repo, and declare your own Eigen, LLVM and UniSparse projects root path:
 ```
-$ git clone https://github.com/cornell-zhang/UniSparse.git
 $ export EIGEN_PATH=$YOUR_EIGEN_PATH
 $ export LLVM_PATH=$YOUR_LLVM_PATH
 $ export UNISPARSE_PATH=$YOUR_UNISPARSE_PATH
+$ git clone https://github.com/cornell-zhang/UniSparse.git $UNISPARSE_PATH/UniSparse
 ```
 and then source the `install.sh` script.
 ```
