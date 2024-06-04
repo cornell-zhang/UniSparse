@@ -1,4 +1,4 @@
-<img src="scripts/unisparse-icon.png" width=76/> UniSparse: An Intermediate Language for General Sparse Format Customization
+<img src="scripts/unisparse-icon.png" width=86/> UniSparse: An Intermediate Language for General Sparse Format Customization
 ==============================================================================
 [![DOI](https://zenodo.org/badge/452907292.svg)](https://zenodo.org/doi/10.5281/zenodo.10464499)
 ![GitHub](https://img.shields.io/github/license/cornell-zhang/unisparse)
