@@ -108,7 +108,7 @@ The pre-built executables can be found in `evaluation/Reusability/executables`, 
 ## Citation
 Please refer to our [OOPSLA'24 paper](https://dl.acm.org/doi/10.1145/3649816) for more details. If you use UniSparse in your research, please use the following bibtex entry to cite us:
 ```
-@article{10.1145/3649816,
+@article{liu-unisparse-oopsla2024,
 author = {Liu, Jie and Zhao, Zhongyuan and Ding, Zijian and Brock, Benjamin and Rong, Hongbo and Zhang, Zhiru},
 title = {UniSparse: An Intermediate Language for General Sparse Format Customization},
 year = {2024},
